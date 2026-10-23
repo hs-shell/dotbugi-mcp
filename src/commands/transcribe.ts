@@ -1,20 +1,19 @@
 import { spawn } from 'node:child_process';
-import { tmpdir } from 'node:os';
 import { resolveAsrRuntime } from '../asr/runtime.js';
 import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES, VOD_VIEWER_PATH } from '../constants.js';
-import { limit } from '../lms-html.js';
+import { createFetchHtml, limit } from '../lms-html.js';
 import { lmsFetch } from '../lms.js';
 import { log } from '../log.js';
 import { materialsRoot } from '../materials/sync.js';
-import { acquireLock } from '../player/lock.js';
-import { cmidOf } from '../player/scheduler.js';
+import { acquireLock, adoptLock } from '../player/lock.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
-import { collectTasks } from '../tasks/collect.js';
-import { transcribeVod, type Phase, type VodMeta } from '../transcribe/pipeline.js';
+import { findVod, type VodMeta } from '../transcribe/find-vod.js';
+import { transcribeVod, type Phase } from '../transcribe/pipeline.js';
 import {
   TRANSCRIBE_BUSY,
   TRANSCRIBE_LOCK_FILE,
+  TRANSCRIBE_TMP_DIR,
   writeTranscribeState,
   type TranscribeState,
 } from '../transcribe/state.js';
@@ -28,13 +27,6 @@ const PHASE_LABELS: Record<Phase, string> = {
   transcribe: '받아쓰는 중',
 };
 
-async function findVod(session: string, cmid: number): Promise<VodMeta> {
-  const { items } = await collectTasks(session);
-  const vod = items.find((t) => t.type === 'vod' && t.vod && cmidOf(t.url) === String(cmid));
-  if (!vod?.vod) throw new Error('수강 과목에서 이 강의(VOD)를 찾지 못했습니다.');
-  return { course: vod.course, title: vod.title, week: vod.vod.week, courseId: vod.vod.courseId };
-}
-
 const viewerHtml = (session: string, cmid: number) =>
   limit(async () => {
     const res = await lmsFetch(`${VOD_VIEWER_PATH}?id=${cmid}`, session);
@@ -46,12 +38,13 @@ const viewerHtml = (session: string, cmid: number) =>
     return res.text();
   });
 
-// 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음)이 같이 쓴다. 한 번에 하나, 상태 파일에 진행을 남긴다
+// 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음, 잠금은 도구가 넘겨준다)이 같이 쓴다. 진행은 상태 파일에 남긴다
 export async function transcribe(arg: string, worker = false): Promise<void> {
   if (!LMS_NUMERIC_ID.test(arg)) throw new Error('강의 번호(cmid)는 숫자여야 합니다.');
   const cmid = Number(arg);
-  const { session } = await getSession();
-  const release = await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
+  const release = worker
+    ? await adoptLock(TRANSCRIBE_LOCK_FILE)
+    : await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
   const controller = new AbortController();
   const stop = (signal: StopSignal) => {
     process.exitCode = SIGNAL_EXIT_CODES[signal];
@@ -60,10 +53,11 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
   for (const s of STOP_SIGNALS) process.once(s, stop);
 
   let meta: VodMeta | null = null;
-  let current: Pick<TranscribeState, 'status' | 'phase' | 'progress' | 'message'> = {
+  let current: Pick<TranscribeState, 'status' | 'phase' | 'progress' | 'path' | 'message'> = {
     status: 'running',
     phase: 'prepare',
     progress: null,
+    path: null,
     message: null,
   };
   // 상태 쓰기는 같은 임시 파일을 쓰므로 차례로
@@ -73,6 +67,7 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
     const state = {
       version: 1 as const,
       ...current,
+      cmid,
       course: meta?.course ?? null,
       title: meta?.title ?? null,
       pid: process.pid,
@@ -89,24 +84,32 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
     log(`[${PHASE_LABELS[phase]}]${progress === null ? '' : ` ${progress}%`}`);
   };
 
+  // 잠금을 잡자마자 running 을 남긴다 — 이후 어디서 실패해도 error 로 바뀐다
+  save({});
+  let session = '';
   try {
-    save({});
+    ({ session } = await getSession());
     const result = await transcribeVod(cmid, {
-      findVod: async (id) => (meta = await findVod(session, id)),
+      findVod: async (id) => (meta = await findVod(createFetchHtml(session), id)),
       viewerHtml: (id) => viewerHtml(session, id),
       runtime: resolveAsrRuntime,
       fetch,
       spawn,
       root: materialsRoot(),
-      tmpRoot: tmpdir(),
+      tmpDir: TRANSCRIBE_TMP_DIR,
       now: () => new Date(),
       report,
       signal: controller.signal,
     });
-    const message =
-      result.status === 'done' ? `녹취를 저장했습니다: ${result.path}` : `이미 녹취가 있어 건너뜁니다: ${result.path}`;
-    save({ status: result.status, phase: null, progress: result.status === 'done' ? 100 : null, message });
-    if (!worker) log(message);
+    const message = result.status === 'done' ? '녹취를 저장했습니다.' : '이미 녹취가 있어 건너뛰었습니다.';
+    save({
+      status: result.status,
+      phase: null,
+      progress: result.status === 'done' ? 100 : null,
+      path: result.path,
+      message,
+    });
+    if (!worker) log(`${message} ${result.path}`);
   } catch (err) {
     // Ctrl+C·종료 신호면 시그널 종료 코드를 그대로 둔다
     if (controller.signal.aborted) return save({ status: 'stopped', message: '중지했습니다.' });

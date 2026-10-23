@@ -1,23 +1,30 @@
 import { dirname, join } from 'node:path';
 import * as z from 'zod/v4';
 import { PLAYER_STATE_FILE, readStateFile, stateText, writeStateFile } from '../player/state.js';
+import { stripUrls } from '../redact.js';
 
-export const TRANSCRIBE_STATE_FILE = join(dirname(PLAYER_STATE_FILE), 'transcribe-state.json');
-export const TRANSCRIBE_LOCK_FILE = join(dirname(PLAYER_STATE_FILE), 'transcribe.lock');
+const CACHE_DIR = dirname(PLAYER_STATE_FILE);
+export const TRANSCRIBE_STATE_FILE = join(CACHE_DIR, 'transcribe-state.json');
+export const TRANSCRIBE_LOCK_FILE = join(CACHE_DIR, 'transcribe.lock');
+// 임시 영상 파일 자리. 고정 경로라 강제 종료로 남은 것도 다음 실행이 지운다 (tmpfs /tmp 면 RAM 을 쓴다)
+export const TRANSCRIBE_TMP_DIR = join(CACHE_DIR, 'transcribe-tmp');
 export const TRANSCRIBE_BUSY = '이미 받아쓰기가 실행 중입니다. transcribe_status 로 확인하고 끝난 뒤 다시 실행하세요.';
 
 // 표시용 데이터만 — 영상 주소(토큰)·세션은 넣지 않는다. 혹시 메시지에 주소가 섞여도 쓸 때 지운다
 export const transcribeStateSchema = z.object({
   version: z.literal(1),
   status: z.enum(['running', 'done', 'skipped', 'stopped', 'error']),
+  cmid: z.number().int().positive(),
   phase: z.enum(['prepare', 'download', 'extract', 'transcribe']).nullable(),
   progress: z.number().min(0).max(100).nullable(),
   course: stateText.nullable(),
   title: stateText.nullable(),
+  // 저장한(또는 이미 있던) 녹취 파일. 경로는 자르지 않는다
+  path: z.string().max(4096).nullable(),
   // 받아쓰는 프로세스 — 죽었는데 running 으로 남았는지 판단용
   pid: z.number().int().positive(),
   updatedAt: z.iso.datetime(),
-  message: stateText.overwrite((s) => s.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[URL]')).nullable(),
+  message: stateText.overwrite(stripUrls).nullable(),
 });
 export type TranscribeState = z.infer<typeof transcribeStateSchema>;
 

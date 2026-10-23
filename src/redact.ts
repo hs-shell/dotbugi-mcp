@@ -9,3 +9,6 @@ export function redact(text: string, secrets: readonly string[] = []): string {
   for (const p of PATTERNS) out = out.replace(p, `$1${MASK}`);
   return out;
 }
+
+// 영상 주소는 경로에 시간 제한 토큰이 있다 — 외부 프로그램 출력·오류를 남기기 전에 주소째 지운다
+export const stripUrls = (text: string) => text.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[URL]');

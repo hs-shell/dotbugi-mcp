@@ -1,9 +1,12 @@
 import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+import { resolveAsrRuntime } from '../asr/runtime.js';
 import { acquireLock, isAlive } from '../player/lock.js';
 import { redact } from '../redact.js';
+import { getSession } from '../session.js';
 import {
   readTranscribeState,
   TRANSCRIBE_BUSY,
@@ -14,20 +17,31 @@ import {
 // dist/tools/ → dist/index.js
 const ENTRY = fileURLToPath(new URL('../index.js', import.meta.url));
 
-// 받아쓰기는 수십 분 걸린다 — 따로 떠 있는 작업 프로세스(셸 없이 인자 배열)로 넘기고 바로 돌아온다
-export async function startWorker(cmid: number, spawnImpl: typeof spawn = spawn): Promise<void> {
-  // 미리 잠금을 잡아 볼 뿐 — 실제 잠금은 작업 프로세스가 잡는다 (그사이 겹치면 늦게 뜬 쪽이 거부된다)
+const WORKER_DEPS = { spawn, getSession, runtime: resolveAsrRuntime };
+
+// 받아쓰기는 수십 분 걸린다 — 따로 떠 있는 작업 프로세스(셸 없이 인자 배열)로 넘기고 바로 돌아온다.
+// 세션·ASR 설치처럼 바로 알 수 있는 실패는 띄우기 전에 도구 오류로 돌려준다
+export async function startWorker(cmid: number, deps = WORKER_DEPS): Promise<void> {
+  await deps.getSession();
+  await deps.runtime();
+  // 잠금은 여기서 잡아 작업 프로세스에 넘긴다 — 동시에 여러 번 불러도 하나만 "시작"으로 답한다
   const release = await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
-  await release();
-  const child = spawnImpl(process.execPath, [ENTRY, 'transcribe', '--worker', String(cmid)], {
-    detached: true,
-    stdio: 'ignore',
-  });
-  await new Promise<void>((resolve, reject) => {
-    child.once('spawn', resolve);
-    child.once('error', reject);
-  });
-  child.unref();
+  try {
+    const child = deps.spawn(process.execPath, [ENTRY, 'transcribe', '--worker', String(cmid)], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    await new Promise<void>((resolve, reject) => {
+      child.once('spawn', resolve);
+      child.once('error', reject);
+    });
+    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 (작업 프로세스는 자기 pid 가 들어올 때까지 기다렸다 이어받는다)
+    await writeFile(TRANSCRIBE_LOCK_FILE, String(child.pid), { mode: 0o600 });
+    child.unref();
+  } catch (err) {
+    await release();
+    throw err;
+  }
 }
 
 export function registerTranscribeVod(server: McpServer): void {
@@ -83,6 +97,7 @@ export function registerTranscribeVod(server: McpServer): void {
             `[${state.stale ? 'stale' : state.status}] ${state.course ?? ''} ${state.title ?? ''}`.trim(),
             state.phase && `단계: ${state.phase}${state.progress === null ? '' : ` ${state.progress}%`}`,
             state.message,
+            state.path,
           ]
             .filter(Boolean)
             .join('\n');

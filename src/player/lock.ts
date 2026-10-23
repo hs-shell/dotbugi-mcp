@@ -32,3 +32,13 @@ export async function acquireLock(
     await unlink(file).catch(() => {});
   }
 }
+
+// 다른 프로세스가 잡아 넘겨준 잠금(파일에 내 pid)을 이어받는다. 넘겨받기 전에 뜰 수 있어 잠시 기다린다
+export async function adoptLock(file: string, timeoutMs = 5000): Promise<() => Promise<void>> {
+  for (const end = Date.now() + timeoutMs; ;) {
+    if ((await readFile(file, 'utf8').catch(() => '')).trim() === String(process.pid))
+      return () => unlink(file).catch(() => {});
+    if (Date.now() > end) throw new Error('넘겨받을 작업 잠금이 없습니다.');
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}

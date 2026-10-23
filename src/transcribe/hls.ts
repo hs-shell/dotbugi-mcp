@@ -48,72 +48,50 @@ export async function mediaGet(
   const chunks: Uint8Array[] = [];
   let size = 0;
   const reader = res.body.getReader();
-  for (let c = await reader.read(); !c.done; c = await reader.read()) {
-    size += c.value.byteLength;
-    if (size > maxBytes) {
-      await reader.cancel().catch(() => {});
-      throw new Error(`영상 파일이 상한(${maxBytes / 1024 / 1024}MB)을 넘습니다.`);
+  try {
+    for (let c = await reader.read(); !c.done; c = await reader.read()) {
+      size += c.value.byteLength;
+      if (size > maxBytes) throw new Error(`영상 파일이 상한(${maxBytes / 1024 / 1024}MB)을 넘습니다.`);
+      chunks.push(c.value);
     }
-    chunks.push(c.value);
+  } catch (err) {
+    await reader.cancel().catch(() => {});
+    if (signal.aborted || size > maxBytes) throw err;
+    throw new Error(`영상 서버가 ${VOD_MEDIA_TIMEOUT_MS / 1000}초 안에 내려보내지 못했습니다.`);
   }
   return Buffer.concat(chunks);
 }
 
-export type Playlist = { kind: 'media'; segments: URL[]; seconds: number } | { kind: 'master'; variant: URL };
-
-// 재생 목록 해석. 암호화·다른 호스트·지원하지 않는 형식은 거부한다. 주소는 base 기준으로 풀고 같은 호스트만 허용
-export function parsePlaylist(text: string, base: URL): Playlist {
+// 단일 미디어 재생 목록만 받는다 (실측 LMS 는 variant 없음). 암호화·다른 호스트·부분 범위·지원하지 않는 형식은 거부한다
+export function parsePlaylist(text: string, base: URL): { segments: URL[]; seconds: number } {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
   if (lines[0] !== '#EXTM3U') throw new Error('영상 재생 목록 형식이 아닙니다.');
-  const resolve = (ref: string) => {
-    const url = URL.parse(ref, base);
-    if (!isMediaUrl(url) || url.hostname !== base.hostname)
-      throw new Error('재생 목록이 다른 서버의 주소를 가리켜 중단했습니다.');
-    return url;
-  };
   const segments: URL[] = [];
-  const variants: { url: URL; bandwidth: number }[] = [];
   let seconds = 0;
-  let pendingBandwidth: number | null = null;
   for (const line of lines.slice(1)) {
     if (!line) continue;
-    if (/^#EXT-X-(SESSION-)?KEY:/.test(line) && !/METHOD=NONE(,|$)/.test(line))
+    if (/^#EXT-X-(SESSION-)?KEY:/.test(line) && !/[:,]METHOD=NONE(,|$)/.test(line))
       throw new Error('암호화된 영상이라 받아쓸 수 없습니다.');
-    // 초기화 세그먼트(fMP4)는 이어 붙이기 방식으로 다룰 수 없다
-    if (line.startsWith('#EXT-X-MAP:')) throw new Error('지원하지 않는 영상 형식입니다.');
-    if (line.startsWith('#EXT-X-STREAM-INF:')) {
-      pendingBandwidth = Number(/[:,]BANDWIDTH=(\d+)/.exec(line)?.[1] ?? Infinity);
-      continue;
-    }
+    // 이어 붙이기 방식으로 다룰 수 없는 형식: 화질별 목록(마스터), 초기화 세그먼트(fMP4), 바이트 범위
+    if (/^#EXT-X-(STREAM-INF|MAP|BYTERANGE):/.test(line)) throw new Error('지원하지 않는 영상 형식입니다.');
     const inf = /^#EXTINF:([\d.]+)/.exec(line);
     if (inf) seconds += Number(inf[1]);
     if (line.startsWith('#')) continue;
-    if (pendingBandwidth !== null) {
-      variants.push({ url: resolve(line), bandwidth: pendingBandwidth });
-      pendingBandwidth = null;
-    } else segments.push(resolve(line));
+    const url = URL.parse(line, base);
+    if (!isMediaUrl(url) || url.hostname !== base.hostname)
+      throw new Error('재생 목록이 다른 서버의 주소를 가리켜 중단했습니다.');
+    segments.push(url);
     if (segments.length > VOD_MAX_SEGMENTS) throw new Error('영상이 너무 길어 받아쓰지 않습니다.');
   }
-  if (variants.length > 0) {
-    if (segments.length > 0) throw new Error('영상 재생 목록 형식이 올바르지 않습니다.');
-    // 받아쓰기엔 화질이 필요 없다 — 가장 가벼운 것
-    return { kind: 'master', variant: variants.sort((a, b) => a.bandwidth - b.bandwidth)[0].url };
-  }
   if (segments.length === 0) throw new Error('영상 재생 목록이 비어 있습니다.');
-  return { kind: 'media', segments, seconds };
+  return { segments, seconds };
 }
 
-// m3u8 → 세그먼트 목록. 마스터 목록이면 한 단계만 따라간다
 export async function loadSegments(
   playlistUrl: URL,
   signal: AbortSignal,
   fetchImpl: typeof fetch = fetch
 ): Promise<{ segments: URL[]; seconds: number }> {
-  const host = playlistUrl.hostname;
-  const read = async (url: URL) =>
-    parsePlaylist(new TextDecoder().decode(await mediaGet(url, host, VOD_PLAYLIST_MAX_BYTES, signal, fetchImpl)), url);
-  let list = await read(playlistUrl);
-  if (list.kind === 'master') list = await read(list.variant);
-  if (list.kind !== 'media') throw new Error('영상 재생 목록 형식이 올바르지 않습니다.');
-  return list;
+  const data = await mediaGet(playlistUrl, playlistUrl.hostname, VOD_PLAYLIST_MAX_BYTES, signal, fetchImpl);
+  return parsePlaylist(new TextDecoder().decode(data), playlistUrl);
 }

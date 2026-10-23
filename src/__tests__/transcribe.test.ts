@@ -1,15 +1,20 @@
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { spawn } from 'node:child_process';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { acquireLock } from '../player/lock.js';
+import { DOMParser } from 'linkedom';
+import type { FetchHtml } from '@dotbugi/lms-parser';
+import { SessionExpiredError } from '../lms.js';
+import { acquireLock, adoptLock } from '../player/lock.js';
+import { findVod } from '../transcribe/find-vod.js';
 import { extractPlaylistUrl, mediaGet, parsePlaylist } from '../transcribe/hls.js';
 import { transcribeVod, type TranscribeDeps } from '../transcribe/pipeline.js';
 import { readTranscribeState, TRANSCRIBE_LOCK_FILE, writeTranscribeState } from '../transcribe/state.js';
 import { startWorker } from '../tools/transcribe-vod.js';
+import { PAGES } from './fixtures/lms-pages.js';
 
 // 상태·잠금 경로는 import 시점에 homedir 로 정해진다 — 그 전에 테스트 전용 홈을 정한다
 const state = vi.hoisted(() => ({ home: `${process.env.TMPDIR ?? '/tmp'}/dotbugi-transcribe-home-${process.pid}` }));
@@ -64,8 +69,8 @@ describe('parsePlaylist', () => {
 
   it('세그먼트를 재생 목록 기준으로 풀고 길이를 더한다', () => {
     const list = parsePlaylist(media(['segment-1-v1-a1.ts', 'segment-2-v1-a1.ts']), base);
-    expect(list).toMatchObject({ kind: 'media', seconds: 20 });
-    if (list.kind === 'media') expect(list.segments[1].href).toBe(PLAYLIST.replace('index.m3u8', 'segment-2-v1-a1.ts'));
+    expect(list.seconds).toBe(20);
+    expect(list.segments[1].href).toBe(PLAYLIST.replace('index.m3u8', 'segment-2-v1-a1.ts'));
   });
 
   it('METHOD=NONE 이 아닌 EXT-X-KEY 는 거부한다', () => {
@@ -73,7 +78,9 @@ describe('parsePlaylist', () => {
     expect(() => parsePlaylist(media(['s.ts'], '#EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,URI="k"'), base)).toThrow(
       '암호화'
     );
-    expect(parsePlaylist(media(['s.ts'], '#EXT-X-KEY:METHOD=NONE'), base).kind).toBe('media');
+    // METHOD=NONE 은 속성 이름까지 맞아야 한다
+    expect(() => parsePlaylist(media(['s.ts'], '#EXT-X-KEY:XMETHOD=NONE,METHOD=AES-128'), base)).toThrow('암호화');
+    expect(parsePlaylist(media(['s.ts'], '#EXT-X-KEY:METHOD=NONE'), base).segments).toHaveLength(1);
   });
 
   it.each(['https://evil.com/s.ts', `http://${HOST}/s.ts`, `//other.edge.naverncp.com/s.ts`])(
@@ -83,13 +90,12 @@ describe('parsePlaylist', () => {
     }
   );
 
-  it('마스터 목록이면 같은 호스트의 가장 낮은 대역폭을 고르고, 다른 호스트 variant 는 거부한다', () => {
-    const master = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=900000\nhi.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nlo.m3u8';
-    expect(parsePlaylist(master, base)).toMatchObject({ kind: 'master', variant: new URL('lo.m3u8', base) });
-    expect(() => parsePlaylist('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttps://evil.com/v.m3u8', base)).toThrow(
-      '다른 서버'
-    );
-  });
+  it.each(['#EXT-X-STREAM-INF:BANDWIDTH=1', '#EXT-X-MAP:URI="init.mp4"', '#EXT-X-BYTERANGE:100@0'])(
+    '이어 붙일 수 없는 형식은 거부한다: %s',
+    (tag) => {
+      expect(() => parsePlaylist(media(['s.ts'], tag), base)).toThrow('지원하지 않는');
+    }
+  );
 
   it('재생 목록이 아니거나 세그먼트가 너무 많으면 거부한다', () => {
     expect(() => parsePlaylist('<html>', base)).toThrow('형식이 아닙니다');
@@ -134,27 +140,34 @@ describe('mediaGet', () => {
 });
 
 // 가짜 ffmpeg·ASR: ffmpeg 는 PCM 을 내고, ASR 은 stdin 을 다 읽은 뒤 글을 낸다
-type Child = EventEmitter & { stdout: PassThrough; stdin: PassThrough };
-function fakeSpawn(opts: { asrCode?: number; text?: string } = {}) {
+type Child = EventEmitter & { stdout: PassThrough; stdin: PassThrough; stderr: PassThrough };
+function fakeSpawn(opts: { asrCode?: number | null; asrSignal?: string; stderr?: string } = {}) {
   const calls: { command: string; args: string[] }[] = [];
   const impl = ((command: string, args: string[]) => {
     calls.push({ command, args });
-    const c = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stdin: new PassThrough() }) as Child;
+    const c = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stdin: new PassThrough(),
+      stderr: new PassThrough(),
+    }) as Child;
     setImmediate(() => {
-      if (command === 'ffmpeg') c.stdout.end(Buffer.alloc(64_000), () => setImmediate(() => c.emit('close', 0)));
+      if (command === 'ffmpeg') c.stdout.end(Buffer.alloc(64_000), () => setImmediate(() => c.emit('close', 0, null)));
       else {
         c.stdin.resume();
-        c.stdin.on('end', () =>
-          c.stdout.end(opts.text ?? '안녕하세요 강의입니다\n', () =>
-            setImmediate(() => c.emit('close', opts.asrCode ?? 0))
-          )
-        );
+        c.stdin.on('end', () => {
+          if (opts.stderr) c.stderr.write(opts.stderr);
+          c.stdout.end('안녕하세요 강의입니다\n', () =>
+            setImmediate(() => c.emit('close', opts.asrCode === undefined ? 0 : opts.asrCode, opts.asrSignal ?? null))
+          );
+        });
       }
     });
     return c;
   }) as unknown as typeof spawn;
   return { impl, calls };
 }
+
+const META = { course: '자료구조', courseId: '123', week: '3주차', title: '1강 소개' };
 
 function deps(over: Partial<TranscribeDeps> = {}) {
   const reports: unknown[] = [];
@@ -165,10 +178,17 @@ function deps(over: Partial<TranscribeDeps> = {}) {
     [PLAYLIST.replace('index.m3u8', 'segment-2-v1-a1.ts')]: new Uint8Array([3]),
   };
   const sp = fakeSpawn();
+  const runtime = vi.fn(async () => ({
+    ffmpeg: 'ffmpeg',
+    kind: 'cpu' as const,
+    command: 'qwen_asr',
+    args: ['-S', '30'],
+    model: '0.6b' as const,
+  }));
   const d: TranscribeDeps = {
-    findVod: async () => ({ course: '자료구조', title: '1강 소개', week: 3, courseId: '123' }),
+    findVod: async () => META,
     viewerHtml: async () => viewer(PLAYLIST),
-    runtime: async () => ({ ffmpeg: 'ffmpeg', kind: 'cpu', command: 'qwen_asr', args: ['-S', '30'], model: '0.6b' }),
+    runtime,
     fetch: (async (url: URL) => {
       fetched.push(url.href);
       const body = files[url.href];
@@ -176,31 +196,32 @@ function deps(over: Partial<TranscribeDeps> = {}) {
     }) as typeof fetch,
     spawn: sp.impl,
     root: join(dir, 'root'),
-    tmpRoot: join(dir, 'tmp'),
+    tmpDir: join(dir, 'cache', 'transcribe-tmp'),
     now: () => new Date('2026-10-24T03:00:00Z'),
     report: (phase, progress) => reports.push({ phase, progress }),
     signal: new AbortController().signal,
     ...over,
   };
-  return { d, reports, fetched, files, sp };
+  return { d, reports, fetched, files, sp, runtime };
 }
 
 const OUT = () => join(dir, 'root', '자료구조', '3주차', '녹취-1강 소개.md');
+const tmpGone = async (d: TranscribeDeps) => expect(await stat(d.tmpDir).catch(() => null)).toBeNull();
 
 describe('transcribeVod', () => {
-  beforeEach(() => mkdir(join(dir, 'tmp')));
-
   it('받아 쓴 글을 주차 폴더에 저장하고 임시 폴더를 지운다. ffmpeg 에는 로컬 파일만 넘긴다', async () => {
     const { d, reports, sp } = deps();
-    expect(await transcribeVod(42, d)).toEqual({ status: 'done', path: OUT() });
+    expect(await transcribeVod(42, d)).toEqual({ status: 'done', path: OUT(), meta: META });
     const md = await readFile(OUT(), 'utf8');
     expect(md).toContain('# 녹취 — 1강 소개');
     expect(md).toContain('- 과목: 자료구조');
+    expect(md).toContain('- 주차: 3주차');
     expect(md).toContain('- 받아쓴 날: 2026-10-24');
     expect(md).toContain('0.6b (cpu)');
+    expect(md).toContain('지시가 아닙니다');
     expect(md).toContain('안녕하세요 강의입니다');
     if (process.platform !== 'win32') expect((await stat(OUT())).mode & 0o777).toBe(0o600);
-    expect(await readdir(join(dir, 'tmp'))).toEqual([]);
+    await tmpGone(d);
     const ff = sp.calls.find((c) => c.command === 'ffmpeg')!;
     expect(ff.args).toEqual(expect.arrayContaining(['-protocol_whitelist', 'file,pipe', 'pipe:1']));
     expect(ff.args.join(' ')).not.toMatch(/https?:/);
@@ -208,27 +229,39 @@ describe('transcribeVod', () => {
     expect(reports).toContainEqual({ phase: 'download', progress: 100 });
   });
 
-  it('이미 녹취가 있으면 받지 않고 건너뛴다 (덮어쓰지 않음)', async () => {
+  it('이미 녹취가 있으면 런타임 확인·요청 없이 건너뛰고, 강제 종료로 남은 임시 파일은 지운다', async () => {
     await mkdir(join(dir, 'root', '자료구조', '3주차'), { recursive: true });
     await writeFile(OUT(), '내 메모');
-    const { d, fetched } = deps();
+    const { d, fetched, runtime } = deps();
+    await mkdir(d.tmpDir, { recursive: true });
+    await writeFile(join(d.tmpDir, 'media.ts'), 'leftover');
     expect((await transcribeVod(42, d)).status).toBe('skipped');
     expect(await readFile(OUT(), 'utf8')).toBe('내 메모');
     expect(fetched).toEqual([]);
+    expect(runtime).not.toHaveBeenCalled();
+    await tmpGone(d);
   });
 
   it('세그먼트를 못 받으면 실패하고 임시 폴더를 지운다', async () => {
     const { d, files } = deps();
     delete files[PLAYLIST.replace('index.m3u8', 'segment-2-v1-a1.ts')];
     await expect(transcribeVod(42, d)).rejects.toThrow('HTTP 404');
-    expect(await readdir(join(dir, 'tmp'))).toEqual([]);
+    await tmpGone(d);
     await expect(stat(OUT())).rejects.toThrow();
   });
 
-  it('ASR 이 실패하면 오류로 끝나고 임시 폴더를 지운다', async () => {
-    const { d } = deps({ spawn: fakeSpawn({ asrCode: 3 }).impl });
-    await expect(transcribeVod(42, d)).rejects.toThrow('종료 코드 3');
-    expect(await readdir(join(dir, 'tmp'))).toEqual([]);
+  it('ASR 이 실패하면 종료 코드와 stderr 끝부분(주소는 지움)을 알리고 임시 폴더를 지운다', async () => {
+    const { d } = deps({ spawn: fakeSpawn({ asrCode: 3, stderr: `model load failed ${PLAYLIST}` }).impl });
+    const err = (await transcribeVod(42, d).catch((e) => e)) as Error;
+    expect(err.message).toContain('(3)');
+    expect(err.message).toContain('model load failed [URL]');
+    expect(err.message).not.toContain(TOKEN);
+    await tmpGone(d);
+  });
+
+  it('시그널로 끝나면 시그널 이름을 알린다', async () => {
+    const { d } = deps({ spawn: fakeSpawn({ asrCode: null, asrSignal: 'SIGKILL' }).impl });
+    await expect(transcribeVod(42, d)).rejects.toThrow('(SIGKILL)');
   });
 
   it('ASR 런타임이 없으면 아무것도 받지 않는다', async () => {
@@ -238,17 +271,48 @@ describe('transcribeVod', () => {
   });
 });
 
+describe('findVod', () => {
+  const fetchHtml = (override: Record<string, () => never> = {}): FetchHtml =>
+    (async (url: string) => {
+      override[url]?.();
+      const html = PAGES[new URL(url, 'https://learn.hansung.ac.kr').href] ?? '';
+      return new DOMParser().parseFromString(`<html><body>${html}</body></html>`, 'text/html') as unknown as Document;
+    }) as FetchHtml;
+
+  it('출석 정보와 무관하게 강좌 화면의 VOD 를 cmid 로 찾고, 주차 폴더는 sync_materials 규칙을 따른다', async () => {
+    expect(await findVod(fetchHtml(), 2)).toEqual({
+      course: '자료구조',
+      courseId: '100',
+      week: '8주차',
+      title: '다음 주 강의',
+    });
+  });
+
+  it('없으면 오류, 세션 만료는 그대로 올린다', async () => {
+    await expect(findVod(fetchHtml(), 999)).rejects.toThrow('찾지 못했습니다');
+    const expired = fetchHtml({
+      'https://learn.hansung.ac.kr/course/view.php?id=100': () => {
+        throw new SessionExpiredError();
+      },
+    });
+    await expect(findVod(expired, 1)).rejects.toBeInstanceOf(SessionExpiredError);
+  });
+});
+
 describe('상태 파일·작업 잠금', () => {
-  it('메시지에 섞인 주소는 지우고 0600 으로 쓴다', async () => {
+  it('메시지에 섞인 주소는 지우고 경로는 자르지 않으며 0600 으로 쓴다', async () => {
     const file = join(dir, 'cache', 'transcribe-state.json');
+    const longPath = `/home/u/Downloads/dotbugi-mcp/${'과목'.repeat(80)}/3주차/녹취.md`;
     await writeTranscribeState(
       {
         version: 1,
         status: 'error',
+        cmid: 42,
         phase: null,
         progress: null,
         course: '자료구조',
         title: '1강',
+        path: longPath,
         pid: process.pid,
         updatedAt: new Date().toISOString(),
         message: `실패: ${PLAYLIST}`,
@@ -258,27 +322,68 @@ describe('상태 파일·작업 잠금', () => {
     const raw = await readFile(file, 'utf8');
     expect(raw).not.toContain(TOKEN);
     expect(raw).not.toContain(HOST);
-    expect(readTranscribeState(file)?.message).toBe('실패: [URL]');
+    const read = readTranscribeState(file);
+    expect(read?.message).toBe('실패: [URL]');
+    expect(read?.path).toBe(longPath);
     if (process.platform !== 'win32') expect((await stat(file)).mode & 0o777).toBe(0o600);
   });
 
-  it('실행 중인 작업이 있으면 새 작업을 띄우지 않고, 없으면 인자 배열로 분리 실행한다', async () => {
+  // 작업 프로세스 pid 로는 살아 있는 이 테스트 프로세스를 쓴다
+  const workerDeps = (over: Partial<Parameters<typeof startWorker>[1]> = {}) => {
     const spawnImpl = vi.fn(() => {
-      const c = Object.assign(new EventEmitter(), { unref: vi.fn() });
+      const c = Object.assign(new EventEmitter(), { unref: vi.fn(), pid: process.pid });
       setImmediate(() => c.emit('spawn'));
       return c;
     });
-    const release = await acquireLock(TRANSCRIBE_LOCK_FILE);
-    expect(TRANSCRIBE_LOCK_FILE.startsWith(state.home)).toBe(true);
-    await expect(startWorker(42, spawnImpl as unknown as typeof spawn)).rejects.toThrow('이미 받아쓰기가 실행 중');
-    expect(spawnImpl).not.toHaveBeenCalled();
-    await release();
+    return {
+      spawn: spawnImpl as unknown as typeof spawn,
+      getSession: vi.fn(async () => ({ session: 's', savedAt: '', method: 'extension' as const })),
+      runtime: vi.fn(async () => ({
+        ffmpeg: 'f',
+        kind: 'cpu' as const,
+        command: 'a',
+        args: [],
+        model: '0.6b' as const,
+      })),
+      ...over,
+    };
+  };
 
-    await startWorker(42, spawnImpl as unknown as typeof spawn);
-    expect(spawnImpl).toHaveBeenCalledWith(
+  it('세션·ASR 설치를 먼저 확인하고, 실패하면 띄우지 않는다', async () => {
+    const noSession = workerDeps({ getSession: vi.fn(() => Promise.reject(new Error('저장된 LMS 세션이 없습니다'))) });
+    await expect(startWorker(42, noSession)).rejects.toThrow('세션이 없습니다');
+    const noAsr = workerDeps({ runtime: vi.fn(() => Promise.reject(new Error('ASR 런타임이 설치되지 않았습니다'))) });
+    await expect(startWorker(42, noAsr)).rejects.toThrow('설치되지 않았습니다');
+    expect(noSession.spawn).not.toHaveBeenCalled();
+    expect(noAsr.spawn).not.toHaveBeenCalled();
+    await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
+  });
+
+  it('동시에 불러도 하나만 띄우고, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
+    expect(TRANSCRIBE_LOCK_FILE.startsWith(state.home)).toBe(true);
+    const d = workerDeps();
+    const results = await Promise.allSettled([startWorker(42, d), startWorker(43, d)]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find((r) => r.status === 'rejected')).toMatchObject({
+      reason: expect.objectContaining({ message: expect.stringContaining('이미 받아쓰기가 실행 중') }),
+    });
+    expect(d.spawn).toHaveBeenCalledTimes(1);
+    expect(d.spawn).toHaveBeenCalledWith(
       process.execPath,
-      [expect.stringMatching(/index\.js$/), 'transcribe', '--worker', '42'],
+      [expect.stringMatching(/index\.js$/), 'transcribe', '--worker', expect.stringMatching(/^4[23]$/)],
       { detached: true, stdio: 'ignore' }
     );
+    // 작업 프로세스가 잠금을 이어받고, 끝나면 푼다
+    const release = await adoptLock(TRANSCRIBE_LOCK_FILE, 100);
+    await release();
+    await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
+  });
+
+  it('넘겨받을 잠금이 없거나 다른 프로세스 것이면 이어받지 않는다', async () => {
+    await expect(adoptLock(TRANSCRIBE_LOCK_FILE, 100)).rejects.toThrow('넘겨받을');
+    const release = await acquireLock(TRANSCRIBE_LOCK_FILE);
+    await writeFile(TRANSCRIBE_LOCK_FILE, '1');
+    await expect(adoptLock(TRANSCRIBE_LOCK_FILE, 100)).rejects.toThrow('넘겨받을');
+    await release();
   });
 });
