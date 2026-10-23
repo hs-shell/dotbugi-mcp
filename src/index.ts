@@ -8,6 +8,7 @@ const USAGE = `사용법:
   dotbugi-mcp login --browser  임시 브라우저 창에서 직접 로그인
   dotbugi-mcp logout           저장된 세션 삭제
   dotbugi-mcp play             미출석 VOD 를 마감 임박 순으로 공식 플레이어 창에 차례로 열기 (Ctrl+C 로 중지)
+  dotbugi-mcp sync             강의자료를 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/ 에 받기 (LMS 에서 사라진 파일은 하나씩 삭제 여부 확인)
   dotbugi-mcp statusline       VOD 재생 상태 한 줄 출력 (Claude Code 상태 표시줄용)`;
 
 async function main(): Promise<void> {
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
   if (command === 'login') return (await import('./commands/login.js')).login(values.browser ? 'browser' : 'extension');
   if (command === 'logout') return (await import('./commands/logout.js')).logout();
   if (command === 'play') return (await import('./commands/play.js')).play();
+  if (command === 'sync') return (await import('./commands/sync.js')).sync();
   if (command === 'statusline') return (await import('./commands/statusline.js')).statusline();
   throw new Error(USAGE);
 }

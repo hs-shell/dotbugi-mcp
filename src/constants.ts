@@ -84,3 +84,13 @@ export const LMS_LOGIN_FORM_SELECTOR = 'input[type="password"]';
 export const VOD_PROGRESS_TABLE_SELECTOR = '.user_progress';
 // shortcut: 사용자 폴더 설치(%LOCALAPPDATA%) 브라우저는 못 찾는다, 요청이 있으면 cmd.exe /c echo %LOCALAPPDATA% 로 해석한다
 export const WSL_PROGRAM_FILES = ['/mnt/c/Program Files', '/mnt/c/Program Files (x86)'];
+
+// 강의자료 동기화(sync_materials). 파일 모듈은 redirect=1 로 실제 파일(pluginfile) 주소를 리다이렉트로 받는다
+export const RESOURCE_VIEW_PATH = '/mod/resource/view.php';
+export const FOLDER_VIEW_PATH = '/mod/folder/view.php';
+// 과목 폴더마다 하나. LMS 파일명은 앞의 점을 지우므로 자료와 이름이 겹치지 않는다
+export const MATERIALS_MANIFEST_NAME = '.dotbugi-manifest.json';
+export const MATERIALS_MANIFEST_MAX_BYTES = 4 * 1024 * 1024;
+// 강의 슬라이드·녹화 자료는 과제 첨부보다 크다
+export const MATERIAL_MAX_BYTES = 200 * 1024 * 1024;
+export const MATERIAL_REQUEST_TIMEOUT_MS = 10 * 60_000;

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, open, unlink, type FileHandle } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -38,26 +39,37 @@ export function attachmentName(url: URL): string {
   }
 }
 
-const tooLarge = () => new Error(`첨부파일이 ${ATTACHMENT_MAX_BYTES / 1024 / 1024}MB 상한을 넘습니다.`);
+// 파일 하나의 크기·요청 시간 상한. 강의자료(#13)는 첨부보다 크게 잡는다
+export interface DownloadLimits {
+  maxBytes: number;
+  timeoutMs: number;
+}
+const ATTACHMENT_LIMITS: DownloadLimits = { maxBytes: ATTACHMENT_MAX_BYTES, timeoutMs: ATTACHMENT_REQUEST_TIMEOUT_MS };
 
-async function writeBody(file: FileHandle, url: URL, session: string): Promise<void> {
-  const res = await lmsFetch(url.href, session, ATTACHMENT_REQUEST_TIMEOUT_MS);
+const tooLarge = (max: number) => new Error(`첨부파일이 ${max / 1024 / 1024}MB 상한을 넘습니다.`);
+
+// 받은 내용의 sha256(hex)을 돌려준다
+async function writeBody(file: FileHandle, url: URL, session: string, limits: DownloadLimits): Promise<string> {
+  const res = await lmsFetch(url.href, session, limits.timeoutMs);
   // 리다이렉트(3xx)도 실패로 본다 — 다른 곳으로 세션을 들고 따라가지 않는다
   if (!res.ok || !res.body) throw new Error(`LMS 응답 오류 HTTP ${res.status}`);
-  if (Number(res.headers.get('content-length')) > ATTACHMENT_MAX_BYTES) throw tooLarge();
+  if (Number(res.headers.get('content-length')) > limits.maxBytes) throw tooLarge(limits.maxBytes);
   // Content-Length 는 믿지 않고 받은 바이트를 직접 센다
   const reader = res.body.getReader();
+  const hash = createHash('sha256');
   let size = 0;
   try {
     for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
       size += chunk.value.byteLength;
-      if (size > ATTACHMENT_MAX_BYTES) throw tooLarge();
+      if (size > limits.maxBytes) throw tooLarge(limits.maxBytes);
+      hash.update(chunk.value);
       await file.write(chunk.value);
     }
   } catch (err) {
     await reader.cancel().catch(() => {});
     throw err;
   }
+  return hash.digest('hex');
 }
 
 // "이름 (n).확장자" — 기존 파일을 덮어쓰지 않고 옆에 받는다
@@ -87,18 +99,20 @@ export async function saveAttachment(
   url: URL,
   dir: string,
   name: string,
-  session: string
-): Promise<{ name: string; path: string }> {
+  session: string,
+  limits = ATTACHMENT_LIMITS
+): Promise<{ name: string; path: string; sha256: string }> {
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const saved = await openNew(dir, name);
   // shortcut: 받는 도중 프로세스가 죽으면 덜 받은 파일이 남는다, 문제가 되면 임시 이름으로 받은 뒤 옮긴다
+  let sha256: string;
   try {
-    await writeBody(saved.file, url, session);
+    sha256 = await writeBody(saved.file, url, session, limits);
   } catch (err) {
     await saved.file.close();
     await unlink(saved.path);
     throw err;
   }
   await saved.file.close();
-  return { name: saved.name, path: saved.path };
+  return { name: saved.name, path: saved.path, sha256 };
 }
