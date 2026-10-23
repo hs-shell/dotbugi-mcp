@@ -34,6 +34,8 @@ function Exit-Failed([int]$e) { if ($e -eq 1168) { exit ${NOT_FOUND_EXIT} } else
 `;
 
 // Type 1 = CRED_TYPE_GENERIC, Persist 2 = CRED_PERSIST_LOCAL_MACHINE(로밍 안 함), 1168 = ERROR_NOT_FOUND
+// Persist 2 를 고른 이유: 1(SESSION)은 Windows 로그오프 때 사라져 매번 다시 login 해야 하고,
+// 3(ENTERPRISE)은 도메인 로밍 프로필을 타고 다른 PC 로 복사될 수 있다. 세션은 이 PC 에만 남긴다
 const OPS = {
   set: `$s = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd().Trim()))
 $b = [Text.Encoding]::Unicode.GetBytes($s)

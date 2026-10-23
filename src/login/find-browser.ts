@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
+import { absolutePathDirs } from '../platform.js';
 
 // 설치된 Chromium 계열 브라우저 탐색 순서: Chrome → Edge → Brave → Whale
 const WINDOWS_PATHS = [
@@ -35,6 +36,6 @@ function candidates(): string[] {
     return WINDOWS_PATHS.flatMap((p) => roots.map((r) => join(r, p)));
   }
   if (process.platform === 'darwin') return MAC_PATHS;
-  const dirs = (env.PATH ?? '').split(delimiter).filter(Boolean);
+  const dirs = absolutePathDirs();
   return LINUX_NAMES.flatMap((name) => dirs.map((d) => join(d, name)));
 }

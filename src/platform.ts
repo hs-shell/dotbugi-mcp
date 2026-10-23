@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { WSL_INTEROP_FILE, WSL_RUNDLL32 } from './constants.js';
+
+// PATH 중 절대경로 항목만 쓴다 (빈 항목·'.' 같은 상대경로는 현재 폴더의 같은 이름 파일을 실행하게 만든다)
+export function absolutePathDirs(): string[] {
+  return (process.env.PATH ?? '').split(delimiter).filter((d) => isAbsolute(d));
+}
 
 export function isWsl(): boolean {
   return process.platform === 'linux' && (existsSync(WSL_INTEROP_FILE) || Boolean(process.env.WSL_DISTRO_NAME));
@@ -27,5 +32,9 @@ function opener(url: string): [string, string[]] {
     return [rundll32, ['url.dll,FileProtocolHandler', url]];
   }
   if (process.platform === 'darwin') return ['/usr/bin/open', [url]];
-  return ['xdg-open', [url]];
+  const xdgOpen = absolutePathDirs()
+    .map((d) => join(d, 'xdg-open'))
+    .find((p) => existsSync(p));
+  if (!xdgOpen) throw new Error('xdg-open 을 찾지 못해 기본 브라우저를 열 수 없습니다.');
+  return [xdgOpen, [url]];
 }
