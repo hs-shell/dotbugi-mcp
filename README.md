@@ -189,6 +189,32 @@ node dist/index.js play   # Ctrl+C 로 중지
 - 과목·제목 등 LMS 텍스트는 제어·서식 문자(터미널 이스케이프 포함)를 지우고 30자로 자릅니다. 상태 파일의 글은 쓸 때·읽을 때 200자로 자릅니다. 링크(symlink)·16KB 초과·형식이 틀린 상태 파일은 읽지 않습니다.
 - 이미 다른 상태 표시줄을 쓰고 있다면 그 스크립트에서 이 명령의 출력을 이어 붙이면 됩니다.
 
+## 로컬 음성 인식 런타임 (`asr`)
+
+VOD 받아쓰기(`transcribe_vod`, #19)가 쓰는 Qwen3-ASR 런타임을 설치·확인·제거합니다. Docker·sudo 없이 `~/.cache/dotbugi-mcp/asr/` 한 폴더(0700)에만 설치하고, 시스템 패키지·PATH 는 건드리지 않습니다.
+
+```bash
+dotbugi-mcp asr install                    # CPU: ffmpeg + qwen_asr + Qwen3-ASR-0.6B (약 2GB)
+dotbugi-mcp asr install --gpu --model 1.7b # NVIDIA GPU: ffmpeg + Python venv(uv) + 선택 모델 (venv 약 6GB)
+dotbugi-mcp asr status                     # 설치 구성·용량·sha256 검증 결과
+dotbugi-mcp asr remove                     # 폴더 삭제 (터미널이 아니면 --yes 필요)
+```
+
+- 실행 방식은 자동으로 고르지 않습니다. CPU 는 0.6B 고정, `--model 0.6b|1.7b` 는 `--gpu` 와 함께일 때만 고를 수 있고 `config.json` 에 저장됩니다. 다시 `install` 하면 바뀝니다.
+- 지원: Linux x64·WSL — x86-64-v3 CPU(AVX2·FMA 등, Intel Haswell·AMD Excavator 이후) + **glibc 2.35 이상**(Ubuntu 22.04·Debian 12 이후). macOS Apple Silicon 은 바이너리 검증 전이라 아직 CPU 설치가 거부됩니다. `--gpu` 는 Linux x64 + NVIDIA GPU + [uv](https://docs.astral.sh/uv/) 필요. Windows 는 WSL 에서 실행하세요.
+- 받는 파일은 모두 코드에 고정된 sha256·크기와 일치해야 쓰입니다(`src/asr/pins.ts`). 60초 동안 데이터가 오지 않으면 끊습니다. `.part` 로 받아 검증한 뒤에만 이름을 바꾸므로 중단돼도 다시 실행하면 이어 받습니다.
+  - `qwen_asr`: 공개 저장소 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release(`asr-v*`)의 미리 빌드한 바이너리 — antirez/qwen-asr 커밋 고정, OpenBLAS 정적 링크
+  - ffmpeg: PyPI `imageio-ffmpeg` 0.6.0 휠 안의 정적 바이너리
+  - 모델: Hugging Face `Qwen/Qwen3-ASR-0.6B`·`1.7B` 고정 리비전
+  - GPU venv: `src/asr/gpu-requirements.txt` (해시 고정, 휠만) — `uv pip install --require-hashes --only-binary :all:`
+- uv 캐시와 uv 가 받는 Python 도 같은 폴더(`uv-cache/`, `python/`)에 두므로 `asr remove` 로 모두 지워집니다.
+- 내려받기는 https 로 github.com·huggingface.co·files.pythonhosted.org 와 그 CDN 만 허용합니다. 텔레메트리는 없습니다.
+
+### qwen_asr 바이너리 고정 (관리자, #22)
+
+1. [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) 의 **Build qwen_asr** 워크플로를 태그 `asr-v1` 로 실행
+2. Release 의 `SHA256SUMS` 값을 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` sha256 에 넣고 PR (값이 `UNPINNED` 인 동안 CPU 설치는 거부됩니다)
+
 ## Claude Code에 등록
 
 ```bash
