@@ -155,7 +155,7 @@ describe('get_assignment', () => {
     const result = await call({ cmid: 5 });
     const out = result.structuredContent as { attachments: { name: string }[]; warnings: string[] };
     expect(out.attachments.map((a) => a.name)).toEqual(['과제.pdf']);
-    expect(out.warnings).toEqual(['첨부파일을 받지 못했습니다 (_.._evil.sh): 첨부파일이 20MB 상한을 넘습니다.']);
+    expect(out.warnings).toEqual(['첨부파일을 받지 못했습니다 (_.._evil.sh): 파일이 20MB 상한을 넘습니다.']);
     expect(sent).toBeLessThan(ATTACHMENT_MAX_BYTES + 3 * chunk.byteLength);
     expect(await readdir(dir())).toEqual(['과제.pdf']);
   });

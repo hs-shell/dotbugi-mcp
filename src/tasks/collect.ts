@@ -87,7 +87,20 @@ export function toTaskItems(course: CourseBase, data: CourseData): TaskItem[] {
   ];
 }
 
-// 내 강좌 목록 → 과목별 스크래핑. dotbugi src/hooks/useGetCourses.ts 처럼 비교과(커뮤니티) 과목은 제외한다
+// LMS 메인의 내 강좌 목록. dotbugi src/hooks/useGetCourses.ts 처럼 비교과(커뮤니티) 과목은 제외한다
+export async function listCourses(fetchHtml: FetchHtml): Promise<CourseBase[]> {
+  const page = await fetchHtml(LMS_COURSE_LIST_PATH);
+  // 목록 컨테이너가 없으면 '과목 0개'가 아니라 다른 페이지를 받은 것이다
+  if (!page.querySelector(LMS_COURSE_LIST_SELECTOR))
+    throw new Error('LMS 메인에서 내 강좌 목록을 찾지 못했습니다. LMS 화면 구조가 바뀌었을 수 있습니다.');
+  // 같은 과목이 목록에 여러 번 나와도 한 번만 긁는다
+  return uniqueBy(
+    parseCoursesFromDOM(page).filter((c) => !c.isCommunity),
+    (c) => c.courseId
+  );
+}
+
+// 내 강좌 목록 → 과목별 스크래핑
 export async function collectTasks(session: string, cachedQuizzes?: CachedQuiz[]): Promise<CollectResult> {
   // 파서는 개별 요청 실패를 빈 값으로 삼킨다(퀴즈 상세 실패는 onError 로도 안 올라오고 '미응시'가 된다).
   // 그래서 모든 요청이 지나는 여기서 실패 수와 세션 만료를 직접 센다
@@ -101,15 +114,7 @@ export async function collectTasks(session: string, cachedQuizzes?: CachedQuiz[]
       throw err;
     });
 
-  const page = await fetchHtml(LMS_COURSE_LIST_PATH);
-  // 목록 컨테이너가 없으면 '과목 0개'가 아니라 다른 페이지를 받은 것이다
-  if (!page.querySelector(LMS_COURSE_LIST_SELECTOR))
-    throw new Error('LMS 메인에서 내 강좌 목록을 찾지 못했습니다. LMS 화면 구조가 바뀌었을 수 있습니다.');
-  // 같은 과목이 목록에 여러 번 나와도 한 번만 긁는다
-  const courses = uniqueBy(
-    parseCoursesFromDOM(page).filter((c) => !c.isCommunity),
-    (c) => c.courseId
-  );
+  const courses = await listCourses(fetchHtml);
   let failedCourses = 0;
   const perCourse = await Promise.all(
     courses.map((course) =>

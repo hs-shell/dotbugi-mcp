@@ -16,7 +16,7 @@ export interface AssignPage {
 }
 
 // 세션 쿠키를 붙여 받을 수 있는 건 LMS 출처의 pluginfile 뿐이다 (다른 주소는 본문 링크로만 남는다)
-function isLmsFileUrl(url: URL): boolean {
+export function isLmsFileUrl(url: URL): boolean {
   return url.origin === LMS_ORIGIN && !url.username && !url.password && url.pathname.startsWith(LMS_FILE_PATH_PREFIX);
 }
 

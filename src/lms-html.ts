@@ -4,8 +4,8 @@ import { LMS_MAX_CONCURRENT_REQUESTS } from './constants.js';
 import { createLimiter } from './limit.js';
 import { lmsFetch } from './lms.js';
 
-// 프로세스 전체에서 하나 — 새로고침이 겹쳐도 LMS 동시 요청 수가 상한을 넘지 않는다
-const limit = createLimiter(LMS_MAX_CONCURRENT_REQUESTS);
+// 프로세스 전체에서 하나 — 새로고침이 겹쳐도 LMS 동시 요청 수가 상한을 넘지 않는다 (HTML 이 아닌 요청도 이걸 거친다)
+export const limit = createLimiter(LMS_MAX_CONCURRENT_REQUESTS);
 
 const isRedirect = (status: number) => status >= 300 && status < 400;
 
