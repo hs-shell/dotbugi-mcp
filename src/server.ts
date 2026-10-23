@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
+import { registerSyncMaterials } from './tools/sync-materials.js';
 import { registerVodStatus } from './tools/vod-status.js';
 
 // 버전은 package.json 단일 출처 (src/·dist/ 모두 한 단계 아래라 같은 상대 경로)
@@ -13,5 +14,6 @@ export function createServer(): McpServer {
   registerListTasks(server);
   registerVodStatus(server);
   registerGetAssignment(server);
+  registerSyncMaterials(server);
   return server;
 }

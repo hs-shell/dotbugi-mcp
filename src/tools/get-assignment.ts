@@ -18,7 +18,7 @@ async function downloadAll(urls: URL[], dir: string, session: string) {
     const name = attachmentName(url);
     try {
       const saved = await saveAttachment(url, dir, name, session);
-      attachments.push(saved);
+      attachments.push({ name: saved.name, path: saved.path });
       if (saved.name !== name)
         warnings.push(`같은 이름의 파일이 이미 있어 덮어쓰지 않고 ${saved.name} 으로 저장했습니다.`);
     } catch (err) {
