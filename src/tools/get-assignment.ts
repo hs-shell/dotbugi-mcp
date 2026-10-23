@@ -17,9 +17,10 @@ async function downloadAll(urls: URL[], dir: string, session: string) {
   for (const url of urls.slice(0, ATTACHMENT_MAX_COUNT)) {
     const name = attachmentName(url);
     try {
-      const { path, existing } = await saveAttachment(url, dir, name, session);
-      attachments.push({ name, path });
-      if (existing) warnings.push(`같은 이름의 파일이 이미 있어 덮어쓰지 않았습니다: ${name}`);
+      const saved = await saveAttachment(url, dir, name, session);
+      attachments.push(saved);
+      if (saved.name !== name)
+        warnings.push(`같은 이름의 파일이 이미 있어 덮어쓰지 않고 ${saved.name} 으로 저장했습니다.`);
     } catch (err) {
       if (err instanceof SessionExpiredError) throw err;
       const message = err instanceof Error ? err.message : String(err);

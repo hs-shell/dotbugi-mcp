@@ -24,7 +24,8 @@ function attachmentUrls(intro: Element): URL[] {
   const urls = new Map<string, URL>();
   for (const a of intro.querySelectorAll('a[href]')) {
     const url = URL.parse(a.getAttribute('href') ?? '', LMS_ORIGIN);
-    if (url && isLmsFileUrl(url)) urls.set(url.href, url);
+    // 같은 파일에 ?forcedownload=1 등만 다른 링크가 여럿 걸려도 한 번만 받는다
+    if (url && isLmsFileUrl(url) && !urls.has(url.origin + url.pathname)) urls.set(url.origin + url.pathname, url);
   }
   return [...urls.values()];
 }

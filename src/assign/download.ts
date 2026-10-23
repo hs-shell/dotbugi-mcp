@@ -1,13 +1,19 @@
 import { mkdir, open, unlink, type FileHandle } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { ATTACHMENT_MAX_BYTES, FILE_NAME_STEM_MAX_LENGTH } from '../constants.js';
+import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_REQUEST_TIMEOUT_MS,
+  FILE_NAME_STEM_MAX_LENGTH,
+  FILE_NAME_SUFFIX_MAX,
+} from '../constants.js';
 import { lmsFetch } from '../lms.js';
 
 // 과제마다 전용 폴더. 이 폴더 밖에는 쓰지 않는다
 export const downloadDir = (cmid: number) => join(homedir(), 'Downloads', 'dotbugi-mcp', `assign-${cmid}`);
 
-const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
+// Windows 는 확장자 앞 공백까지 무시하고 예약 이름으로 본다 (CON .txt)
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])\s*(\.|$)/i;
 const EXTENSION = /\.[\p{L}\p{N}]{1,10}$/u;
 
 // 경로 구분자·Windows 금지 문자·제어/서식 문자(방향 전환 등)를 지우고, 앞뒤 점·공백(../·숨김 파일)과 예약 이름을 피한다
@@ -17,7 +23,7 @@ export function safeFileName(raw: string): string {
   const stem = Array.from(name.slice(0, name.length - ext.length))
     .slice(0, FILE_NAME_STEM_MAX_LENGTH)
     .join('')
-    .trimEnd();
+    .replace(/[.\s]+$/u, '');
   const safe = stem ? stem + ext : 'attachment';
   return WINDOWS_RESERVED.test(safe) ? `_${safe}` : safe;
 }
@@ -35,7 +41,7 @@ export function attachmentName(url: URL): string {
 const tooLarge = () => new Error(`첨부파일이 ${ATTACHMENT_MAX_BYTES / 1024 / 1024}MB 상한을 넘습니다.`);
 
 async function writeBody(file: FileHandle, url: URL, session: string): Promise<void> {
-  const res = await lmsFetch(url.href, session);
+  const res = await lmsFetch(url.href, session, ATTACHMENT_REQUEST_TIMEOUT_MS);
   // 리다이렉트(3xx)도 실패로 본다 — 다른 곳으로 세션을 들고 따라가지 않는다
   if (!res.ok || !res.body) throw new Error(`LMS 응답 오류 HTTP ${res.status}`);
   if (Number(res.headers.get('content-length')) > ATTACHMENT_MAX_BYTES) throw tooLarge();
@@ -54,32 +60,45 @@ async function writeBody(file: FileHandle, url: URL, session: string): Promise<v
   }
 }
 
-// 첨부파일을 dir/name 에 받는다. 같은 이름이 이미 있으면 덮어쓰지 않고 existing 으로 알린다
+// "이름 (n).확장자" — 기존 파일을 덮어쓰지 않고 옆에 받는다
+function withSuffix(name: string, n: number): string {
+  if (n === 1) return name;
+  const ext = EXTENSION.exec(name)?.[0] ?? '';
+  return `${name.slice(0, name.length - ext.length)} (${n})${ext}`;
+}
+
+// wx: 이미 있으면(심볼릭 링크 포함) 열지 않는다 — 비어 있는 이름을 찾을 때까지 번호를 붙인다
+async function openNew(dir: string, name: string): Promise<{ file: FileHandle; name: string; path: string }> {
+  for (let n = 1; n <= FILE_NAME_SUFFIX_MAX; n++) {
+    const candidate = withSuffix(name, n);
+    const path = resolve(dir, candidate);
+    if (dirname(path) !== resolve(dir)) throw new Error('첨부파일 이름이 저장 폴더를 벗어납니다.');
+    try {
+      return { file: await open(path, 'wx', 0o600), name: candidate, path };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    }
+  }
+  throw new Error('같은 이름의 파일이 너무 많습니다. 저장 폴더를 정리하세요.');
+}
+
+// 첨부파일을 dir 아래 새 파일로 받는다. 같은 이름이 있으면 번호를 붙인 이름으로 저장한다
 export async function saveAttachment(
   url: URL,
   dir: string,
   name: string,
   session: string
-): Promise<{ path: string; existing: boolean }> {
-  const path = resolve(dir, name);
-  if (dirname(path) !== resolve(dir)) throw new Error('첨부파일 이름이 저장 폴더를 벗어납니다.');
+): Promise<{ name: string; path: string }> {
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  let file: FileHandle;
+  const saved = await openNew(dir, name);
+  // shortcut: 받는 도중 프로세스가 죽으면 덜 받은 파일이 남는다, 문제가 되면 임시 이름으로 받은 뒤 옮긴다
   try {
-    // wx: 이미 있으면(심볼릭 링크 포함) 열지 않는다
-    file = await open(path, 'wx', 0o600);
+    await writeBody(saved.file, url, session);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EEXIST') return { path, existing: true };
+    await saved.file.close();
+    await unlink(saved.path);
     throw err;
   }
-  // shortcut: 프로세스가 받는 도중 죽으면 덜 받은 파일이 남아 다음 호출에서 existing 이 된다, 문제가 되면 임시 이름으로 받은 뒤 옮긴다
-  try {
-    await writeBody(file, url, session);
-  } catch (err) {
-    await file.close();
-    await unlink(path);
-    throw err;
-  }
-  await file.close();
-  return { path, existing: false };
+  await saved.file.close();
+  return { name: saved.name, path: saved.path };
 }

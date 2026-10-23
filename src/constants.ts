@@ -56,5 +56,9 @@ export const LMS_FILE_PATH_PREFIX = '/pluginfile.php/';
 // 첨부파일 하나·과제 하나당 상한 (디스크를 채우거나 요청이 끝없이 이어지지 않게)
 export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
 export const ATTACHMENT_MAX_COUNT = 20;
+// 상한 크기 첨부를 느린 회선에서도 받을 수 있게 첨부 요청만 길게 (본문 수신 포함)
+export const ATTACHMENT_REQUEST_TIMEOUT_MS = 120_000;
+// 같은 이름 파일이 있을 때 붙여 보는 " (n)" 의 상한
+export const FILE_NAME_SUFFIX_MAX = 100;
 // 확장자를 뺀 파일명 길이(코드 포인트). 한글 4바이트 문자여도 파일 시스템 이름 한도(255바이트) 안에 든다
 export const FILE_NAME_STEM_MAX_LENGTH = 60;

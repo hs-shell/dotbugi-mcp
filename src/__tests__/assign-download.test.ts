@@ -9,6 +9,13 @@ describe('safeFileName', () => {
     ['C:\\Windows\\x.dll', 'C__Windows_x.dll'],
     ['.bashrc', 'bashrc'],
     ['CON.txt', '_CON.txt'],
+    ['nul .txt', '_nul.txt'],
+    ['CON .tar.gz', '_CON .tar.gz'],
+    ['CONIN$', '_CONIN$'],
+    ['conout$.log', '_conout$.log'],
+    ['COM¹.txt', '_COM¹.txt'],
+    ['LPT³', '_LPT³'],
+    ['COM10.txt', 'COM10.txt'],
     ['과제\u202Efdp.exe', '과제_fdp.exe'],
     ['a\nb\u0000c.pdf', 'a_b_c.pdf'],
     ['보고서 양식.hwp ', '보고서 양식.hwp'],
@@ -20,6 +27,10 @@ describe('safeFileName', () => {
     const name = safeFileName(`${'가'.repeat(200)}.pdf`);
     expect(name).toBe(`${'가'.repeat(60)}.pdf`);
     expect(Buffer.byteLength(name)).toBeLessThan(255);
+  });
+
+  it('확장자 없는 이름은 자른 뒤 끝의 점·공백을 지운다', () => {
+    expect(safeFileName(`${'가'.repeat(59)}. 나머지`)).toBe('가'.repeat(59));
   });
 });
 

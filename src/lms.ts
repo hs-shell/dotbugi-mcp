@@ -15,18 +15,22 @@ export class SessionExpiredError extends Error {
 }
 
 // 세션 쿠키를 붙이는 유일한 경로. 출처가 정확히 LMS 가 아니면 보내지 않고, 리다이렉트는 따라가지 않는다
-export async function lmsFetch(pathOrUrl: string, session: string): Promise<Response> {
+export async function lmsFetch(
+  pathOrUrl: string,
+  session: string,
+  timeoutMs = LMS_REQUEST_TIMEOUT_MS
+): Promise<Response> {
   const url = new URL(pathOrUrl, LMS_ORIGIN);
   if (url.origin !== LMS_ORIGIN || url.username || url.password)
     throw new Error('LMS 이외의 주소로는 요청하지 않습니다.');
   const res = await fetch(url, {
     headers: { cookie: `${SESSION_COOKIE}=${session}` },
     redirect: 'manual',
-    signal: AbortSignal.timeout(LMS_REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   }).catch((err: unknown) => {
     // 원래 오류 대신 고정 문구만 던진다 (요청 정보가 섞이지 않게)
     if (err instanceof Error && err.name === 'TimeoutError')
-      throw new Error(`LMS 가 ${LMS_REQUEST_TIMEOUT_MS / 1000}초 안에 응답하지 않았습니다.`);
+      throw new Error(`LMS 가 ${timeoutMs / 1000}초 안에 응답하지 않았습니다.`);
     throw err;
   });
   const location = res.headers.get('location');

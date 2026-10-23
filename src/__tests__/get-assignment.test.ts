@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ATTACHMENT_MAX_BYTES } from '../constants.js';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENT_REQUEST_TIMEOUT_MS, LMS_REQUEST_TIMEOUT_MS } from '../constants.js';
 import { createServer } from '../server.js';
 import { LOGIN_REDIRECT } from './fixtures/lms-pages.js';
 
@@ -124,7 +124,15 @@ describe('get_assignment', () => {
   });
 
   it('LMS pluginfile 이 아닌 첨부 주소에는 요청하지 않고, 세션은 LMS 로만 보내며 결과에 남기지 않는다', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
     const result = await call({ cmid: 5 });
+    // 첨부만 긴 제한 시간을 쓴다
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([
+      LMS_REQUEST_TIMEOUT_MS,
+      ATTACHMENT_REQUEST_TIMEOUT_MS,
+      ATTACHMENT_REQUEST_TIMEOUT_MS,
+    ]);
+    timeout.mockRestore();
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls).toEqual([`${L}/mod/assign/view.php?id=5`, `${FILE}?forcedownload=1`, TRAVERSAL]);
     for (const [, init] of fetchMock.mock.calls) expect(init).toMatchObject({ redirect: 'manual' });
@@ -162,12 +170,28 @@ describe('get_assignment', () => {
     expect(out.warnings[0]).toContain('상한을 넘습니다');
   });
 
-  it('같은 이름의 파일이 이미 있으면 덮어쓰지 않는다', async () => {
+  it('같은 이름의 파일이 이미 있으면 덮어쓰지 않고 번호를 붙여 받는다', async () => {
     await mkdir(dir(), { recursive: true });
     await writeFile(join(dir(), '과제.pdf'), '내 풀이');
-    const out = (await call({ cmid: 5 })).structuredContent as { warnings: string[] };
+    const out = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
     expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
-    expect(out.warnings).toEqual(['같은 이름의 파일이 이미 있어 덮어쓰지 않았습니다: 과제.pdf']);
+    expect(await readFile(join(dir(), '과제 (2).pdf'), 'utf8')).toBe('%PDF-1.4');
+    expect(out.attachments[0]).toEqual({ name: '과제 (2).pdf', path: join(dir(), '과제 (2).pdf') });
+    expect(out.warnings).toEqual(['같은 이름의 파일이 이미 있어 덮어쓰지 않고 과제 (2).pdf 으로 저장했습니다.']);
+  });
+
+  it('쿼리만 다른 같은 파일은 한 번만 받고, 다른 파일과 이름이 겹치면 번호를 붙인다', async () => {
+    const view = `${L}/mod/assign/view.php?id=5`;
+    const other = `${L}/pluginfile.php/12/mod_assign/introattachment/0/%EA%B3%BC%EC%A0%9C.pdf`;
+    const page = `<html><body><div role="main"><h2>과제1</h2><div id="intro">
+      <a href="${FILE}?forcedownload=1">a</a><a href="${FILE}">b</a><a href="${other}">c</a></div></div></body></html>`;
+    fetchMock.mockImplementation(async (input) =>
+      String(input) === view ? new Response(page) : new Response(String(input) === other ? '두번째' : '첫번째')
+    );
+    const out = (await call({ cmid: 5 })).structuredContent as { attachments: { name: string }[] };
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([view, `${FILE}?forcedownload=1`, other]);
+    expect(out.attachments.map((a) => a.name)).toEqual(['과제.pdf', '과제 (2).pdf']);
+    expect(await readFile(join(dir(), '과제 (2).pdf'), 'utf8')).toBe('두번째');
   });
 
   it.each([0, -1, 1.5, '5', '5/../../x'])('cmid 가 양의 정수가 아니면 거부한다: %j', async (cmid) => {
