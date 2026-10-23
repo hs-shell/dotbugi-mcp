@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { rename, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
@@ -9,6 +9,7 @@ import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import {
   readTranscribeState,
+  writeTranscribeState,
   TRANSCRIBE_BUSY,
   TRANSCRIBE_LOCK_FILE,
   transcribeStateSchema,
@@ -35,9 +36,26 @@ export async function startWorker(cmid: number, deps = WORKER_DEPS): Promise<voi
       child.once('spawn', resolve);
       child.once('error', reject);
     });
-    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 (작업 프로세스는 자기 pid 가 들어올 때까지 기다렸다 이어받는다)
-    await writeFile(TRANSCRIBE_LOCK_FILE, String(child.pid), { mode: 0o600 });
+    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 (작업 프로세스는 자기 pid 가 들어올 때까지 기다렸다 이어받는다).
+    // 임시 파일 + rename — 덮어쓰는 순간 빈 pid 를 읽은 다른 호출이 잠금을 낡은 것으로 보고 가져가지 않게
+    const tmp = `${TRANSCRIBE_LOCK_FILE}.${process.pid}.tmp`;
+    await writeFile(tmp, String(child.pid), { mode: 0o600 });
+    await rename(tmp, TRANSCRIBE_LOCK_FILE);
     child.unref();
+    // 시작 직후 transcribe_status 가 이전 작업 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신)
+    await writeTranscribeState({
+      version: 1,
+      status: 'running',
+      cmid,
+      phase: 'prepare',
+      progress: null,
+      course: null,
+      title: null,
+      path: null,
+      pid: child.pid!,
+      updatedAt: new Date().toISOString(),
+      message: null,
+    }).catch(() => {});
   } catch (err) {
     await release();
     throw err;
