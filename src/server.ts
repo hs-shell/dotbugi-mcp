@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
+import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerVodStatus } from './tools/vod-status.js';
 
@@ -11,5 +12,6 @@ export function createServer(): McpServer {
   const server = new McpServer({ name: 'dotbugi-mcp', version });
   registerListTasks(server);
   registerVodStatus(server);
+  registerGetAssignment(server);
   return server;
 }
