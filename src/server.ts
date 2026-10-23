@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
+import { registerSummarizeWeek } from './prompts/summarize-week.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerVodStatus } from './tools/vod-status.js';
@@ -13,5 +14,6 @@ export function createServer(): McpServer {
   registerListTasks(server);
   registerVodStatus(server);
   registerGetAssignment(server);
+  registerSummarizeWeek(server);
   return server;
 }
