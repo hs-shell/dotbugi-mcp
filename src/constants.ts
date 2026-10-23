@@ -49,3 +49,12 @@ export const LMS_REQUEST_TIMEOUT_MS = 20_000;
 export const TASKS_CACHE_TTL_MS = 60 * 60_000;
 // list_tasks 과목명 필터 입력 길이 상한
 export const COURSE_FILTER_MAX_LENGTH = 100;
+// 과제 상세 페이지. 제출은 사용자가 이 페이지에서 직접 한다
+export const ASSIGN_VIEW_PATH = '/mod/assign/view.php';
+// 세션 쿠키를 붙여 받는 첨부파일은 이 경로 아래(Moodle 파일 제공 스크립트)뿐이다
+export const LMS_FILE_PATH_PREFIX = '/pluginfile.php/';
+// 첨부파일 하나·과제 하나당 상한 (디스크를 채우거나 요청이 끝없이 이어지지 않게)
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const ATTACHMENT_MAX_COUNT = 20;
+// 확장자를 뺀 파일명 길이(코드 포인트). 한글 4바이트 문자여도 파일 시스템 이름 한도(255바이트) 안에 든다
+export const FILE_NAME_STEM_MAX_LENGTH = 60;

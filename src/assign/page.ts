@@ -1,0 +1,52 @@
+import { normalizeLmsDate } from '@dotbugi/lms-parser';
+import { LMS_FILE_PATH_PREFIX, LMS_ORIGIN } from '../constants.js';
+import { clean } from '../tasks/text.js';
+import { toIsoDeadline } from '../tasks/time.js';
+import { htmlToMarkdown } from './markdown.js';
+
+// 제출 상황 표의 마감 행 머리글 (ko / en)
+const DUE_DATE_LABELS = ['종료 일시', 'Due date'];
+
+export interface AssignPage {
+  title: string;
+  status: { label: string; value: string }[];
+  deadline: string | null;
+  body: string;
+  attachmentUrls: URL[];
+}
+
+// 세션 쿠키를 붙여 받을 수 있는 건 LMS 출처의 pluginfile 뿐이다 (다른 주소는 본문 링크로만 남는다)
+function isLmsFileUrl(url: URL): boolean {
+  return url.origin === LMS_ORIGIN && !url.username && !url.password && url.pathname.startsWith(LMS_FILE_PATH_PREFIX);
+}
+
+function attachmentUrls(intro: Element): URL[] {
+  const urls = new Map<string, URL>();
+  for (const a of intro.querySelectorAll('a[href]')) {
+    const url = URL.parse(a.getAttribute('href') ?? '', LMS_ORIGIN);
+    if (url && isLmsFileUrl(url)) urls.set(url.href, url);
+  }
+  return [...urls.values()];
+}
+
+// Moodle 3.2 과제 화면: 본문·첨부는 #intro, 제출 상황은 .submissionstatustable 의 "머리글 | 값" 행
+export function parseAssignPage(doc: Document): AssignPage {
+  const main = doc.querySelector('[role="main"]') ?? doc.body;
+  const title = clean(main.querySelector('h2')?.textContent ?? '');
+  if (!title)
+    throw new Error('과제 화면을 읽지 못했습니다. cmid 가 과제(mod/assign/view.php?id=…)의 id 인지 확인하세요.');
+  const status = Array.from(main.querySelectorAll('.submissionstatustable tr')).flatMap((row) => {
+    const cells = row.querySelectorAll('th, td');
+    if (cells.length < 2) return [];
+    return [{ label: clean(cells[0].textContent ?? ''), value: clean(cells[cells.length - 1].textContent ?? '') }];
+  });
+  const due = status.find((s) => DUE_DATE_LABELS.includes(s.label))?.value ?? null;
+  const intro = main.querySelector('#intro');
+  return {
+    title,
+    status,
+    deadline: toIsoDeadline(normalizeLmsDate(due)),
+    body: intro ? htmlToMarkdown(intro) : '',
+    attachmentUrls: intro ? attachmentUrls(intro) : [],
+  };
+}
