@@ -70,6 +70,21 @@ export function renderPicker(all: CourseBase[], state: PickerState): string[] {
   return [HELP, ...all.map((c, i) => `${i === state.cursor ? '>' : ' '} [${state.on[i] ? 'x' : ' '}] ${label(c)}`)];
 }
 
+// 동아시아 전각 문자(한글·한자·전각 기호)는 터미널에서 2칸 — 줄바꿈되면 다시 그릴 때 줄 수가 어긋난다
+const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u;
+export function fitWidth(line: string, columns?: number): string {
+  if (!columns) return line;
+  let width = 0;
+  let out = '';
+  for (const ch of line) {
+    width += WIDE.test(ch) ? 2 : 1;
+    // 마지막 칸까지 채우면 터미널이 자동 줄바꿈할 수 있어 한 칸 남긴다
+    if (width > columns - 1) break;
+    out += ch;
+  }
+  return out;
+}
+
 type RawInput = NodeJS.ReadStream & { setRawMode(mode: boolean): unknown };
 
 // 대화형 선택. 저장하면 켜짐 배열, 취소하면 null. 어떤 경로로 끝나도 터미널 모드를 되돌린다
@@ -82,7 +97,7 @@ export async function pick(
   let state: PickerState = { cursor: 0, on: initial };
   let drawn = 0;
   const draw = () => {
-    const lines = renderPicker(all, state);
+    const lines = renderPicker(all, state).map((l) => fitWidth(l, (output as NodeJS.WriteStream).columns));
     // 이전 화면 줄 수만큼 올라가 지우고 다시 그린다
     output.write(`${drawn ? `\x1b[${drawn}A` : ''}\x1b[J${lines.join('\n')}\n`);
     drawn = lines.length;
@@ -124,19 +139,22 @@ export async function pick(
 export async function courses(opts: CoursesOptions): Promise<void> {
   if ([opts.list, opts.on !== undefined, opts.off !== undefined].filter(Boolean).length > 1)
     throw new Error('--list · --on · --off 는 하나만 쓸 수 있습니다.');
+  const query = opts.on ?? opts.off;
+  if (query !== undefined && !query.trim()) throw new Error('--on/--off 에 과목명 일부나 courseId 를 적어 주세요.');
+  const interactive = query === undefined && !opts.list && !!process.stdin.isTTY && !!process.stderr.isTTY;
   const { session } = await getSession();
   // 설정 파일 키는 숫자 courseId 만 받는다
   const all = (await listAllCourses(createFetchHtml(session))).filter((c) => LMS_NUMERIC_ID.test(c.courseId));
   if (all.length === 0) return log('LMS 메인에 강좌가 없습니다.');
-  const config = readCoursesConfig();
+  // 저장하는 경로에서는 깨진 설정 파일을 덮어쓰지 않는다
+  const config = readCoursesConfig(undefined, query !== undefined || interactive);
 
-  const query = opts.on ?? opts.off;
   if (query !== undefined) {
-    const course = findCourse(all, query);
+    const course = findCourse(all, query.trim());
     await writeCoursesConfig({ ...config, courses: { ...config.courses, [course.courseId]: opts.on !== undefined } });
     return log(`${opts.on !== undefined ? '켰습니다' : '껐습니다'}: ${label(course)}`);
   }
-  if (opts.list || !process.stdin.isTTY || !process.stderr.isTTY) {
+  if (!interactive) {
     process.stdout.write(`${formatList(all, config)}\n`);
     if (!opts.list) log('터미널에서 실행하면 목록에서 바로 켜고 끌 수 있습니다 (또는 --on/--off <과목명|courseId>).');
     return;

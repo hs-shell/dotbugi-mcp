@@ -7,6 +7,10 @@ import { PLAYER_STATE_FILE } from '../player/state.js';
 import { createServer } from '../server.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, NOW } from './fixtures/lms-pages.js';
 
+// 추적 설정(~/.config)을 실제 홈에서 읽지 않게 빈 테스트 홈을 쓴다
+const home = vi.hoisted(() => ({ dir: `${process.env.TMPDIR ?? '/tmp'}/dotbugi-list-tasks-home-${process.pid}` }));
+vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => home.dir }));
+
 const SESSION = 'abcdefghij0123456789';
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));

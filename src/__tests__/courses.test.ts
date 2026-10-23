@@ -3,7 +3,15 @@ import { dirname } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { CourseBase } from '@dotbugi/lms-parser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { courses, findCourse, formatList, pick, pickerReducer, type PickerState } from '../commands/courses.js';
+import {
+  courses,
+  findCourse,
+  fitWidth,
+  formatList,
+  pick,
+  pickerReducer,
+  type PickerState,
+} from '../commands/courses.js';
 import {
   COURSES_FILE,
   readCoursesConfig,
@@ -56,6 +64,19 @@ describe('추적 설정', () => {
     }
     await expect(writeCoursesConfig({ version: 1, courses: { '../x': true } })).rejects.toThrow();
   });
+
+  it('깨진 파일은 경고하고, 저장 경로(strict·--on/--off)는 덮어쓰지 않고 지우라고 안내한다', async () => {
+    await mkdir(dirname(COURSES_FILE), { recursive: true });
+    await writeFile(COURSES_FILE, '{ broken');
+    const stderr = vi.mocked(process.stderr.write);
+    stderr.mockClear();
+    expect(readCoursesConfig()).toEqual(empty);
+    expect(String(stderr.mock.calls[0]?.[0])).toContain('지우면 기본값으로 초기화');
+    expect(() => readCoursesConfig(COURSES_FILE, true)).toThrow('덮어쓰지 않았습니다');
+    await expect(courses({ on: '비교과' })).rejects.toThrow('지우면 기본값으로 초기화');
+    await expect(courses({ off: '100' })).rejects.toThrow('덮어쓰지 않았습니다');
+    expect(await readFile(COURSES_FILE, 'utf8')).toBe('{ broken');
+  });
 });
 
 describe('--list · --on · --off', () => {
@@ -83,6 +104,11 @@ describe('--list · --on · --off', () => {
     });
   });
 
+  it('빈 --on/--off 는 거부한다', async () => {
+    await expect(courses({ on: '' })).rejects.toThrow('과목명 일부나 courseId');
+    await expect(courses({ off: '   ' })).rejects.toThrow('과목명 일부나 courseId');
+  });
+
   it('--list 와 --on 등을 함께 쓰면 오류', async () => {
     await expect(courses({ list: true, on: 'x' })).rejects.toThrow('하나만');
   });
@@ -104,6 +130,12 @@ describe('대화형 선택', () => {
     expect(keys('q').done).toBe('cancel');
     expect(keys('escape').done).toBe('cancel');
     expect(pickerReducer(start, { name: 'c', ctrl: true }).done).toBe('interrupt');
+  });
+
+  it('화면 폭에 맞춰 자른다 (한글은 2칸, 마지막 칸은 비움)', () => {
+    expect(fitWidth('ab자료구조', 7)).toBe('ab자료');
+    expect(fitWidth('abcdef', 4)).toBe('abc');
+    expect(fitWidth('자료구조', undefined)).toBe('자료구조');
   });
 
   const fakeTty = () => {
