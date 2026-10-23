@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { absolutePathDirs } from '../platform.js';
+import { WSL_PROGRAM_FILES } from '../constants.js';
+import { absolutePathDirs, isWsl } from '../platform.js';
 
 // 설치된 Chromium 계열 브라우저 탐색 순서: Chrome → Edge → Brave → Whale
 const WINDOWS_PATHS = [
@@ -36,6 +37,8 @@ function candidates(): string[] {
     return WINDOWS_PATHS.flatMap((p) => roots.map((r) => join(r, p)));
   }
   if (process.platform === 'darwin') return MAC_PATHS;
+  // WSL 에선 Windows 브라우저(평소 프로필)를 interop 으로 직접 실행한다
+  if (isWsl()) return WINDOWS_PATHS.flatMap((p) => WSL_PROGRAM_FILES.map((r) => join(r, ...p.split('\\'))));
   const dirs = absolutePathDirs();
   return LINUX_NAMES.flatMap((name) => dirs.map((d) => join(d, name)));
 }

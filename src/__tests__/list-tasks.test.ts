@@ -62,6 +62,8 @@ describe('list_tasks', () => {
     expect(text.text.split('\n')[0]).toBe('[과제] 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00');
     expect(result.structuredContent).toMatchObject({ warnings: [] });
     expect(JSON.stringify(result)).not.toContain(SESSION);
+    // 스케줄러 내부용 필드는 응답에 나가지 않는다
+    expect(JSON.stringify(result)).not.toContain('courseId');
   });
 
   it('일부를 못 가져오면 경고를 붙이고, 텍스트 표의 | 는 이스케이프한다', async () => {
