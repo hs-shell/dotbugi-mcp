@@ -23,10 +23,12 @@ export const CALLBACK_PATH = '/cb';
 export const CALLBACK_MAX_BODY_BYTES = 4096;
 export const LOGIN_TIMEOUT_MS = 5 * 60_000;
 
-export const CDP_PORT_FILE = 'DevToolsActivePort';
-export const CDP_PORT_WAIT_MS = 15_000;
+// 브라우저 시작이 느린 첫 호출도 넉넉히 기다리되, 응답이 없으면 멈추지 않도록 끊는다
+export const CDP_CALL_TIMEOUT_MS = 15_000;
 export const POLL_INTERVAL_MS = 1000;
 export const BROWSER_EXIT_WAIT_MS = 5000;
+// 셸 관례: 128 + 시그널 번호
+export const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
 
 // shortcut: Windows C: 드라이브가 /mnt/c 에 마운트됐다고 가정, automount root 를 바꾼 환경이면 wslpath 로 해석하도록 바꾼다
 export const WSL_POWERSHELL = '/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe';
