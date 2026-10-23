@@ -1,0 +1,43 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { lmsFetch, SessionExpiredError, verifySession } from '../lms.js';
+
+const SESSION = 'abcdefghij0123456789';
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+afterEach(() => fetchMock.mockReset());
+
+describe('lmsFetch', () => {
+  it.each([
+    'https://evil.example/my/',
+    'http://learn.hansung.ac.kr/my/',
+    '//evil.example/x',
+    'https://learn.hansung.ac.kr.evil.example/',
+    'https://learn.hansung.ac.kr@evil.example/',
+    'https://user:pw@learn.hansung.ac.kr/',
+    'https://learn.hansung.ac.kr:8443/',
+  ])('LMS 출처가 아니면 요청하지 않는다: %s', async (url) => {
+    await expect(lmsFetch(url, SESSION)).rejects.toThrow('LMS 이외');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('LMS 경로에만 세션 쿠키를 붙이고 리다이렉트를 따라가지 않는다', async () => {
+    fetchMock.mockResolvedValue(new Response('ok'));
+    await lmsFetch('/my/', SESSION);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://learn.hansung.ac.kr/my/');
+    expect(init).toMatchObject({ redirect: 'manual', headers: { cookie: `MoodleSession=${SESSION}` } });
+  });
+
+  it('로그인 페이지로의 리다이렉트는 세션 만료', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(null, { status: 303, headers: { location: 'https://learn.hansung.ac.kr/login/index.php' } })
+    );
+    await expect(lmsFetch('/my/', SESSION)).rejects.toBeInstanceOf(SessionExpiredError);
+    await expect(verifySession(SESSION)).resolves.toBe(false);
+  });
+
+  it('200 이면 유효한 세션', async () => {
+    fetchMock.mockResolvedValue(new Response('ok'));
+    await expect(verifySession(SESSION)).resolves.toBe(true);
+  });
+});
