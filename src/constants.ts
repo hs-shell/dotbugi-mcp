@@ -32,7 +32,7 @@ export const CDP_CALL_TIMEOUT_MS = 15_000;
 export const POLL_INTERVAL_MS = 1000;
 export const BROWSER_EXIT_WAIT_MS = 5000;
 // 셸 관례: 128 + 시그널 번호
-export const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
+export const SIGNAL_EXIT_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const;
 
 // shortcut: Windows C: 드라이브가 /mnt/c 에 마운트됐다고 가정, automount root 를 바꾼 환경이면 wslpath 로 해석하도록 바꾼다
 export const WSL_POWERSHELL = '/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe';
@@ -49,3 +49,18 @@ export const LMS_REQUEST_TIMEOUT_MS = 20_000;
 export const TASKS_CACHE_TTL_MS = 60 * 60_000;
 // list_tasks 과목명 필터 입력 길이 상한
 export const COURSE_FILTER_MAX_LENGTH = 100;
+// 공식 VOD 플레이어 페이지. 여는 주소는 숫자 cmid 로만 만든다
+export const VOD_PLAYER_PATH = '/mod/vod/view.php';
+export const LMS_NUMERIC_ID = /^\d{1,10}$/;
+// 서버 진도 확인 간격 (1~2분) — 강의 하나에 몇 시간 걸려도 LMS 요청은 분당 1건 미만
+export const VOD_POLL_INTERVAL_MS = 90_000;
+// 강제 종료되면 status 가 playing 으로 남는다 — updatedAt 이 이보다 오래되면 읽는 쪽(#6)은 멈춘 것으로 본다
+export const PLAYER_STATE_STALE_MS = 2 * VOD_POLL_INTERVAL_MS;
+// 진도를 이만큼 연속으로 모르면(약 15분) 상태·로그로 알린다
+export const VOD_UNKNOWN_WARN_POLLS = 10;
+// 로그인 페이지가 200 으로 오면(리다이렉트 없이) 비밀번호 입력란으로 알아본다
+export const LMS_LOGIN_FORM_SELECTOR = 'input[type="password"]';
+// 진도 페이지(user_progress.php)의 진도 표
+export const VOD_PROGRESS_TABLE_SELECTOR = '.user_progress';
+// shortcut: 사용자 폴더 설치(%LOCALAPPDATA%) 브라우저는 못 찾는다, 요청이 있으면 cmd.exe /c echo %LOCALAPPDATA% 로 해석한다
+export const WSL_PROGRAM_FILES = ['/mnt/c/Program Files', '/mnt/c/Program Files (x86)'];
