@@ -1,7 +1,7 @@
 name: PR 제목 검증
 
-# 스쿼시 머지 시 PR 제목이 main 커밋 메시지가 되고, release-please가 이를 읽어
-# 버전을 산출한다. 따라서 PR 제목이 Conventional Commits 형식인지 검사한다.
+# 스쿼시 머지 시 PR 제목이 main 커밋 메시지가 되므로
+# PR 제목이 Conventional Commits 형식인지 검사한다.
 # (commitlint는 로컬 커밋만 검사 → 스쿼시되면 사라지므로 PR 제목 검증이 별도로 필요)
 on:
   pull_request:

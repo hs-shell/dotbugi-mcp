@@ -6,7 +6,7 @@
 
 ## 설치 / 빌드
 
-Node.js 22 이상이 필요합니다.
+Node.js 22.22.1 이상이 필요합니다 (개발 도구 요구사항).
 
 ```bash
 npm install
@@ -46,3 +46,7 @@ npm run format   # Prettier
 ```
 
 커밋 메시지와 PR 제목은 Conventional Commits 형식을 따릅니다(husky + commitlint로 검사).
+
+## 개발 참고
+
+- 비공개 저장소라 브랜치 보호(필수 검사)를 쓸 수 없어 CI 결과는 참고용이다. **CI가 실패한 PR은 머지하지 않는다.**
