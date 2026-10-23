@@ -3,6 +3,10 @@ import { SessionExpiredError } from '../lms.js';
 import { collectTasks, toTaskItems } from '../tasks/collect.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, PAGES } from './fixtures/lms-pages.js';
 
+// 추적 설정(~/.config)은 import 시점 homedir 로 정해진다 — 개발자 실제 설정을 읽지 않게 빈 테스트 홈을 쓴다
+const state = vi.hoisted(() => ({ home: `${process.env.TMPDIR ?? '/tmp'}/dotbugi-collect-home-${process.pid}` }));
+vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => state.home }));
+
 const SESSION = 'abcdefghij0123456789';
 const L = 'https://learn.hansung.ac.kr';
 const fetchMock = vi.fn<typeof fetch>(fakeLmsFetch);
@@ -43,6 +47,15 @@ describe('collectTasks', () => {
       expect.objectContaining({ type: 'assign', course: '운영체제', title: '기한 없는 과제', deadline: null }),
     ]);
     expect(fetchedUrls().some((u) => u.includes('id=300'))).toBe(false);
+  });
+
+  it('추적 설정을 따른다 — 꺼진 강좌는 요청하지 않고, 켠 비교과는 가져온다', async () => {
+    const { items } = await collectTasks(SESSION, undefined, { version: 1, courses: { '100': false, '300': true } });
+    expect(new Set(items.map((i) => i.course))).not.toContain('자료구조');
+    const urls = fetchedUrls();
+    expect(urls.some((u) => u.includes('id=100'))).toBe(false);
+    expect(urls.some((u) => u.includes('id=300'))).toBe(true);
+    expect(urls.some((u) => u.includes('id=200'))).toBe(true);
   });
 
   it('LMS 요청은 출처 고정 경로로 세션 쿠키와 함께, 동시에 3개까지만', async () => {

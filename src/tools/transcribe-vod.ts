@@ -70,7 +70,7 @@ export function registerTranscribeVod(server: McpServer): void {
       description:
         '한성대 LMS 강의 영상(VOD) 하나의 소리를 로컬 ASR 로 받아써 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/녹취-<강의명>.md 로 저장하는 ' +
         '백그라운드 작업을 시작하고 바로 돌아온다. 진행은 transcribe_status 로 본다. 한 번에 하나만, 이미 녹취가 있으면 건너뛴다. ' +
-        '출석·진도에는 영향이 없다.',
+        '출석·진도에는 영향이 없다. 대상 강좌는 dotbugi-mcp courses 설정을 따른다.',
       inputSchema: z.object({
         cmid: z.number().int().positive().max(9_999_999_999).describe('VOD 강의 번호 (LMS 주소 view.php?id= 의 숫자)'),
       }),

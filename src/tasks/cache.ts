@@ -1,8 +1,11 @@
 import { TASKS_CACHE_TTL_MS } from '../constants.js';
 import { collectTasks, type CachedQuiz, type CollectResult } from './collect.js';
+import { readCoursesConfig } from './courses.js';
 
 interface Entry {
   session: string;
+  // 강좌 추적 설정이 바뀌면 다른 결과다
+  tracking: string;
   fetchedAt: number;
   result: Promise<CollectResult>;
 }
@@ -17,10 +20,18 @@ export async function getTaskItems(
   refresh: boolean,
   now = Date.now()
 ): Promise<{ fetchedAt: number } & CollectResult> {
+  const config = readCoursesConfig();
+  const tracking = JSON.stringify(config.courses);
   // 다른 세션(재로그인)이면 이전 계정 결과를 쓰지 않는다
-  if (refresh || !entry || entry.session !== session || now - entry.fetchedAt >= TASKS_CACHE_TTL_MS) {
+  if (
+    refresh ||
+    !entry ||
+    entry.session !== session ||
+    entry.tracking !== tracking ||
+    now - entry.fetchedAt >= TASKS_CACHE_TTL_MS
+  ) {
     const cachedQuizzes = known?.session === session ? known.quizzes : undefined;
-    const current: Entry = { session, fetchedAt: now, result: collectTasks(session, cachedQuizzes) };
+    const current: Entry = { session, tracking, fetchedAt: now, result: collectTasks(session, cachedQuizzes, config) };
     entry = current;
     const evict = () => {
       if (entry === current) entry = null;
