@@ -210,10 +210,12 @@ dotbugi-mcp asr remove                     # 폴더 삭제 (터미널이 아니�
 - uv 캐시와 uv 가 받는 Python 도 같은 폴더(`uv-cache/`, `python/`)에 두므로 `asr remove` 로 모두 지워집니다.
 - 내려받기는 https 로 github.com·huggingface.co·files.pythonhosted.org 와 그 CDN 만 허용합니다. 텔레메트리는 없습니다.
 
-### qwen_asr 바이너리 고정 (관리자, #22)
+### qwen_asr 바이너리 고정 (관리자)
 
-1. [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) 의 **Build qwen_asr** 워크플로를 태그 `asr-v1` 로 실행
-2. Release 의 `SHA256SUMS` 값을 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` sha256 에 넣고 PR (값이 `UNPINNED` 인 동안 CPU 설치는 거부됩니다)
+`linux-x64` 는 Release `asr-v1` 로 고정돼 있습니다. 새 빌드를 올릴 때는:
+
+1. [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) 의 **Build qwen_asr** 워크플로를 새 태그(`asr-v2` …)로 실행
+2. Release 의 `SHA256SUMS` 값과 파일 크기를 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` 에 넣고 PR (값이 `UNPINNED` 인 플랫폼은 CPU 설치가 거부됩니다)
 
 ## Claude Code에 등록
 
