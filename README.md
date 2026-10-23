@@ -57,6 +57,14 @@ node dist/index.js logout
 - 일부 과목·항목을 가져오지 못하면 `warnings`(텍스트 맨 앞에도)에 실패 건수를 알리고, 그 결과는 캐시하지 않습니다.
 - 세션이 없거나 만료되면 `dotbugi-mcp login` 을 다시 실행하라는 오류를 돌려줍니다.
 
+### `vod_status` (읽기 전용)
+
+`list_tasks(type: vod)` 와 같은 기준의 **남은(미출석) VOD** 를 마감 임박 순으로 돌려주고, `play` 로 재생 중이면 상태 파일의 지금 강의 진도·남은 시간(`player`)을 함께 붙입니다. 인자는 `refresh` 하나입니다.
+
+- `player`: 상태 파일(아래 `play` 참고) 내용 + `stale`(재생 중인데 갱신이 3분 넘게 끊김). 파일이 없거나 형식이 틀리면 `null`
+- 텍스트는 상태 표시줄과 같은 한 줄(재생 중일 때) + `list_tasks` 와 같은 표입니다.
+- 세션이 없거나 만료됐거나 LMS 를 못 읽어도 오류로 끝내지 않고, `player` 와 함께 `tasks: []`·`fetchedAt: null`·`warnings`(login 안내)를 돌려줍니다.
+
 ### `get_assignment` (LMS 읽기 전용, 로컬에 첨부파일 저장)
 
 과제 하나의 본문·마감·제출 상황을 돌려주고, 첨부파일을 서버가 직접 받아 **로컬 경로만** 알려줍니다. **제출은 하지 않습니다** — 결과물은 사용자가 `submitUrl`(`https://learn.hansung.ac.kr/mod/assign/view.php?id=<cmid>`)에서 직접 제출합니다.
@@ -114,6 +122,32 @@ node dist/index.js play   # Ctrl+C 로 중지
 - `status`: `playing` / `done`(모두 마침) / `stopped`(Ctrl+C) / `error`(`message` 에 이유)
 - `index`: 지금 강의 순번(1부터, 없으면 0). `progress`·`remainingSeconds`(출석 인정까지 남은 학습 시간)는 서버 진도를 못 읽으면 `null`
 - 재생 중에는 약 90초마다 `updatedAt` 이 갱신됩니다. 강제 종료되면 `status` 가 `playing` 으로 남으므로, 읽는 쪽은 `updatedAt` 이 3분(`PLAYER_STATE_STALE_MS`, 확인 간격의 2배)보다 오래되면 멈춘 것으로 봐야 합니다.
+
+## Claude Code 상태 표시줄
+
+`play` 로 재생하는 동안 Claude Code 아래쪽에 진행 상황을 한 줄로 띄웁니다.
+
+```text
+🎬 VOD 3/7 · 초급일본어 5과  ▓▓▓▓▓▓░░░░ 62%  12분 남음 · 다음: 6과 (D-1)
+```
+
+`~/.claude/settings.json` 에 추가합니다 (`refreshInterval` 은 Claude Code가 한가할 때도 N초마다 다시 그리게 합니다).
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node /절대/경로/dotbugi-mcp/dist/index.js statusline",
+    "refreshInterval": 30
+  }
+}
+```
+
+- 상태 파일(`~/.cache/dotbugi-mcp/player-state.json`)만 읽습니다. 네트워크·키체인·Claude Code가 넘기는 세션 JSON(stdin)은 쓰지 않습니다.
+- 재생 중이 아니면(파일 없음·`done`·`stopped`) 아무것도 출력하지 않습니다. `error` 는 짧은 오류 한 줄로 보여줍니다.
+- 갱신이 3분 넘게 끊기면 `⚠ N분째 갱신 없음`(갱신 시각이 미래면 `⚠ 갱신 시각 이상`)을 붙이고, 1시간 넘게 지난 상태(강제 종료·지난 오류)는 숨깁니다. 지난 마감은 `D-day` 대신 `마감` 으로 보여줍니다.
+- 과목·제목 등 LMS 텍스트는 제어·서식 문자(터미널 이스케이프 포함)를 지우고 30자로 자릅니다. 상태 파일의 글은 쓸 때·읽을 때 200자로 자릅니다. 링크(symlink)·16KB 초과·형식이 틀린 상태 파일은 읽지 않습니다.
+- 이미 다른 상태 표시줄을 쓰고 있다면 그 스크립트에서 이 명령의 출력을 이어 붙이면 됩니다.
 
 ## Claude Code에 등록
 
