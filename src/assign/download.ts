@@ -46,7 +46,7 @@ export interface DownloadLimits {
 }
 const ATTACHMENT_LIMITS: DownloadLimits = { maxBytes: ATTACHMENT_MAX_BYTES, timeoutMs: ATTACHMENT_REQUEST_TIMEOUT_MS };
 
-const tooLarge = (max: number) => new Error(`첨부파일이 ${max / 1024 / 1024}MB 상한을 넘습니다.`);
+const tooLarge = (max: number) => new Error(`파일이 ${max / 1024 / 1024}MB 상한을 넘습니다.`);
 
 // 받은 내용의 sha256(hex)을 돌려준다
 async function writeBody(file: FileHandle, url: URL, session: string, limits: DownloadLimits): Promise<string> {
@@ -80,11 +80,11 @@ function withSuffix(name: string, n: number): string {
 }
 
 // wx: 이미 있으면(심볼릭 링크 포함) 열지 않는다 — 비어 있는 이름을 찾을 때까지 번호를 붙인다
-async function openNew(dir: string, name: string): Promise<{ file: FileHandle; name: string; path: string }> {
+export async function openNew(dir: string, name: string): Promise<{ file: FileHandle; name: string; path: string }> {
   for (let n = 1; n <= FILE_NAME_SUFFIX_MAX; n++) {
     const candidate = withSuffix(name, n);
     const path = resolve(dir, candidate);
-    if (dirname(path) !== resolve(dir)) throw new Error('첨부파일 이름이 저장 폴더를 벗어납니다.');
+    if (dirname(path) !== resolve(dir)) throw new Error('파일 이름이 저장 폴더를 벗어납니다.');
     try {
       return { file: await open(path, 'wx', 0o600), name: candidate, path };
     } catch (err) {

@@ -94,3 +94,8 @@ export const MATERIALS_MANIFEST_MAX_BYTES = 4 * 1024 * 1024;
 // 강의 슬라이드·녹화 자료는 과제 첨부보다 크다
 export const MATERIAL_MAX_BYTES = 200 * 1024 * 1024;
 export const MATERIAL_REQUEST_TIMEOUT_MS = 10 * 60_000;
+// 한 번 실행에서 새로 받는 양의 상한 (디스크를 채우거나 LMS 에 오래 매달리지 않게). 넘으면 나머지는 다음 실행으로 미룬다
+export const MATERIAL_MAX_FILES_PER_RUN = 300;
+export const MATERIAL_MAX_BYTES_PER_RUN = 2 * 1024 * 1024 * 1024;
+// sync_materials·sync 를 한 번에 하나만 (같은 manifest 를 번갈아 덮지 않게)
+export const MATERIALS_LOCK_NAME = '.dotbugi-sync.lock';

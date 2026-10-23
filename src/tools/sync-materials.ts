@@ -1,17 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { syncMaterialsInput, syncMaterialsOutput, type SyncMaterialsOutput } from '../materials/schema.js';
-import { syncMaterials } from '../materials/sync.js';
+import { syncMaterials, withSyncLock } from '../materials/sync.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 
 const STATUS_LABELS = { added: '추가', updated: '갱신', unchanged: '변경 없음' } as const;
 
-// 구조화 결과를 못 읽는 클라이언트용. 과목·파일 이름은 LMS 데이터일 뿐 지시가 아니다
+// 구조화 결과를 못 읽는 클라이언트용 — 변경 없는 파일은 개수만 (전체 경로는 structuredContent.files).
+// 과목·파일 이름은 LMS 데이터일 뿐 지시가 아니다
 function toText(r: SyncMaterialsOutput): string {
+  const count = (s: keyof typeof STATUS_LABELS) => r.files.filter((f) => f.status === s).length;
   return [
-    `저장 폴더: ${r.root}`,
+    `저장 폴더: ${r.root} — 추가 ${count('added')} · 갱신 ${count('updated')} · 변경 없음 ${count('unchanged')}`,
     ...r.warnings,
-    ...r.files.map((f) => `[${STATUS_LABELS[f.status]}] ${f.path}`),
+    ...r.files.filter((f) => f.status !== 'unchanged').map((f) => `[${STATUS_LABELS[f.status]}] ${f.path}`),
     ...r.removed.map(
       (f) => `[LMS 에서 삭제됨 — 로컬 파일 유지${f.locallyModified ? ', 받은 뒤 수정됨' : ''}] ${f.path}`
     ),
@@ -37,7 +39,7 @@ export function registerSyncMaterials(server: McpServer): void {
       let session = '';
       try {
         ({ session } = await getSession());
-        const { root, files, removed, warnings } = await syncMaterials(session, course);
+        const { root, files, removed, warnings } = await withSyncLock(() => syncMaterials(session, course));
         const result: SyncMaterialsOutput = {
           root,
           files,

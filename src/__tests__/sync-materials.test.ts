@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmRemovals } from '../commands/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { fileKey, weekName } from '../materials/course-page.js';
-import { resolveRemoved, syncMaterials, type SyncResult } from '../materials/sync.js';
+import { resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
 import { createServer } from '../server.js';
 
 const SESSION = 'abcdefghij0123456789';
@@ -16,6 +16,14 @@ const state = vi.hoisted(() => ({ home: '' }));
 vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => state.home }));
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
+// 한 번 실행 상한은 테스트에서만 줄인다
+const caps = vi.hoisted(() => ({ files: 300 }));
+vi.mock('../constants.js', async (orig) => ({
+  ...(await orig<typeof import('../constants.js')>()),
+  get MATERIAL_MAX_FILES_PER_RUN() {
+    return caps.files;
+  },
+}));
 
 // 익명화한 가짜 LMS. 리비전·내용을 바꿔 가며 증분 동작을 본다
 let lms: {
@@ -26,6 +34,7 @@ let lms: {
   b: string;
   folder: boolean;
   folderStatus: number;
+  twin: boolean;
 };
 const SLIDES = (rev: number) => `${L}/pluginfile.php/50/mod_resource/content/${rev}/%EA%B0%95%EC%9D%98%201.pdf`;
 const NOTES = `${L}/pluginfile.php/51/mod_resource/content/1/notes.txt`;
@@ -43,7 +52,9 @@ function page(url: string): Response {
   switch (url) {
     case `${L}/`:
       return html(
-        `<ul class="my-course-lists">${courseItem('100', '[A반] 자료구조')}${courseItem('200', '../../evil')}</ul>`
+        `<ul class="my-course-lists">${courseItem('100', '[A반] 자료구조')}${courseItem('200', '../../evil')}${
+          lms.twin ? courseItem('300', '[B반] 자료구조') : ''
+        }</ul>`
       );
     case `${L}/course/view.php?id=100`:
       return html(`<ul class="topics">
@@ -55,6 +66,11 @@ function page(url: string): Response {
     case `${L}/course/view.php?id=200`:
       return html(
         `<ul><li id="section-1"><span class="sectionname">Week 1</span><ul>${mod('resource', 21)}</ul></li></ul>`
+      );
+    // 이름이 같은 다른 과목 (분반)
+    case `${L}/course/view.php?id=300`:
+      return html(
+        `<ul><li id="section-1"><span class="sectionname">1주차</span><ul>${mod('resource', 21)}</ul></li></ul>`
       );
     case `${L}/mod/resource/view.php?id=11&redirect=1`:
       return redirect(`${SLIDES(lms.slidesRev)}?forcedownload=1`);
@@ -72,7 +88,8 @@ function page(url: string): Response {
       return html(`<div role="main"><ul>
         <li><a href="${FOLDER(lms.folderRev, 'a.txt')}?forcedownload=1">a.txt</a></li>
         <li><a href="${FOLDER(lms.folderRev, 'sub/b.txt')}?forcedownload=1">b.txt</a></li>
-        <li><a href="https://evil.example/pluginfile.php/52/x.txt">x</a></li></ul></div>`);
+        <li><a href="https://evil.example/pluginfile.php/52/x.txt">x</a></li>
+        <li><a href="${L}/pluginfile.php/52/mod_folder/intro/0/desc.pdf">설명란 첨부</a></li></ul></div>`);
     case SLIDES(lms.slidesRev):
       return html(lms.slides);
     case NOTES:
@@ -98,10 +115,21 @@ const statusOf = (r: SyncResult) => Object.fromEntries(r.files.map((f) => [f.pat
 
 beforeEach(async () => {
   state.home = await mkdtemp(join(tmpdir(), 'dotbugi-home-'));
-  lms = { slidesRev: 1, slides: 'slides v1', folderRev: 1, a: 'A', b: 'B', folder: true, folderStatus: 200 };
+  lms = {
+    slidesRev: 1,
+    slides: 'slides v1',
+    folderRev: 1,
+    a: 'A',
+    b: 'B',
+    folder: true,
+    folderStatus: 200,
+    twin: false,
+  };
 });
 afterEach(async () => {
+  caps.files = 300;
   fetchMock.mockClear();
+  fetchMock.mockImplementation(async (input) => page(String(input)));
   await rm(state.home, { recursive: true, force: true });
 });
 
@@ -354,5 +382,117 @@ describe('삭제 확인 (CLI)', () => {
     await writeFile(manifestFile(), JSON.stringify(m));
     await resolveRemoved(item, true);
     expect(await readFile(outside, 'utf8')).toBe('중요');
+  });
+});
+
+describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
+  const outside = () => join(state.home, 'outside');
+
+  it('주차 폴더가 밖을 가리키는 링크면 그 안에 쓰지도, 바꾸지도 않는다', async () => {
+    await sync();
+    await mkdir(outside());
+    await rename(course('3주차'), join(outside(), '3주차'));
+    await symlink(join(outside(), '3주차'), course('3주차'));
+    lms.folderRev = 2;
+    Object.assign(lms, { a: 'A2', b: 'B2' });
+    const r = await sync();
+    expect(await readFile(join(outside(), '3주차', 'a.txt'), 'utf8')).toBe('A');
+    expect((await readdir(join(outside(), '3주차'))).sort()).toEqual(['a.txt', 'b.txt']);
+    expect(r.warnings).toContainEqual(expect.stringContaining('폴더가 아니라(링크 등) 건너뜁니다'));
+  });
+
+  it('과목 폴더가 링크면 manifest 를 읽지도 쓰지도 않고 건너뛴다', async () => {
+    await mkdir(outside());
+    await mkdir(root(), { recursive: true });
+    await symlink(outside(), course());
+    const r = await sync();
+    expect(await readdir(outside())).toEqual([]);
+    expect(r.warnings).toContainEqual(expect.stringContaining('폴더가 아니라(링크 등) 건너뜁니다'));
+  });
+
+  it('링크된 주차 폴더 속 파일은 삭제 확인에서 y 여도 지우지 않는다', async () => {
+    const [item] = await (async () => {
+      await sync();
+      lms.folder = false;
+      return (await sync()).removed;
+    })();
+    await mkdir(outside());
+    await rename(course('3주차'), join(outside(), '3주차'));
+    await symlink(join(outside(), '3주차'), course('3주차'));
+    await expect(resolveRemoved(item, true)).rejects.toThrow('링크 등');
+    expect((await readdir(join(outside(), '3주차'))).sort()).toEqual(['a.txt', 'b.txt']);
+  });
+
+  it('받는 동안 사용자가 파일을 고치면 덮어쓰지 않고 "(2)" 로 저장한다', async () => {
+    await sync();
+    Object.assign(lms, { slidesRev: 2, slides: 'slides v2' });
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === SLIDES(2)) await writeFile(course('강의 개요', '강의 1.pdf'), '받는 중 필기');
+      return page(String(input));
+    });
+    await sync();
+    expect(await readFile(course('강의 개요', '강의 1.pdf'), 'utf8')).toBe('받는 중 필기');
+    expect(await readFile(course('강의 개요', '강의 1 (2).pdf'), 'utf8')).toBe('slides v2');
+  });
+
+  it('받다가 실패하면 자료 이름의 파일도 .part 도 남기지 않는다', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) !== FOLDER(1, 'a.txt')) return page(String(input));
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('par'));
+          c.error(new Error('끊김'));
+        },
+      });
+      return new Response(body);
+    });
+    const r = await sync();
+    expect((await readdir(course('3주차'))).sort()).toEqual(['b.txt']);
+    expect(r.warnings).toContainEqual(expect.stringContaining('a.txt 을(를) 받지 못했습니다'));
+  });
+
+  it('동기화는 한 번에 하나만 돈다', async () => {
+    let release!: () => void;
+    const first = withSyncLock(() => new Promise<void>((r) => (release = r)));
+    await vi.waitFor(() => expect(release).toBeDefined());
+    await expect(withSyncLock(async () => {})).rejects.toThrow('다른 강의자료 동기화');
+    release();
+    await first;
+    await expect(withSyncLock(async () => 1)).resolves.toBe(1);
+  });
+
+  it('설명란 첨부 등 자료 본문이 아닌 pluginfile 은 받지 않는다', async () => {
+    await sync();
+    expect(fileFetches().some((u) => u.includes('/intro/'))).toBe(false);
+  });
+
+  it('같은 이름의 다른 과목은 "<과목> (<번호>)" 폴더에 받는다 (순서가 바뀌어도 같은 폴더)', async () => {
+    await sync();
+    lms.twin = true;
+    await sync();
+    expect(await readdir(join(root(), '자료구조 (300)', '1주차'))).toEqual(['x.txt']);
+    fetchMock.mockClear();
+    const r = await sync();
+    expect(fileFetches()).toEqual([]);
+    expect(r.warnings.filter((w) => w.includes('다른 과목'))).toEqual([]);
+  });
+
+  it('보고한 뒤 파일이 바뀌면 y 여도 지우지 않는다', async () => {
+    await sync();
+    lms.folder = false;
+    const [item] = (await sync()).removed;
+    await writeFile(item.path, '그사이 필기');
+    expect(await resolveRemoved(item, true)).toBe(false);
+    expect(await readFile(item.path, 'utf8')).toBe('그사이 필기');
+  });
+
+  it('한 번 실행의 상한을 넘으면 나머지는 받지 않고 경고하며, 다음 실행에서 이어 받는다', async () => {
+    caps.files = 2;
+    const r = await sync();
+    expect(r.files).toHaveLength(2);
+    expect(r.warnings).toContainEqual(expect.stringContaining('한 번에 받는 상한'));
+    expect(r.removed).toEqual([]);
+    caps.files = 300;
+    expect((await sync()).files.filter((f) => f.status === 'added')).toHaveLength(3);
   });
 });

@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { mkdir, open, rename, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import * as z from 'zod/v4';
-import { isLmsFileUrl } from '../assign/page.js';
+import { isMaterialUrl } from './course-page.js';
 import { LMS_NUMERIC_ID, MATERIALS_MANIFEST_MAX_BYTES, MATERIALS_MANIFEST_NAME } from '../constants.js';
 
 // 디스크의 기록은 사용자·다른 프로그램이 고칠 수 있으므로 읽을 때마다 검증한다. path 는 형식만 보고, 쓸 때·지울 때 resolveInside 로 다시 확인한다
@@ -17,7 +17,7 @@ const entrySchema = z.object({
     .max(2048)
     .refine((u) => {
       const url = URL.parse(u);
-      return !!url && isLmsFileUrl(url) && !url.search && !url.hash;
+      return !!url && isMaterialUrl(url) && !url.search && !url.hash;
     }),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
   // 과목 폴더 기준 상대 경로

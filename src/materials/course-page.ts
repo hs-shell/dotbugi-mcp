@@ -43,13 +43,17 @@ export function parseCoursePage(doc: Document): CourseModule[] {
   });
 }
 
-// 화면 본문의 LMS pluginfile 링크 (쿼리는 버리고 경로만, 중복 없이)
+// 파일·폴더 모듈 본문 파일만 받는다 (설명란 첨부 등 다른 영역의 pluginfile 은 제외)
+const MATERIAL_PATH = /^\/pluginfile\.php\/\d+\/mod_(resource|folder)\/content\//;
+export const isMaterialUrl = (url: URL) => isLmsFileUrl(url) && MATERIAL_PATH.test(url.pathname);
+
+// 화면 본문의 강의자료 pluginfile 링크 (쿼리는 버리고 경로만, 중복 없이)
 export function fileLinks(doc: Document): URL[] {
   const main = doc.querySelector('[role="main"]') ?? doc.body;
   const urls = new Map<string, URL>();
   for (const a of main.querySelectorAll('a[href]')) {
     const url = URL.parse(a.getAttribute('href') ?? '', LMS_ORIGIN);
-    if (url && isLmsFileUrl(url)) urls.set(url.origin + url.pathname, new URL(url.origin + url.pathname));
+    if (url && isMaterialUrl(url)) urls.set(url.origin + url.pathname, new URL(url.origin + url.pathname));
   }
   return [...urls.values()];
 }
@@ -61,7 +65,7 @@ export async function resourceFileUrl(cmid: number, session: string): Promise<UR
     if (res.status >= 300 && res.status < 400) {
       await res.body?.cancel();
       const url = URL.parse(res.headers.get('location') ?? '', LMS_ORIGIN);
-      if (!url || !isLmsFileUrl(url)) throw new Error('LMS 가 파일이 아닌 곳으로 이동시켰습니다.');
+      if (!url || !isMaterialUrl(url)) throw new Error('LMS 가 파일이 아닌 곳으로 이동시켰습니다.');
       return new URL(url.origin + url.pathname);
     }
     if (!res.ok) throw new Error(`LMS 응답 오류 HTTP ${res.status}`);
