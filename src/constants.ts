@@ -6,6 +6,10 @@ export const LMS_ORIGIN = `https://${LMS_HOST}`;
 export const LMS_HOME_PATH = '/my/';
 export const LMS_LOGIN_PAGE_PATH = '/login/index.php';
 export const LMS_LOGOUT_PATH = '/login/logout.php';
+// 내 강좌 목록(.my-course-lists)이 있는 LMS 메인. dotbugi 확장도 이 페이지에서 과목을 읽는다
+export const LMS_COURSE_LIST_PATH = '/';
+// @dotbugi/lms-parser parseCoursesFromDOM 이 읽는 '.my-course-lists > li' 의 목록 컨테이너
+export const LMS_COURSE_LIST_SELECTOR = '.my-course-lists';
 export const SESSION_COOKIE = 'MoodleSession';
 // 로그인 관련 URL(/login.php, /login/index.php …)은 모두 경로에 login 이 들어간다
 export const LOGIN_URL_MARKER = 'login';
@@ -34,3 +38,14 @@ export const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
 export const WSL_POWERSHELL = '/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe';
 export const WSL_RUNDLL32 = '/mnt/c/WINDOWS/System32/rundll32.exe';
 export const WSL_INTEROP_FILE = '/proc/sys/fs/binfmt_misc/WSLInterop';
+
+// LMS 화면의 날짜는 한국 시간이다 (실행 환경 시간대와 무관하게 해석)
+export const LMS_UTC_OFFSET = '+09:00';
+// 과목이 많아도 LMS 에 동시에 보내는 요청 수를 제한한다
+export const LMS_MAX_CONCURRENT_REQUESTS = 3;
+// LMS 가 응답하지 않아도 도구 호출이 끝나도록 요청마다 끊는다 (본문 수신 포함)
+export const LMS_REQUEST_TIMEOUT_MS = 20_000;
+// dotbugi 확장과 같은 1시간 캐시
+export const TASKS_CACHE_TTL_MS = 60 * 60_000;
+// list_tasks 과목명 필터 입력 길이 상한
+export const COURSE_FILTER_MAX_LENGTH = 100;

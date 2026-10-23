@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LMS_REQUEST_TIMEOUT_MS } from '../constants.js';
 import { lmsFetch, lmsLogout, SessionExpiredError, verifySession } from '../lms.js';
 
 const SESSION = 'abcdefghij0123456789';
@@ -34,6 +35,18 @@ describe('lmsFetch', () => {
     );
     await expect(lmsFetch('/my/', SESSION)).rejects.toBeInstanceOf(SessionExpiredError);
     await expect(verifySession(SESSION)).resolves.toBe(false);
+  });
+
+  it('응답이 없으면 정해진 시간에 끊고, 오류에 세션을 담지 않는다', async () => {
+    const timeout = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(AbortSignal.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError')));
+    fetchMock.mockImplementation((_url: URL, init: RequestInit) => Promise.reject(init.signal!.reason));
+    const err = (await lmsFetch('/my/', SESSION).catch((e: unknown) => e)) as Error;
+    expect(timeout).toHaveBeenCalledWith(LMS_REQUEST_TIMEOUT_MS);
+    expect(err.message).toBe('LMS 가 20초 안에 응답하지 않았습니다.');
+    expect(err.message).not.toContain(SESSION);
+    timeout.mockRestore();
   });
 
   it('200 이면 유효한 세션', async () => {

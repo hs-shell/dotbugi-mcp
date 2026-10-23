@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2023",
+    // @dotbugi/lms-parser 타입 선언이 DOM 타입(Document)을 쓴다
+    "lib": ["ES2023", "DOM"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
