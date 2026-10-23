@@ -20,18 +20,19 @@ export interface CollectResult {
 }
 
 // "mm:ss" 또는 "hh:mm:ss" → 초 (@dotbugi/lms-parser fetchVodProgress.ts 와 같은 규칙)
-function toSeconds(time: string): number {
+export function toSeconds(time: string): number {
   const parts = time.split(':').map(Number);
   return parts.reduce((acc, n) => acc * 60 + n, 0);
 }
 
 // dotbugi src/lib/attendance.ts isAttended
-const isAttended = (value: string) => value.toLowerCase().trim() === 'o';
+export const isAttended = (value: string) => value.toLowerCase().trim() === 'o';
 
 function vodStatus(attended: boolean, required?: string, watched?: string): string {
   if (attended) return '출석';
-  if (!required || !watched || toSeconds(required) === 0) return '미출석';
-  return `미출석 (진도 ${Math.min(100, Math.floor((toSeconds(watched) / toSeconds(required)) * 100))}%)`;
+  const percent = required && watched ? Math.floor((toSeconds(watched) / toSeconds(required)) * 100) : NaN;
+  // 시간 형식을 못 읽으면(NaN·0 나누기) 진도는 빼고 알린다
+  return Number.isFinite(percent) ? `미출석 (진도 ${Math.min(100, percent)}%)` : '미출석';
 }
 
 // LMS 가 준 링크라도 LMS 출처가 아니면 내보내지 않는다
@@ -64,6 +65,7 @@ export function toTaskItems(course: CourseBase, data: CourseData): TaskItem[] {
         start,
         deadline,
         url: lmsUrl(vod.url),
+        vod: { courseId: course.courseId, week: vod.week },
       },
     ];
   });

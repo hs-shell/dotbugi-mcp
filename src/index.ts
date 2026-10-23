@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { login } from './commands/login.js';
 import { logout } from './commands/logout.js';
+import { play } from './commands/play.js';
 import { log } from './log.js';
 import { createServer } from './server.js';
 
@@ -10,7 +11,8 @@ const USAGE = `사용법:
   dotbugi-mcp                  MCP 서버 실행 (stdio)
   dotbugi-mcp login            dotbugi 확장으로 LMS 세션 연결
   dotbugi-mcp login --browser  임시 브라우저 창에서 직접 로그인
-  dotbugi-mcp logout           저장된 세션 삭제`;
+  dotbugi-mcp logout           저장된 세션 삭제
+  dotbugi-mcp play             미출석 VOD 를 마감 임박 순으로 공식 플레이어 창에 차례로 열기 (Ctrl+C 로 중지)`;
 
 async function main(): Promise<void> {
   const { positionals, values } = parseArgs({ allowPositionals: true, options: { browser: { type: 'boolean' } } });
@@ -20,6 +22,7 @@ async function main(): Promise<void> {
   if (command === undefined) return void serveStdio(createServer);
   if (command === 'login') return login(values.browser ? 'browser' : 'extension');
   if (command === 'logout') return logout();
+  if (command === 'play') return play();
   throw new Error(USAGE);
 }
 

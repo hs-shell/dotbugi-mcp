@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionExpiredError } from '../lms.js';
-import { collectTasks } from '../tasks/collect.js';
+import { collectTasks, toTaskItems } from '../tasks/collect.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, PAGES } from './fixtures/lms-pages.js';
 
 const SESSION = 'abcdefghij0123456789';
@@ -33,6 +33,7 @@ describe('collectTasks', () => {
         start: '2026-10-20T00:00:00+09:00',
         deadline: '2026-10-27T23:59:59+09:00',
         url: `${L}/mod/vod/view.php?id=1`,
+        vod: { courseId: '100', week: 8 },
       },
       expect.objectContaining({ type: 'vod', title: '다음 주 강의', start: '2026-10-28T00:00:00+09:00' }),
       expect.objectContaining({ type: 'assign', title: '과제1', done: false, deadline: '2026-10-25T18:00:00+09:00' }),
@@ -145,5 +146,23 @@ describe('collectTasks', () => {
     expect(items).toContainEqual(
       expect.objectContaining({ course: '운영체제', title: '과제 이름', deadline: '곧 마감', url: '' })
     );
+  });
+
+  it('VOD 시간 형식을 못 읽으면 진도 NaN% 대신 진도를 뺀다', () => {
+    const vod = { week: 1, subject: '1', title: '강의', url: `${L}/mod/vod/view.php?id=1`, range: '', length: '' };
+    const att = { title: '강의', week: 1, isAttendance: 'X', weeklyAttendance: 'X' };
+    const status = (requiredTime: string, watchedTime: string) =>
+      toTaskItems(
+        { courseId: '1', courseTitle: '과목', prof: '' },
+        {
+          vodDataArray: [vod],
+          vodAttendanceArray: [{ ...att, requiredTime, watchedTime }],
+          assignDataArray: [],
+          quizDataArray: [],
+        }
+      )[0].status;
+    expect(status('알수없음', '05:00')).toBe('미출석');
+    expect(status('00:00', '05:00')).toBe('미출석');
+    expect(status('20:00', '05:00')).toBe('미출석 (진도 25%)');
   });
 });

@@ -49,3 +49,10 @@ export const LMS_REQUEST_TIMEOUT_MS = 20_000;
 export const TASKS_CACHE_TTL_MS = 60 * 60_000;
 // list_tasks 과목명 필터 입력 길이 상한
 export const COURSE_FILTER_MAX_LENGTH = 100;
+// 공식 VOD 플레이어 페이지. 여는 주소는 숫자 cmid 로만 만든다
+export const VOD_PLAYER_PATH = '/mod/vod/view.php';
+export const LMS_NUMERIC_ID = /^\d{1,10}$/;
+// 서버 진도 확인 간격 (1~2분) — 강의 하나에 몇 시간 걸려도 LMS 요청은 분당 1건 미만
+export const VOD_POLL_INTERVAL_MS = 90_000;
+// shortcut: 사용자 폴더 설치(%LOCALAPPDATA%) 브라우저는 못 찾는다, 요청이 있으면 cmd.exe /c echo %LOCALAPPDATA% 로 해석한다
+export const WSL_PROGRAM_FILES = ['/mnt/c/Program Files', '/mnt/c/Program Files (x86)'];
