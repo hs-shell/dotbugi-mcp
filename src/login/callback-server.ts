@@ -23,18 +23,26 @@ export function startCallbackServer(allowedOrigins: readonly string[], timeoutMs
   const server = createServer((req, res) => {
     const origin = req.headers.origin;
     if (done || req.method !== 'POST' || req.url !== CALLBACK_PATH) return void res.writeHead(404).end();
+    // DNS 리바인딩 등으로 다른 이름을 거쳐 온 요청은 받지 않는다
+    if (req.headers.host !== `${CALLBACK_HOST}:${port()}`) return void res.writeHead(421).end();
     if (!origin || !allowedOrigins.includes(origin)) return void res.writeHead(403).end();
     if (Number(req.headers['content-length'] ?? 0) > CALLBACK_MAX_BODY_BYTES) return void res.writeHead(413).end();
-    readBody(req, res, (body) => {
+    // 본문을 읽기 전에 닫아 동시에 들어온 두 번째 요청은 받지 않는다. 기회는 한 번뿐이라 코드 추측도 막힌다
+    done = true;
+    const reject = (status: number) => {
+      res.writeHead(status).end('', close);
+      fail(new Error('잘못된 연결 요청을 받아 중단했습니다. dotbugi-mcp login 을 다시 실행하세요.'));
+    };
+    readBody(req, res, reject, (body) => {
       const msg = parseJson(body);
-      if (!msg) return void res.writeHead(400).end();
-      if (!sameCode(String(msg.code), code)) return void res.writeHead(403).end();
-      if (!SESSION_PATTERN.test(String(msg.session))) return void res.writeHead(400).end();
-      done = true;
+      if (!msg) return reject(400);
+      if (!sameCode(String(msg.code), code)) return reject(403);
+      if (!SESSION_PATTERN.test(String(msg.session))) return reject(400);
       res.writeHead(200, { 'Access-Control-Allow-Origin': origin }).end('ok', close);
       accept(String(msg.session));
     });
   });
+  const port = () => (server.address() as AddressInfo).port;
 
   const timer = setTimeout(() => {
     close();
@@ -49,19 +57,26 @@ export function startCallbackServer(allowedOrigins: readonly string[], timeoutMs
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, CALLBACK_HOST, () => {
-      resolve({ port: (server.address() as AddressInfo).port, code, session, close });
+      resolve({ port: port(), code, session, close });
     });
   });
 }
 
 // 크기 제한을 넘으면 413 으로 끊는다 (Content-Length 없이 흘려보내는 경우 대비)
-function readBody(req: IncomingMessage, res: ServerResponse, onBody: (body: string) => void) {
+function readBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  reject: (status: number) => void,
+  onBody: (body: string) => void
+) {
   const chunks: Buffer[] = [];
   let size = 0;
   req.on('data', (chunk: Buffer) => {
+    if (size > CALLBACK_MAX_BODY_BYTES) return;
     size += chunk.length;
     if (size > CALLBACK_MAX_BODY_BYTES) {
-      res.writeHead(413, { connection: 'close' }).end();
+      res.setHeader('connection', 'close');
+      reject(413);
       req.destroy();
       return;
     }
