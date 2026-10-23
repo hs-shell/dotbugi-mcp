@@ -3,13 +3,15 @@ export function createLimiter(max: number): <T>(task: () => Promise<T>) => Promi
   let active = 0;
   const waiting: (() => void)[] = [];
   return async (task) => {
+    // 대기자는 release 가 넘겨준 자리를 그대로 이어받는다 (active 를 줄였다 늘리면 그 사이 같은 틱 호출이 끼어든다)
     if (active >= max) await new Promise<void>((resolve) => waiting.push(resolve));
-    active++;
+    else active++;
     try {
       return await task();
     } finally {
-      active--;
-      waiting.shift()?.();
+      const next = waiting.shift();
+      if (next) next();
+      else active--;
     }
   };
 }

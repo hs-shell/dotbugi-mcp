@@ -7,14 +7,17 @@ import { selectTasks } from '../tasks/select.js';
 
 const TYPE_LABELS: Record<TaskType, string> = { vod: '강의', assign: '과제', quiz: '퀴즈' };
 
-// 구조화 결과를 못 읽는 클라이언트용 한 줄 요약
-function toText(tasks: Task[]): string {
-  if (tasks.length === 0) return '조건에 맞는 항목이 없습니다.';
-  return tasks
-    .map(
-      (t) => `[${TYPE_LABELS[t.type]}] ${t.course} | ${t.title} | ${t.status} | ${t.remaining} | ${t.deadline ?? '-'}`
-    )
-    .join('\n');
+// 표 구분자와 헷갈리지 않게 LMS 텍스트 안의 | 는 이스케이프한다
+const cell = (value: string) => value.replaceAll('|', '\\|');
+
+// 구조화 결과를 못 읽는 클라이언트용 한 줄 요약 (경고가 있으면 맨 앞에)
+function toText(tasks: Task[], warnings: string[]): string {
+  const lines = tasks.map(
+    (t) =>
+      `[${TYPE_LABELS[t.type]}] ${cell(t.course)} | ${cell(t.title)} | ${t.status} | ${t.remaining} | ${cell(t.deadline ?? '-')}`
+  );
+  if (lines.length === 0) lines.push('조건에 맞는 항목이 없습니다.');
+  return [...warnings, ...lines].join('\n');
 }
 
 export function registerListTasks(server: McpServer): void {
@@ -32,11 +35,12 @@ export function registerListTasks(server: McpServer): void {
     async ({ refresh, ...filters }) => {
       try {
         const { session } = await getSession();
-        const { fetchedAt, items } = await getTaskItems(session, refresh);
+        const { fetchedAt, items, failures } = await getTaskItems(session, refresh);
         const tasks = selectTasks(items, filters, Date.now());
+        const warnings = failures > 0 ? [`일부 과목/항목을 가져오지 못했습니다 (${failures}건).`] : [];
         return {
-          content: [{ type: 'text', text: toText(tasks) }],
-          structuredContent: { fetchedAt: new Date(fetchedAt).toISOString(), tasks },
+          content: [{ type: 'text', text: toText(tasks, warnings) }],
+          structuredContent: { fetchedAt: new Date(fetchedAt).toISOString(), tasks, warnings },
         };
       } catch (err) {
         // 세션 없음·만료 메시지는 dotbugi-mcp login 안내를 담고 있다. 그 밖의 오류도 마스킹 후 그대로 알린다

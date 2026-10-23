@@ -60,7 +60,22 @@ describe('list_tasks', () => {
     expect(tasks[0].remaining).toBe('1일 6시간');
     const [text] = result.content as { text: string }[];
     expect(text.text.split('\n')[0]).toBe('[과제] 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00');
+    expect(result.structuredContent).toMatchObject({ warnings: [] });
     expect(JSON.stringify(result)).not.toContain(SESSION);
+  });
+
+  it('일부를 못 가져오면 경고를 붙이고, 텍스트 표의 | 는 이스케이프한다', async () => {
+    vi.spyOn(process.stderr, 'write').mockReturnValueOnce(true);
+    fetchMock.mockImplementation(async (url) => {
+      if (String(url).endsWith('/mod/quiz/view.php?id=9')) return new Response('', { status: 500 });
+      const res = await fakeLmsFetch(url);
+      return new Response((await res.text()).replace('과제1', '과제|1'), { status: res.status });
+    });
+    const result = await call({ refresh: true });
+    expect(result.structuredContent).toMatchObject({ warnings: ['일부 과목/항목을 가져오지 못했습니다 (1건).'] });
+    const lines = (result.content as { text: string }[])[0].text.split('\n');
+    expect(lines[0]).toBe('일부 과목/항목을 가져오지 못했습니다 (1건).');
+    expect(lines[1]).toContain('과제\\|1 |');
   });
 
   it('1시간 동안 캐시를 쓰고, refresh 나 TTL 만료 시 다시 가져온다', async () => {

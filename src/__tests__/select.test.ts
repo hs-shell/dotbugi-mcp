@@ -9,6 +9,7 @@ const item = (title: string, deadline: string | null, over: Partial<TaskItem> = 
   title,
   done: false,
   status: '미제출',
+  start: null,
   deadline,
   url: 'https://learn.hansung.ac.kr/x',
   ...over,
@@ -36,6 +37,16 @@ describe('selectTasks', () => {
   it('종류·과목(부분, 대소문자 무시) 필터', () => {
     expect(titles({ incompleteOnly: true, type: 'quiz' })).toEqual(['곧']);
     expect(titles({ incompleteOnly: true, course: '운영' })).toEqual(['곧']);
+  });
+  it('VOD 는 조회 시점에 출석 인정 기간 안인 것만', () => {
+    const vod = (title: string, start: string | null, deadline: string | null) =>
+      item(title, deadline, { type: 'vod', start });
+    const vods = [
+      vod('진행 중', '2026-10-20T00:00:00+09:00', '2026-10-27T23:59:59+09:00'),
+      vod('아직', '2026-10-28T00:00:00+09:00', '2026-11-03T23:59:59+09:00'),
+      vod('기간 모름', null, null),
+    ];
+    expect(selectTasks(vods, { incompleteOnly: true }, now).map((t) => t.title)).toEqual(['진행 중']);
   });
   it('남은 시간을 붙인다', () => {
     expect(selectTasks(items, { incompleteOnly: true }, now)[0].remaining).toBe('6시간 0분');

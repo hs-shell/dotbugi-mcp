@@ -18,6 +18,9 @@ export function selectTasks(items: TaskItem[], input: Omit<ListTasksInput, 'refr
       const ms = deadlineMs(t.deadline);
       // 캐시 이후 지난 마감은 뺀다
       if (ms < now) return false;
+      // VOD 는 출석 인정 기간 안(시작 ≤ 지금 ≤ 종료)인 것만 — 조회 시점에 걸러야 캐시된 1시간 동안에도 맞다
+      // (dotbugi src/hooks/useCourseData.tsx filterVodsForDisplay)
+      if (t.type === 'vod' && !(deadlineMs(t.start) <= now && now <= ms)) return false;
       if (input.type && t.type !== input.type) return false;
       if (input.incompleteOnly && t.done) return false;
       if (course && !t.course.toLowerCase().includes(course)) return false;

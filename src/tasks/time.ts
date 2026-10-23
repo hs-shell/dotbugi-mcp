@@ -1,4 +1,5 @@
 import { LMS_UTC_OFFSET } from '../constants.js';
+import { clean } from './text.js';
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -6,11 +7,11 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 // normalizeLmsDate 결과 형식: "2024-03-10 23:59" 또는 "2024-03-10 23:59:59"
 const LMS_DATE = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(:\d{2})?$/;
 
-// LMS 날짜(한국 시간)를 오프셋이 붙은 ISO 문자열로. 형식을 모르면 원문을 그대로 둔다
+// LMS 날짜(한국 시간)를 오프셋이 붙은 ISO 문자열로. 형식을 모르면 원문을 (한 줄로 정리해) 그대로 둔다
 export function toIsoDeadline(lmsDate: string | null): string | null {
   if (!lmsDate) return null;
   const m = LMS_DATE.exec(lmsDate.trim());
-  return m ? `${m[1]}T${m[2]}${m[3] ?? ':00'}${LMS_UTC_OFFSET}` : lmsDate;
+  return m ? `${m[1]}T${m[2]}${m[3] ?? ':00'}${LMS_UTC_OFFSET}` : clean(lmsDate);
 }
 
 // VOD 출석 인정 기간 "시작 ~ 종료" 분리
