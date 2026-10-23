@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.env
+
+# 임시 시제품 스크립트 — 커밋하지 않음
+/scripts/
