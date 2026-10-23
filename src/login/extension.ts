@@ -2,6 +2,7 @@ import { CONNECT_HASH_KEY, DOTBUGI_EXTENSION_IDS, LMS_HOME_PATH, LMS_ORIGIN, LOG
 import { log } from '../log.js';
 import { openUrl } from '../platform.js';
 import { startCallbackServer } from './callback-server.js';
+import { codeFingerprint } from './fingerprint.js';
 
 const ALLOWED_ORIGINS = DOTBUGI_EXTENSION_IDS.map((id) => `chrome-extension://${id}`);
 
@@ -17,6 +18,7 @@ export async function loginWithExtension(): Promise<string> {
     throw err;
   }
   log('브라우저에서 LMS에 로그인한 뒤, dotbugi 확장의 연결 창에서 승인하세요. (5분 제한)');
+  log(`연결 창에 표시된 확인 코드가 ${codeFingerprint(server.code)} 인지 확인한 뒤 [연결]을 누르세요.`);
   log('dotbugi 확장이 없다면 Ctrl+C 로 중단하고 dotbugi-mcp login --browser 를 사용하세요.');
   return server.session;
 }
