@@ -2,7 +2,7 @@ import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { ensurePrivateDir } from './state.js';
 
-const isAlive = (pid: number) => {
+export const isAlive = (pid: number) => {
   try {
     process.kill(pid, 0);
     return true;

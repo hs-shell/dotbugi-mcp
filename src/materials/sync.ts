@@ -194,7 +194,7 @@ async function syncFile(
 }
 
 // 과목 폴더는 "<과목>". 같은 이름의 다른 과목이 이미 쓰고 있으면 "<과목> (<과목 번호>)"
-async function openCourseDir(root: string, title: string, courseId: string) {
+export async function openCourseDir(root: string, title: string, courseId: string) {
   for (const name of [title, `${title} (${courseId})`]) {
     const dir = childDir(root, name);
     await ensureRealDir(root, dir, false);

@@ -29,7 +29,7 @@ export interface PlayerDeps {
 }
 
 // LMS 가 준 링크가 정확히 LMS 의 플레이어 주소일 때만 숫자 cmid 를 꺼낸다
-function cmidOf(url: string): string | null {
+export function cmidOf(url: string): string | null {
   try {
     const u = new URL(url);
     const id = u.searchParams.get('id') ?? '';
