@@ -131,22 +131,47 @@ describe('vod_status', () => {
     expect((result.content as { text: string }[])[0].text).toMatch(/^\[강의\] .*트리 순회/);
   });
 
+  const state = {
+    version: 1,
+    status: 'playing',
+    updatedAt: new Date(NOW.getTime() - 60_000).toISOString(),
+    total: 1,
+    index: 1,
+    current: { course: '자료구조', title: '트리 순회', week: 8, deadline: null, progress: 40, remainingSeconds: 600 },
+    next: null,
+    message: null,
+  };
+
   it('재생 중이면 지금 강의의 진도와 상태 표시줄 한 줄을 붙인다', async () => {
-    const state = {
-      version: 1,
-      status: 'playing',
-      updatedAt: new Date(NOW.getTime() - 60_000).toISOString(),
-      total: 1,
-      index: 1,
-      current: { course: '자료구조', title: '트리 순회', week: 8, deadline: null, progress: 40, remainingSeconds: 600 },
-      next: null,
-      message: null,
-    };
     writeFileSync(PLAYER_STATE_FILE, JSON.stringify(state));
     const result = await call({}, 'vod_status');
     expect(result.structuredContent).toMatchObject({ player: { ...state, stale: false } });
     const lines = (result.content as { text: string }[])[0].text.split('\n');
     expect(lines[0]).toBe('🎬 VOD 1/1 · 자료구조 트리 순회  ▓▓▓▓░░░░░░ 40%  10분 남음');
     expect(lines[1]).toContain('트리 순회');
+  });
+
+  it('재생 중인데 갱신이 끊기면 stale 이다', async () => {
+    writeFileSync(
+      PLAYER_STATE_FILE,
+      JSON.stringify({ ...state, updatedAt: new Date(NOW.getTime() - 10 * 60_000).toISOString() })
+    );
+    const result = await call({}, 'vod_status');
+    expect(result.structuredContent).toMatchObject({ player: { stale: true } });
+  });
+
+  it('세션이 없어도 실패하지 않고 재생 상태와 login 안내를 돌려준다', async () => {
+    writeFileSync(PLAYER_STATE_FILE, JSON.stringify(state));
+    getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. 터미널에서 dotbugi-mcp login 을 실행하세요.'));
+    const result = await call({}, 'vod_status');
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      fetchedAt: null,
+      tasks: [],
+      warnings: [expect.stringContaining('dotbugi-mcp login')],
+      player: { status: 'playing', stale: false },
+    });
+    expect((result.content as { text: string }[])[0].text.split('\n')[0]).toMatch(/^🎬 VOD 1\/1/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

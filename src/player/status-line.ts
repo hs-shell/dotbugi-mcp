@@ -25,7 +25,15 @@ function dDay(deadline: string | null, now: number): string | null {
   const ms = deadlineMs(deadline);
   if (Number.isNaN(ms)) return null;
   const days = Math.floor((ms + OFFSET_MS) / MS_PER_DAY) - Math.floor((now + OFFSET_MS) / MS_PER_DAY);
-  return days <= 0 ? 'D-day' : `D-${days}`;
+  // formatRemaining 과 같이 지난 마감은 '마감'
+  if (days < 0) return '마감';
+  return days === 0 ? 'D-day' : `D-${days}`;
+}
+
+// 재생 중인데 갱신이 끊김. 미래 시각(시계가 뒤로 감)도 믿을 수 없어 끊긴 것으로 본다
+export function isStale(state: PlayerState, now: number): boolean {
+  const age = now - Date.parse(state.updatedAt);
+  return state.status === 'playing' && (age > PLAYER_STATE_STALE_MS || age < 0);
 }
 
 // 표시할 게 없으면 빈 문자열. 예) 🎬 VOD 3/7 · 초급일본어 5과  ▓▓▓▓▓▓░░░░ 62%  12분 남음 · 다음: 6과 (D-1)
@@ -50,7 +58,8 @@ export function renderStatusLine(state: PlayerState | null, now: number): string
     const d = dDay(next.deadline, now);
     parts.push(` · 다음: ${show(next.title)}${d ? ` (${d})` : ''}`);
   }
-  if (age > PLAYER_STATE_STALE_MS) parts.push(` · ⚠ ${Math.floor(age / 60_000)}분째 갱신 없음`);
+  if (isStale(state, now))
+    parts.push(age < 0 ? ' · ⚠ 갱신 시각 이상' : ` · ⚠ ${Math.floor(age / 60_000)}분째 갱신 없음`);
   else if (state.message) parts.push(` · ⚠ ${show(state.message)}`);
   return parts.join('');
 }

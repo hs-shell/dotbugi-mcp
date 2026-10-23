@@ -2,7 +2,7 @@ import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PLAYER_STATE_MAX_BYTES } from '../constants.js';
+import { PLAYER_STATE_MAX_BYTES, PLAYER_STATE_TEXT_MAX } from '../constants.js';
 import { readPlayerState, type PlayerState } from '../player/state.js';
 import { renderStatusLine } from '../player/status-line.js';
 
@@ -38,10 +38,26 @@ describe('renderStatusLine', () => {
     expect(renderStatusLine({ ...playing, updatedAt: at(61) }, NOW)).toBe('');
   });
 
+  it('다음 강의 D-day 는 한국 날짜 기준이고, 지난 마감은 마감으로 보여준다', () => {
+    const line = (now: string, deadline: string) =>
+      renderStatusLine({ ...playing, updatedAt: now, next: { ...playing.next!, deadline } }, Date.parse(now)).replace(
+        /.*\(/,
+        ''
+      );
+    expect(line('2026-10-24T23:59:59+09:00', '2026-10-25T00:00:01+09:00')).toBe('D-1)');
+    expect(line('2026-10-25T00:00:00+09:00', '2026-10-25T23:59:59+09:00')).toBe('D-day)');
+    expect(line('2026-10-26T00:00:00+09:00', '2026-10-25T23:59:59+09:00')).toBe('마감)');
+  });
+
+  it('updatedAt 이 미래(시계가 뒤로 감)면 갱신 이상으로 표시한다', () => {
+    expect(renderStatusLine({ ...playing, updatedAt: at(-10) }, NOW)).toMatch(/· ⚠ 갱신 시각 이상$/);
+  });
+
   it('오류는 짧게, 끝났거나 멈췄거나 상태가 없으면 아무것도 안 보여준다', () => {
     expect(renderStatusLine({ ...playing, status: 'error', message: '세션 만료' }, NOW)).toBe(
       '⚠ VOD 재생 오류: 세션 만료'
     );
+    expect(renderStatusLine({ ...playing, status: 'error', message: '세션 만료', updatedAt: at(61) }, NOW)).toBe('');
     expect(renderStatusLine({ ...playing, status: 'done' }, NOW)).toBe('');
     expect(renderStatusLine({ ...playing, status: 'stopped' }, NOW)).toBe('');
     expect(renderStatusLine(null, NOW)).toBe('');
@@ -67,6 +83,11 @@ describe('readPlayerState', () => {
   it('올바른 상태 파일을 읽는다', async () => {
     await writeFile(file, JSON.stringify(playing));
     expect(readPlayerState(file)).toEqual(playing);
+  });
+
+  it('긴 글은 거부하지 않고 잘라서 읽는다', async () => {
+    await writeFile(file, JSON.stringify({ ...playing, message: '가'.repeat(5000) }));
+    expect(readPlayerState(file)?.message).toBe('가'.repeat(PLAYER_STATE_TEXT_MAX));
   });
 
   it('없거나 깨졌거나 스키마가 틀리거나 너무 크면 null', async () => {

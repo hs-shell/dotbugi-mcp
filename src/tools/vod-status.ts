@@ -1,20 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { PLAYER_STATE_STALE_MS } from '../constants.js';
 import { PLAYER_STATE_FILE, playerStateSchema, readPlayerState } from '../player/state.js';
-import { renderStatusLine } from '../player/status-line.js';
+import { isStale, renderStatusLine } from '../player/status-line.js';
 import { redact } from '../redact.js';
-import { getSession } from '../session.js';
-import { getTaskItems } from '../tasks/cache.js';
 import { listTasksOutput } from '../tasks/schema.js';
-import { selectTasks } from '../tasks/select.js';
-import { toText } from './list-tasks.js';
+import { loadTasks, toText } from './list-tasks.js';
 
 const vodStatusInput = z.object({
   refresh: z.boolean().default(false).describe('1시간 캐시를 무시하고 LMS 에서 다시 가져오기'),
 });
 
 const vodStatusOutput = listTasksOutput.extend({
+  fetchedAt: z.string().nullable().describe('LMS 에서 가져온 시각 (ISO). 못 가져왔으면 null'),
   player: playerStateSchema
     .extend({ stale: z.boolean().describe('재생 중인데 갱신이 끊김 (강제 종료 등으로 멈춘 것으로 봄)') })
     .nullable()
@@ -35,25 +32,21 @@ export function registerVodStatus(server: McpServer): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ refresh }) => {
+      const now = Date.now();
+      const state = readPlayerState(PLAYER_STATE_FILE);
+      const player = state && { ...state, stale: isStale(state, now) };
+      const line = renderStatusLine(state, now);
       try {
-        const now = Date.now();
-        const state = readPlayerState(PLAYER_STATE_FILE);
-        const player = state && {
-          ...state,
-          stale: state.status === 'playing' && now - Date.parse(state.updatedAt) > PLAYER_STATE_STALE_MS,
-        };
-        const { session } = await getSession();
-        const { fetchedAt, items, failures } = await getTaskItems(session, refresh);
-        const tasks = selectTasks(items, { type: 'vod', incompleteOnly: true }, now);
-        const warnings = failures > 0 ? [`일부 과목/항목을 가져오지 못했습니다 (${failures}건).`] : [];
-        const line = renderStatusLine(state, now);
-        return {
-          content: [{ type: 'text', text: [line, toText(tasks, warnings)].filter(Boolean).join('\n') }],
-          structuredContent: { fetchedAt: new Date(fetchedAt).toISOString(), tasks, warnings, player },
-        };
+        const result = await loadTasks(refresh, { type: 'vod', incompleteOnly: true }, now);
+        const text = [line, toText(result.tasks, result.warnings)].filter(Boolean).join('\n');
+        return { content: [{ type: 'text', text }], structuredContent: { ...result, player } };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: [{ type: 'text', text: redact(message) }], isError: true };
+        // 세션 없음·만료·LMS 오류여도 로컬 재생 상태는 보여준다 (login 안내는 warnings 로)
+        const warning = redact(err instanceof Error ? err.message : String(err));
+        return {
+          content: [{ type: 'text', text: [line, warning].filter(Boolean).join('\n') }],
+          structuredContent: { fetchedAt: null, tasks: [], warnings: [warning], player },
+        };
       }
     }
   );

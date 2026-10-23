@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PLAYER_STATE_TEXT_MAX } from '../constants.js';
 import { writePlayerState, type PlayerState } from '../player/state.js';
 
 const state: PlayerState = {
@@ -29,6 +30,15 @@ describe.skipIf(process.platform === 'win32')('writePlayerState', () => {
     expect((await stat(dir)).mode & 0o777).toBe(0o700);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
     expect(await readdir(dir)).toEqual(['player-state.json']);
+  });
+
+  it('긴 글은 잘라서 써 상태 파일이 읽기 상한을 넘지 않게 한다', async () => {
+    const file = join(root, 'player-state.json');
+    const long = '가'.repeat(PLAYER_STATE_TEXT_MAX * 10);
+    await writePlayerState(file, { ...state, message: long, current: { ...state.current!, title: long } });
+    const saved = JSON.parse(await readFile(file, 'utf8')) as PlayerState;
+    expect(saved.message).toHaveLength(PLAYER_STATE_TEXT_MAX);
+    expect(saved.current?.title).toHaveLength(PLAYER_STATE_TEXT_MAX);
   });
 
   it('이미 있던 넓은 권한 디렉터리는 0700 으로 좁힌다', async () => {

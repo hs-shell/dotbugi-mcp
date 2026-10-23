@@ -74,6 +74,8 @@ export const PLAYER_STATE_STALE_MS = 2 * VOD_POLL_INTERVAL_MS;
 export const STATUSLINE_HIDE_AFTER_MS = 60 * 60_000;
 // 상태 파일 읽기 상한 (정상 파일은 1KB 안팎)
 export const PLAYER_STATE_MAX_BYTES = 16 * 1024;
+// 상태 파일의 글(과목·제목·메시지 등) 길이 상한. 넘으면 쓸 때·읽을 때 자른다
+export const PLAYER_STATE_TEXT_MAX = 200;
 // 진도를 이만큼 연속으로 모르면(약 15분) 상태·로그로 알린다
 export const VOD_UNKNOWN_WARN_POLLS = 10;
 // 로그인 페이지가 200 으로 오면(리다이렉트 없이) 비밀번호 입력란으로 알아본다

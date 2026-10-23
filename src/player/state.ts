@@ -3,13 +3,14 @@ import { chmod, mkdir, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import * as z from 'zod/v4';
-import { PLAYER_STATE_MAX_BYTES } from '../constants.js';
+import { PLAYER_STATE_MAX_BYTES, PLAYER_STATE_TEXT_MAX } from '../constants.js';
 
 export const PLAYER_STATE_FILE = join(homedir(), '.cache', 'dotbugi-mcp', 'player-state.json');
 export const PLAYER_LOCK_FILE = join(dirname(PLAYER_STATE_FILE), 'player.lock');
 
-// 상태 파일은 다른 프로세스가 쓴 디스크 데이터라 읽을 때 이 스키마로 검증한다
-const text = z.string().max(1000);
+// 상태 파일은 다른 프로세스가 쓴 디스크 데이터라 읽을 때 이 스키마로 검증한다.
+// 긴 글은 거부하지 않고 자른다 (쓸 때도 같은 스키마로 잘라 PLAYER_STATE_MAX_BYTES 안에 들게 — 7개 × 200자)
+const text = z.string().overwrite((s) => s.slice(0, PLAYER_STATE_TEXT_MAX));
 const playerVod = z.object({
   course: text,
   title: text,
@@ -63,6 +64,6 @@ export async function ensurePrivateDir(dir: string): Promise<void> {
 export async function writePlayerState(file: string, state: PlayerState): Promise<void> {
   await ensurePrivateDir(dirname(file));
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(tmp, `${JSON.stringify(playerStateSchema.parse(state), null, 2)}\n`, { mode: 0o600 });
   await rename(tmp, file);
 }
