@@ -1,9 +1,17 @@
 import { lmsLogout } from '../lms.js';
 import { log } from '../log.js';
-import { deleteSession, readSession } from '../session.js';
+import { deleteSession, InvalidStoredSessionError, readSession, type StoredSession } from '../session.js';
 
 export async function logout(): Promise<void> {
-  const stored = await readSession();
+  let stored: StoredSession | null;
+  try {
+    stored = await readSession();
+  } catch (err) {
+    if (!(err instanceof InvalidStoredSessionError)) throw err;
+    // 형식이 깨진 값은 서버 로그아웃 없이 지우기만 한다 (그래야 다시 login 할 수 있다)
+    await deleteSession();
+    return log('형식이 올바르지 않은 세션을 OS 키체인에서 삭제했습니다.');
+  }
   if (!stored) return log('저장된 세션이 없습니다.');
   if (stored.method === 'browser') {
     // 임시 프로필 로그인은 dotbugi-mcp 전용 세션이므로 서버에서도 끊는다
