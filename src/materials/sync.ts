@@ -281,7 +281,7 @@ async function syncCourse(
   if (dirty) await save(manifest);
 }
 
-// 수강 과목(비교과 제외)의 강의자료를 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/ 에 맞춘다. course 는 과목명 일부(대소문자 무시)
+// 추적 중인 강좌(dotbugi-mcp courses, 기본: 비교과 제외)의 강의자료를 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/ 에 맞춘다. course 는 과목명 일부(대소문자 무시)
 export async function syncMaterials(session: string, course?: string): Promise<SyncResult> {
   const fetchHtml = createFetchHtml(session);
   const out: SyncResult = { root: materialsRoot(), files: [], removed: [], warnings: [] };
