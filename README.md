@@ -2,7 +2,7 @@
 
 한성대 LMS(learn.hansung.ac.kr, Moodle 3.2 + 코스모스)의 VOD·과제·퀴즈를 Claude Code / Claude Desktop에서 다루기 위한 MCP 서버.
 
-> 현재는 서버 뼈대만 있습니다. `login`·조회 도구 등은 이후 이슈에서 추가됩니다.
+> 현재는 서버 뼈대와 `login`/`logout`만 있습니다. 조회 도구는 이후 이슈에서 추가됩니다.
 
 ## 설치 / 빌드
 
@@ -13,6 +13,31 @@ npm install
 npm run build
 npm run inspect   # MCP Inspector로 동작 확인
 ```
+
+## 로그인 / 로그아웃
+
+LMS 세션은 **터미널에서** 확보합니다 (MCP 도구가 아니므로 자격 증명이 대화 기록에 남지 않습니다).
+
+```bash
+node dist/index.js login            # 기본: dotbugi 확장으로 연결
+node dist/index.js login --browser  # 대체: 임시 브라우저 창에서 직접 로그인
+node dist/index.js logout
+```
+
+(`npm link` 등으로 설치하면 `dotbugi-mcp login` 으로 실행할 수 있습니다.)
+
+- **기본(`login`)**: 기본 브라우저로 LMS가 열리고, 로그인된 상태에서 dotbugi 확장의 연결 창에서 승인하면 세션이 `127.0.0.1`로 전달됩니다. 확장 쪽 기능은 [hs-shell/dotbugi#167](https://github.com/hs-shell/dotbugi/issues/167)에서 제공됩니다. 연결은 일회용 코드 + dotbugi 확장 출처만 허용하며 5분 안에 한 번만 받습니다.
+- **대체(`login --browser`)**: 설치된 Chrome → Edge → Brave → Whale 중 하나를 **새 임시 프로필**로 엽니다. 주소가 `https://learn.hansung.ac.kr` 인지 확인하고 로그인하면, LMS 세션 쿠키만 꺼낸 뒤 창을 닫고 임시 프로필을 삭제합니다. 평소 브라우저 정보에는 접근하지 않습니다. **WSL에서는 지원하지 않습니다** (Windows 브라우저의 디버깅 포트에 닿지 않음) — 확장 방식을 쓰거나 Windows 터미널에서 실행하세요.
+- 받은 세션은 LMS `/my/` 접속으로 확인한 뒤에만 저장합니다.
+- **`logout`**: 키체인에서 세션을 지웁니다. `--browser` 로 얻은 세션은 LMS 서버에서도 로그아웃합니다. 확장 방식 세션은 평소 브라우저와 공유되므로 서버 로그아웃은 하지 않습니다(브라우저까지 로그아웃되기 때문).
+
+### 보안 참고
+
+- 웹서비스 토큰(폐기 불가, 12주 유효) 대신 **세션 쿠키(`MoodleSession`)** 를 씁니다. 세션은 활동이 없으면 만료되고 로그아웃으로 서버에서 끊을 수 있습니다.
+- 세션은 **OS 키체인에만** 저장합니다 (Windows 자격 증명 관리자 / macOS 키체인 / Linux Secret Service, 없으면 커널 키링 — 재부팅 시 사라짐). 키체인을 쓸 수 없으면 로그인을 거부하며, 파일로 대신 저장하지 않습니다.
+- **WSL**에서는 Windows 자격 증명 관리자(`session.dotbugi-mcp` 일반 자격 증명)를 PowerShell로 사용합니다.
+- 키체인은 **같은 사용자 권한으로 실행되는 프로세스라면 읽을 수 있습니다.** Bash 실행 권한이 있는 AI 에이전트도 마찬가지입니다. 필요 없을 때는 `logout` 하세요.
+- 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보내고, 세션 값·연결 코드는 화면이나 로그에 출력하지 않습니다.
 
 ## Claude Code에 등록
 
