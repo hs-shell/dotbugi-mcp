@@ -1,0 +1,12 @@
+dist
+node_modules
+coverage
+
+.env
+.env.*
+
+*.log
+*.lock
+
+# 임시 시제품 스크립트 (커밋 대상 아님)
+scripts
