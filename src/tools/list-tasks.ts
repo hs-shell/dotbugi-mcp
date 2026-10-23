@@ -11,7 +11,7 @@ const TYPE_LABELS: Record<TaskType, string> = { vod: '강의', assign: '과제',
 const cell = (value: string) => value.replaceAll('|', '\\|');
 
 // 구조화 결과를 못 읽는 클라이언트용 한 줄 요약 (경고가 있으면 맨 앞에)
-function toText(tasks: Task[], warnings: string[]): string {
+export function toText(tasks: Task[], warnings: string[]): string {
   const lines = tasks.map(
     (t) =>
       `[${TYPE_LABELS[t.type]}] ${cell(t.course)} | ${cell(t.title)} | ${t.status} | ${t.remaining} | ${cell(t.deadline ?? '-')}`

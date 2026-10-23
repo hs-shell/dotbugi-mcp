@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerListTasks } from './tools/list-tasks.js';
+import { registerVodStatus } from './tools/vod-status.js';
 
 // 버전은 package.json 단일 출처 (src/·dist/ 모두 한 단계 아래라 같은 상대 경로)
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
@@ -9,5 +10,6 @@ const { version } = createRequire(import.meta.url)('../package.json') as { versi
 export function createServer(): McpServer {
   const server = new McpServer({ name: 'dotbugi-mcp', version });
   registerListTasks(server);
+  registerVodStatus(server);
   return server;
 }
