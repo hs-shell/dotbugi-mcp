@@ -38,7 +38,7 @@ export interface AsrRuntime {
   command: string;
   args: string[];
   model: AsrModel;
-  env: Record<string, string>;
+  env?: Record<string, string>;
 }
 
 const INSTALL_HINT = '`dotbugi-mcp asr install` 을 실행하세요.';
@@ -61,7 +61,7 @@ export function readAsrConfig(root: string): AsrConfig | null {
   return parsed.data;
 }
 
-export function resolveAsrRuntime(root = ASR_ROOT): AsrRuntime {
+export async function resolveAsrRuntime(root = ASR_ROOT): Promise<AsrRuntime> {
   const config = readAsrConfig(root);
   if (!config) throw new Error(`로컬 음성 인식(ASR) 런타임이 설치되어 있지 않습니다. ${INSTALL_HINT}`);
   const paths = asrPaths(root);
@@ -86,8 +86,9 @@ export function resolveAsrRuntime(root = ASR_ROOT): AsrRuntime {
       model: config.model,
       env: { HF_HUB_OFFLINE: '1' },
     };
-  // shortcut: 물리 코어 수 대신 논리 코어의 절반(SMT 가정), 상한 8 — POC(8코어)에서 -t 8 이 최적이었다
-  const threads = Math.max(1, Math.min(8, Math.floor(availableParallelism() / 2)));
+  // shortcut: 물리 코어 수 대신 논리 코어의 절반(x86 SMT 가정, Apple Silicon 은 SMT 없음), 상한 8 — POC(8코어)에서 -t 8 이 최적
+  const cores = process.platform === 'darwin' ? availableParallelism() : Math.floor(availableParallelism() / 2);
+  const threads = Math.max(1, Math.min(8, cores));
   return {
     ffmpeg: paths.ffmpeg,
     kind: 'cpu',

@@ -10,7 +10,8 @@ export const PLAYER_LOCK_FILE = join(dirname(PLAYER_STATE_FILE), 'player.lock');
 
 // 상태 파일은 다른 프로세스가 쓴 디스크 데이터라 읽을 때 이 스키마로 검증한다.
 // 긴 글은 거부하지 않고 자른다 (쓸 때도 같은 스키마로 잘라 PLAYER_STATE_MAX_BYTES 안에 들게 — 7개 × 200자)
-const text = z.string().overwrite((s) => s.slice(0, PLAYER_STATE_TEXT_MAX));
+export const stateText = z.string().overwrite((s) => s.slice(0, PLAYER_STATE_TEXT_MAX));
+const text = stateText;
 const playerVod = z.object({
   course: text,
   title: text,
@@ -40,12 +41,16 @@ export type PlayerState = z.infer<typeof playerStateSchema>;
 // 상태 표시줄이 자주 부르므로 동기로 읽는다. 링크를 따라가지 않고(O_NOFOLLOW), FIFO 에 막히지 않으며(O_NONBLOCK),
 // 정규 파일·크기 상한·스키마를 통과한 것만 돌려준다. 없거나 이상하면 null
 export function readPlayerState(file: string): PlayerState | null {
+  return readStateFile(file, playerStateSchema);
+}
+
+export function readStateFile<T>(file: string, schema: z.ZodType<T>): T | null {
   let fd: number | undefined;
   try {
     fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
     const st = fstatSync(fd);
     if (!st.isFile() || st.size > PLAYER_STATE_MAX_BYTES) return null;
-    const parsed = playerStateSchema.safeParse(JSON.parse(readFileSync(fd, 'utf8')));
+    const parsed = schema.safeParse(JSON.parse(readFileSync(fd, 'utf8')));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -61,9 +66,13 @@ export async function ensurePrivateDir(dir: string): Promise<void> {
 }
 
 // 읽는 쪽이 쓰다 만 파일을 보지 않게 임시 파일에 쓰고 rename 한다. 디렉터리 0700, 파일 0600
-export async function writePlayerState(file: string, state: PlayerState): Promise<void> {
+export function writePlayerState(file: string, state: PlayerState): Promise<void> {
+  return writeStateFile(file, playerStateSchema, state);
+}
+
+export async function writeStateFile<T>(file: string, schema: z.ZodType<T>, state: T): Promise<void> {
   await ensurePrivateDir(dirname(file));
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(playerStateSchema.parse(state), null, 2)}\n`, { mode: 0o600 });
+  await writeFile(tmp, `${JSON.stringify(schema.parse(state), null, 2)}\n`, { mode: 0o600 });
   await rename(tmp, file);
 }

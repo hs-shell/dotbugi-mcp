@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileSha256 } from '../asr/download.js';
 import { installAsr, parseInstallOptions } from '../asr/install.js';
-import { FFMPEG, MODELS, QWEN_ASR_BINARY, type AsrModel } from '../asr/pins.js';
+import { FFMPEG, MODELS, QWEN_ASR_BINARY, type AsrModel, type AsrPlatform } from '../asr/pins.js';
 import { ASR_ROOT, asrPaths, modelFilePath, readAsrConfig } from '../asr/runtime.js';
 import { log } from '../log.js';
 
@@ -59,18 +59,27 @@ async function status(root: string): Promise<void> {
     config = (err as Error).message;
   }
   log(`위치: ${root}\n설정: ${config}`);
-  // 플랫폼에 맞는 고정값으로 검증한다 (미지원 플랫폼이면 해당 항목만 확인 불가)
-  const platform = process.platform === 'darwin' ? 'macos-arm64' : 'linux-x64';
-  log(`- ffmpeg: ${mb(await sizeOf(paths.ffmpeg))} ${await verify(paths.ffmpeg, FFMPEG[platform].entrySha256)}`);
-  if (existsSync(paths.qwenAsr))
-    log(
-      `- qwen_asr: ${mb(await sizeOf(paths.qwenAsr))} ${await verify(paths.qwenAsr, QWEN_ASR_BINARY[platform].sha256)}`
-    );
+  // 이 플랫폼의 고정값으로 검증한다. 미지원 플랫폼이면 바이너리는 검증할 수 없다고만 알린다
+  const platform: AsrPlatform | null =
+    process.platform === 'linux' && process.arch === 'x64'
+      ? 'linux-x64'
+      : process.platform === 'darwin' && process.arch === 'arm64'
+        ? 'macos-arm64'
+        : null;
+  const binary = async (name: string, path: string, sha256: string | undefined) => {
+    if (!existsSync(path)) return;
+    const result = sha256
+      ? await verify(path, sha256)
+      : `미지원 플랫폼(${process.platform}-${process.arch}) — 검증 불가`;
+    log(`- ${name}: ${mb(await sizeOf(path))} ${result}`);
+  };
+  await binary('ffmpeg', paths.ffmpeg, platform ? FFMPEG[platform].entrySha256 : undefined);
+  await binary('qwen_asr', paths.qwenAsr, platform ? QWEN_ASR_BINARY[platform].sha256 : undefined);
   for (const model of Object.keys(MODELS) as AsrModel[]) {
     if (!existsSync(join(paths.models, model))) continue;
     const results = await Promise.all(
       Object.entries(MODELS[model].files).map(
-        async ([f, sha]) => `${f}: ${await verify(modelFilePath(root, model, f), sha)}`
+        async ([f, pin]) => `${f}: ${await verify(modelFilePath(root, model, f), pin.sha256)}`
       )
     );
     const bad = results.filter((r) => !r.endsWith('검증 OK'));

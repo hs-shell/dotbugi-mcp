@@ -5,12 +5,13 @@ import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { download } from '../asr/download.js';
-import { installAsr, parseInstallOptions } from '../asr/install.js';
+import { installAsr, missingCpuFlags, parseInstallOptions } from '../asr/install.js';
 import { isAllowedDownloadUrl, MODELS, QWEN_ASR_BINARY, UNPINNED } from '../asr/pins.js';
 import { asrConfigSchema, asrPaths, GPU_SCRIPT, modelFilePath, resolveAsrRuntime } from '../asr/runtime.js';
 import { extractZipEntry } from '../asr/zip.js';
 
 const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
+const pin = (sha256: string, maxBytes = 1000) => ({ sha256, maxBytes });
 
 let root: string;
 beforeEach(async () => void (root = await mkdtemp(join(tmpdir(), 'asr-'))));
@@ -47,15 +48,15 @@ describe('download', () => {
       'fetch',
       vi.fn(async () => new Response(body))
     );
-    await expect(download(url, join(root, 'f'), sha('other'), 'f')).rejects.toThrow('sha256');
+    await expect(download(url, join(root, 'f'), pin(sha('other')), 'f')).rejects.toThrow('sha256');
     expect(await readdir(root)).toEqual([]);
   });
 
   it('맞으면 dest 에 쓰고, 다음에는 받지 않는다', async () => {
     const fetchMock = vi.fn(async () => new Response(body));
     vi.stubGlobal('fetch', fetchMock);
-    await download(url, join(root, 'f'), sha(body), 'f');
-    await download(url, join(root, 'f'), sha(body), 'f');
+    await download(url, join(root, 'f'), pin(sha(body)), 'f');
+    await download(url, join(root, 'f'), pin(sha(body)), 'f');
     expect(await readFile(join(root, 'f'), 'utf8')).toBe(body);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -66,9 +67,32 @@ describe('download', () => {
       async () => new Response(body.slice(4), { status: 206, headers: { 'content-range': `bytes 4-8/${body.length}` } })
     );
     vi.stubGlobal('fetch', fetchMock);
-    await download(url, join(root, 'f'), sha(body), 'f');
+    await download(url, join(root, 'f'), pin(sha(body)), 'f');
     expect(await readFile(join(root, 'f'), 'utf8')).toBe(body);
     expect(fetchMock.mock.calls[0][1]?.headers).toEqual({ range: 'bytes=4-' });
+  });
+
+  it('크기 상한을 넘으면 받다가 끊고 버린다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body))
+    );
+    await expect(download(url, join(root, 'f'), pin(sha(body), 4), 'f')).rejects.toThrow('크기');
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('응답이 멈추면 시간 제한으로 끊는다', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const fetchMock = vi.fn(
+      (_u: URL, init: RequestInit) =>
+        new Promise<Response>((_, reject) => init.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = expect(download(url, join(root, 'f'), pin(sha(body)), 'f')).rejects.toThrow('멈춰');
+    while (!fetchMock.mock.calls.length) await new Promise((r) => setImmediate(r));
+    await vi.advanceTimersByTimeAsync(60_000);
+    await pending;
+    vi.useRealTimers();
   });
 
   it('고정값이 없거나, 허용 밖 호스트·http·리다이렉트는 거부', async () => {
@@ -76,9 +100,11 @@ describe('download', () => {
       async () => new Response(null, { status: 302, headers: { location: 'https://evil.example/f' } })
     );
     vi.stubGlobal('fetch', fetchMock);
-    await expect(download(url, join(root, 'f'), UNPINNED, 'f')).rejects.toThrow('고정되지 않아');
-    await expect(download('https://evil.example/f', join(root, 'f'), sha(body), 'f')).rejects.toThrow('허용되지 않은');
-    await expect(download(url, join(root, 'f'), sha(body), 'f')).rejects.toThrow('허용되지 않은');
+    await expect(download(url, join(root, 'f'), pin(UNPINNED), 'f')).rejects.toThrow('고정되지 않아');
+    await expect(download('https://evil.example/f', join(root, 'f'), pin(sha(body)), 'f')).rejects.toThrow(
+      '허용되지 않은'
+    );
+    await expect(download(url, join(root, 'f'), pin(sha(body)), 'f')).rejects.toThrow('허용되지 않은');
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(isAllowedDownloadUrl(new URL('http://huggingface.co/x'))).toBe(false);
     expect(isAllowedDownloadUrl(new URL('https://huggingface.co.evil.example/x'))).toBe(false);
@@ -108,6 +134,15 @@ describe.skipIf(!supported)('installAsr', () => {
   });
 });
 
+describe('CPU 기능 확인', () => {
+  it('x86-64-v3 플래그가 빠지면 알려 준다', () => {
+    const v3 = 'flags\t\t: fpu sse2 avx avx2 fma bmi1 bmi2 abm movbe f16c\n';
+    expect(missingCpuFlags(v3)).toEqual([]);
+    expect(missingCpuFlags('flags\t\t: fpu sse2 avx avx2 fma\n')).toEqual(['bmi1', 'bmi2', 'abm', 'movbe', 'f16c']);
+    expect(missingCpuFlags('')).toHaveLength(7);
+  });
+});
+
 describe('경로', () => {
   it('모델 파일 이름이 폴더 밖을 가리키면 거부', () => {
     expect(() => modelFilePath(root, '0.6b', '../config.json')).toThrow();
@@ -129,19 +164,19 @@ describe('resolveAsrRuntime', () => {
   const modelFiles = (m: '0.6b' | '1.7b') => Object.keys(MODELS[m].files).map((f) => modelFilePath(root, m, f));
 
   it('설치 전·설정 오류·파일 누락이면 asr install 안내', async () => {
-    expect(() => resolveAsrRuntime(root)).toThrow('dotbugi-mcp asr install');
+    await expect(resolveAsrRuntime(root)).rejects.toThrow('dotbugi-mcp asr install');
     await install({ runtime: 'cpu', model: '1.7b' }, []);
-    expect(() => resolveAsrRuntime(root)).toThrow('형식이 올바르지 않습니다');
+    await expect(resolveAsrRuntime(root)).rejects.toThrow('형식이 올바르지 않습니다');
     await writeFile(asrPaths(root).config, '{');
-    expect(() => resolveAsrRuntime(root)).toThrow('형식이 올바르지 않습니다');
+    await expect(resolveAsrRuntime(root)).rejects.toThrow('형식이 올바르지 않습니다');
     await install({ runtime: 'cpu', model: '0.6b' }, [asrPaths(root).ffmpeg]);
-    expect(() => resolveAsrRuntime(root)).toThrow('파일이 없습니다');
+    await expect(resolveAsrRuntime(root)).rejects.toThrow('파일이 없습니다');
   });
 
   it('CPU: qwen_asr 를 stdin 30초 청크로', async () => {
     const p = asrPaths(root);
     await install({ runtime: 'cpu', model: '0.6b' }, [p.ffmpeg, p.qwenAsr, ...modelFiles('0.6b')]);
-    const rt = resolveAsrRuntime(root);
+    const rt = await resolveAsrRuntime(root);
     expect(rt).toMatchObject({ ffmpeg: p.ffmpeg, kind: 'cpu', command: p.qwenAsr, model: '0.6b' });
     expect(rt.args).toEqual(expect.arrayContaining(['--stdin', '-S', '30', '--silent', '-t']));
     expect(rt.args.slice(0, 2)).toEqual(['-d', join(p.models, '0.6b')]);
@@ -151,7 +186,7 @@ describe('resolveAsrRuntime', () => {
   it('GPU: venv python -I + 동봉 스크립트, 오프라인', async () => {
     const p = asrPaths(root);
     await install({ runtime: 'gpu', model: '1.7b' }, [p.ffmpeg, p.venvPython, ...modelFiles('1.7b')]);
-    expect(resolveAsrRuntime(root)).toEqual({
+    expect(await resolveAsrRuntime(root)).toEqual({
       ffmpeg: p.ffmpeg,
       kind: 'gpu',
       command: p.venvPython,

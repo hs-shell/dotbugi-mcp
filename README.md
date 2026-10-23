@@ -201,18 +201,19 @@ dotbugi-mcp asr remove                     # 폴더 삭제 (터미널이 아니�
 ```
 
 - 실행 방식은 자동으로 고르지 않습니다. CPU 는 0.6B 고정, `--model 0.6b|1.7b` 는 `--gpu` 와 함께일 때만 고를 수 있고 `config.json` 에 저장됩니다. 다시 `install` 하면 바뀝니다.
-- 지원: Linux x64·WSL(AVX2 CPU), macOS Apple Silicon(CPU, 미검증). `--gpu` 는 Linux x64 + NVIDIA GPU + [uv](https://docs.astral.sh/uv/) 필요. Windows 는 WSL 에서 실행하세요.
-- 받는 파일은 모두 코드에 고정된 sha256 과 일치해야 쓰입니다(`src/asr/pins.ts`). `.part` 로 받아 검증한 뒤에만 이름을 바꾸므로 중단돼도 다시 실행하면 이어 받습니다.
-  - `qwen_asr`: 이 저장소 Release(`asr-v*`)의 미리 빌드한 바이너리 — `.github/workflows/asr-binaries.yml` 이 antirez/qwen-asr 를 커밋 고정으로 빌드
+- 지원: Linux x64·WSL — x86-64-v3 CPU(AVX2·FMA 등, Intel Haswell·AMD Excavator 이후) + **glibc 2.35 이상**(Ubuntu 22.04·Debian 12 이후). macOS Apple Silicon 은 바이너리 검증 전이라 아직 CPU 설치가 거부됩니다. `--gpu` 는 Linux x64 + NVIDIA GPU + [uv](https://docs.astral.sh/uv/) 필요. Windows 는 WSL 에서 실행하세요.
+- 받는 파일은 모두 코드에 고정된 sha256·크기와 일치해야 쓰입니다(`src/asr/pins.ts`). 60초 동안 데이터가 오지 않으면 끊습니다. `.part` 로 받아 검증한 뒤에만 이름을 바꾸므로 중단돼도 다시 실행하면 이어 받습니다.
+  - `qwen_asr`: 공개 저장소 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release(`asr-v*`)의 미리 빌드한 바이너리 — antirez/qwen-asr 커밋 고정, OpenBLAS 정적 링크
   - ffmpeg: PyPI `imageio-ffmpeg` 0.6.0 휠 안의 정적 바이너리
   - 모델: Hugging Face `Qwen/Qwen3-ASR-0.6B`·`1.7B` 고정 리비전
   - GPU venv: `src/asr/gpu-requirements.txt` (해시 고정, 휠만) — `uv pip install --require-hashes --only-binary :all:`
+- uv 캐시와 uv 가 받는 Python 도 같은 폴더(`uv-cache/`, `python/`)에 두므로 `asr remove` 로 모두 지워집니다.
 - 내려받기는 https 로 github.com·huggingface.co·files.pythonhosted.org 와 그 CDN 만 허용합니다. 텔레메트리는 없습니다.
 
-### qwen_asr 바이너리 고정 (관리자)
+### qwen_asr 바이너리 고정 (관리자, #22)
 
-1. Actions 에서 **ASR 바이너리** 워크플로를 태그 `asr-v1` 로 실행(또는 `asr-v1` 태그 푸시)
-2. 만들어진 Release 의 `SHA256SUMS` 값을 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` sha256 에 넣고 PR (값이 `UNPINNED` 인 동안 CPU 설치는 거부됩니다)
+1. [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) 의 **Build qwen_asr** 워크플로를 태그 `asr-v1` 로 실행
+2. Release 의 `SHA256SUMS` 값을 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` sha256 에 넣고 PR (값이 `UNPINNED` 인 동안 CPU 설치는 거부됩니다)
 
 ## Claude Code에 등록
 
