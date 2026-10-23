@@ -1,12 +1,12 @@
 import type { VodAttendanceData } from '@dotbugi/lms-parser';
 import { describe, expect, it, vi } from 'vitest';
-import { VOD_POLL_INTERVAL_MS } from '../constants.js';
+import { VOD_POLL_INTERVAL_MS, VOD_UNKNOWN_WARN_POLLS } from '../constants.js';
 import { SessionExpiredError } from '../lms.js';
 import { playVods, selectTargets, type PlayerDeps, type VodTarget } from '../player/scheduler.js';
 import type { PlayerState } from '../player/state.js';
 import type { TaskItem } from '../tasks/schema.js';
 
-vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
 
 const L = 'https://learn.hansung.ac.kr';
 const now = Date.parse('2026-10-24T12:00:00+09:00');
@@ -138,12 +138,41 @@ describe('playVods', () => {
     expect(JSON.stringify(states)).not.toMatch(/cmid|courseId|http/);
   });
 
-  it('진도 행을 못 찾거나 조회가 잠깐 실패해도 넘어가지 않고 다시 확인한다', async () => {
-    const { events, states, run } = setup([[], new Error('LMS 응답 오류 HTTP 500'), [row('A', '20:00')]]);
+  it('진도 행을 못 찾거나 조회가 잠깐 실패해도 넘어가지 않고 다시 확인한다 (원인도 로그에)', async () => {
+    const failure = new Error('VOD 진도 조회 실패', { cause: new Error('LMS 응답 오류 HTTP 500') });
+    const { events, states, run } = setup([[], failure, [row('A', '20:00')]]);
     await run([target('A', '1')]);
     expect(events).toEqual(['poll:100', 'open:1', 'sleep', 'poll:100', 'sleep', 'poll:100']);
     expect(states[0].current).toMatchObject({ progress: null, remainingSeconds: null });
     expect(states.at(-1)?.status).toBe('done');
+    expect(stderr.mock.calls.join('')).toContain('VOD 진도 조회 실패: LMS 응답 오류 HTTP 500');
+  });
+
+  it(`진도를 ${VOD_UNKNOWN_WARN_POLLS}번 연속 모르면 상태에 경고를 남기고, 다시 알면 지운다`, async () => {
+    const unknown = Array.from({ length: VOD_UNKNOWN_WARN_POLLS }, () => [] as VodAttendanceData[]);
+    const { states, run } = setup([...unknown, [row('A', '05:00')], [row('A', '20:00')]]);
+    await run([target('A', '1')]);
+    const messages = states.map((s) => s.message);
+    expect(messages.slice(0, VOD_UNKNOWN_WARN_POLLS - 1).every((m) => m === null)).toBe(true);
+    expect(messages[VOD_UNKNOWN_WARN_POLLS - 1]).toContain('서버 진도를 한동안 확인하지 못했습니다');
+    expect(messages[VOD_UNKNOWN_WARN_POLLS]).toBeNull();
+  });
+
+  it('상태 파일 쓰기가 실패해도 재생은 계속된다', async () => {
+    const { deps, events, run } = setup([[row('A', '05:00')], [row('A', '20:00')]]);
+    deps.save = vi.fn(async () => {
+      throw new Error('EACCES');
+    });
+    await run([target('A', '1')]);
+    expect(events).toEqual(['poll:100', 'open:1', 'sleep', 'poll:100']);
+  });
+
+  it('이미 중지됐으면 더 요청하지 않고 stopped', async () => {
+    const { deps, states, controller, run } = setup([]);
+    controller.abort();
+    await run([target('A', '1')]);
+    expect(deps.fetchProgress).not.toHaveBeenCalled();
+    expect(states).toEqual([expect.objectContaining({ status: 'stopped', index: 1 })]);
   });
 
   it('출석 인정 기간이 끝나면 그 강의는 건너뛴다', async () => {

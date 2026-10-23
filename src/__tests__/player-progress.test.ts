@@ -21,6 +21,15 @@ describe('createProgressFetcher', () => {
     });
   });
 
+  it('진도 표가 비어 있으면 빈 목록, 진도 표가 없는 페이지는 실패, 200 로그인 페이지는 세션 만료', async () => {
+    await expect(createProgressFetcher(SESSION)('200')).resolves.toEqual([]);
+    const page = (body: string) => async () => new Response(`<html><body>${body}</body></html>`);
+    fetchMock.mockImplementation(page('<p>오류</p>'));
+    await expect(createProgressFetcher(SESSION)('100')).rejects.toThrow('진도 표를 찾지 못했습니다');
+    fetchMock.mockImplementation(page('<form id="login"><input type="password" name="password"></form>'));
+    await expect(createProgressFetcher(SESSION)('100')).rejects.toBeInstanceOf(SessionExpiredError);
+  });
+
   it('로그인으로 리다이렉트되면 세션 만료 오류를 그대로 올린다', async () => {
     fetchMock.mockImplementation(async () => LOGIN_REDIRECT());
     await expect(createProgressFetcher(SESSION)('100')).rejects.toBeInstanceOf(SessionExpiredError);

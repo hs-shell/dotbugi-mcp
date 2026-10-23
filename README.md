@@ -66,7 +66,8 @@ node dist/index.js play   # Ctrl+C 로 중지
 - 지금 **출석 인정 기간 안의 미출석 VOD**를 마감 임박 순(같으면 과목·주차 순)으로, LMS **공식 플레이어 페이지**(`/mod/vod/view.php?id=<번호>`)를 평소 브라우저 프로필의 앱 모드 창(`--app`)으로 하나씩 엽니다. 출석·진도는 공식 플레이어가 평소처럼 기록합니다.
 - 재생 중에는 90초마다 서버 진도 페이지(`report/ubcompletion/user_progress.php`)를 한 장씩 확인하고, **서버가 출석(진도 100%)을 확인한 뒤에만** 다음 강의 창을 엽니다. 서버 반영 주기만큼 늦게 넘어갈 수 있습니다.
 - 다 본 창은 직접 닫아 주세요 (평소 프로필 창은 외부에서 제어하지 않습니다). 이미 출석한 강의는 열지 않고, 보는 중에 출석 인정 기간이 끝나면 건너뜁니다.
-- 세션이 만료되면 멈추고 `dotbugi-mcp login` 을 안내합니다.
+- 세션이 만료되면 멈추고 `dotbugi-mcp login` 을 안내합니다. 진도를 10번(약 15분) 연속 확인하지 못하면 로그와 상태 파일 `message` 로 알립니다.
+- 한 번에 하나만 실행됩니다 (`~/.cache/dotbugi-mcp/player.lock`, 강제 종료로 남은 잠금은 다음 실행이 넘겨받음). Ctrl+C·터미널 종료(SIGINT·SIGTERM·SIGHUP)로 멈추면 상태를 `stopped` 로 남깁니다.
 - 헤드리스 재생·자동 음소거·배속 강제·플레이어 검사 우회·진도 요청 직접 생성은 **하지 않습니다**.
 - 브라우저는 Chrome → Edge → Brave → Whale 순으로 찾습니다. WSL에서는 `C:\Program Files` 의 Windows 브라우저를 실행합니다.
 
@@ -94,7 +95,7 @@ node dist/index.js play   # Ctrl+C 로 중지
 
 - `status`: `playing` / `done`(모두 마침) / `stopped`(Ctrl+C) / `error`(`message` 에 이유)
 - `index`: 지금 강의 순번(1부터, 없으면 0). `progress`·`remainingSeconds`(출석 인정까지 남은 학습 시간)는 서버 진도를 못 읽으면 `null`
-- 재생 중에는 약 90초마다 `updatedAt` 이 갱신됩니다. 한참 지났다면 프로세스가 강제 종료된 것입니다.
+- 재생 중에는 약 90초마다 `updatedAt` 이 갱신됩니다. 강제 종료되면 `status` 가 `playing` 으로 남으므로, 읽는 쪽은 `updatedAt` 이 3분(`PLAYER_STATE_STALE_MS`, 확인 간격의 2배)보다 오래되면 멈춘 것으로 봐야 합니다.
 
 ## Claude Code에 등록
 

@@ -1,5 +1,11 @@
 import type { VodAttendanceData } from '@dotbugi/lms-parser';
-import { LMS_NUMERIC_ID, LMS_ORIGIN, VOD_PLAYER_PATH, VOD_POLL_INTERVAL_MS } from '../constants.js';
+import {
+  LMS_NUMERIC_ID,
+  LMS_ORIGIN,
+  VOD_PLAYER_PATH,
+  VOD_POLL_INTERVAL_MS,
+  VOD_UNKNOWN_WARN_POLLS,
+} from '../constants.js';
 import { SessionExpiredError } from '../lms.js';
 import { log } from '../log.js';
 import { redact } from '../redact.js';
@@ -50,16 +56,20 @@ export function selectTargets(items: TaskItem[], now: number): VodTarget[] {
     );
 }
 
+const UNKNOWN_WARNING =
+  '서버 진도를 한동안 확인하지 못했습니다. 강의를 보고 있는지, LMS 진도 페이지가 바뀌지 않았는지 확인하세요.';
+
 const display = ({ course, title, week, deadline }: PlayerVod): PlayerVod => ({ course, title, week, deadline });
 
 // 서버가 출석(진도 100%)을 확인해야만 다음 강의로 넘어간다. 창은 강의마다 한 번만 연다
 export async function playVods(targets: VodTarget[], deps: PlayerDeps, signal: AbortSignal): Promise<void> {
   let index = 0;
   let progress: Progress | null = null;
+  // 상태 파일은 표시용이라 쓰기 실패로 재생을 끝내거나 원래 오류를 가리지 않는다
   const save = (status: PlayerState['status'], message: string | null = null) => {
     const current = targets[index];
     const next = targets[index + 1];
-    return deps.save({
+    const state: PlayerState = {
       version: 1,
       status,
       updatedAt: new Date(deps.now()).toISOString(),
@@ -74,7 +84,8 @@ export async function playVods(targets: VodTarget[], deps: PlayerDeps, signal: A
         : null,
       next: next ? display(next) : null,
       message,
-    });
+    };
+    return deps.save(state).catch((err: unknown) => log(`상태 파일을 쓰지 못했습니다. (${describe(err)})`));
   };
 
   log(`볼 VOD ${targets.length}개 — 마감 임박 순으로 엽니다. 멈추려면 Ctrl+C`);
@@ -83,19 +94,24 @@ export async function playVods(targets: VodTarget[], deps: PlayerDeps, signal: A
       const vod = targets[index];
       progress = null;
       let opened = false;
+      let unknown = 0;
       for (;;) {
+        signal.throwIfAborted();
         progress = await poll(deps, vod);
         if (progress.done) {
-          log(`출석 확인: ${vod.course} · ${vod.title}`);
+          log(`진도 100% 확인: ${vod.course} · ${vod.title}`);
           break;
         }
         if (deadlineMs(vod.deadline) < deps.now()) {
           log(`출석 인정 기간이 끝나 건너뜁니다: ${vod.course} · ${vod.title}`);
           break;
         }
-        await save('playing');
+        // 진도를 계속 모르면(행을 못 찾음·조회 실패) 마감까지 조용히 기다리지 않고 알린다
+        unknown = progress.progress === null ? unknown + 1 : 0;
+        const warning = unknown >= VOD_UNKNOWN_WARN_POLLS ? UNKNOWN_WARNING : null;
+        if (unknown === VOD_UNKNOWN_WARN_POLLS) log(UNKNOWN_WARNING);
+        await save('playing', warning);
         if (!opened) {
-          signal.throwIfAborted();
           await deps.open(vod.cmid);
           opened = true;
           log(`(${index + 1}/${targets.length}) ${vod.course} · ${vod.title} — 다 보면 창은 직접 닫아 주세요`);
@@ -111,7 +127,7 @@ export async function playVods(targets: VodTarget[], deps: PlayerDeps, signal: A
       await save('stopped');
       return log('중지했습니다. (열린 창은 직접 닫아 주세요)');
     }
-    await save('error', redact(err instanceof Error ? err.message : String(err)));
+    await save('error', redact(describe(err)));
     throw err;
   }
 }
@@ -122,7 +138,13 @@ async function poll(deps: PlayerDeps, vod: VodTarget): Promise<Progress> {
     return progressOf(await deps.fetchProgress(vod.courseId), vod);
   } catch (err) {
     if (err instanceof SessionExpiredError) throw err;
-    log(`진도를 확인하지 못했습니다. 잠시 뒤 다시 확인합니다. (${err instanceof Error ? err.message : String(err)})`);
+    log(`진도를 확인하지 못했습니다. 잠시 뒤 다시 확인합니다. (${describe(err)})`);
     return { done: false, progress: null, remainingSeconds: null };
   }
+}
+
+// 파서가 감싼 원인(시간 초과·HTTP 코드)까지 보여 준다. 출력은 log·redact 를 거친다
+function describe(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  return err.cause instanceof Error ? `${err.message}: ${err.cause.message}` : err.message;
 }
