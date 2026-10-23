@@ -2,7 +2,7 @@ import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { ensurePrivateDir } from './state.js';
 
-const isAlive = (pid: number) => {
+export const isAlive = (pid: number) => {
   try {
     process.kill(pid, 0);
     return true;
@@ -30,5 +30,15 @@ export async function acquireLock(
     if ((Number.isInteger(pid) && pid > 0 && isAlive(pid)) || attempt > 0) throw new Error(busyMessage);
     // 강제 종료로 남은 잠금 — 넘겨받는다
     await unlink(file).catch(() => {});
+  }
+}
+
+// 다른 프로세스가 잡아 넘겨준 잠금(파일에 내 pid)을 이어받는다. 넘겨받기 전에 뜰 수 있어 잠시 기다린다
+export async function adoptLock(file: string, timeoutMs = 5000): Promise<() => Promise<void>> {
+  for (const end = Date.now() + timeoutMs; ;) {
+    if ((await readFile(file, 'utf8').catch(() => '')).trim() === String(process.pid))
+      return () => unlink(file).catch(() => {});
+    if (Date.now() > end) throw new Error('넘겨받을 작업 잠금이 없습니다.');
+    await new Promise((r) => setTimeout(r, 50));
   }
 }

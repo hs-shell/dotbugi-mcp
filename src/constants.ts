@@ -99,3 +99,16 @@ export const MATERIAL_MAX_FILES_PER_RUN = 300;
 export const MATERIAL_MAX_BYTES_PER_RUN = 2 * 1024 * 1024 * 1024;
 // sync_materials·sync 를 한 번에 하나만 (같은 manifest 를 번갈아 덮지 않게)
 export const MATERIALS_LOCK_NAME = '.dotbugi-sync.lock';
+
+// VOD 받아쓰기(transcribe_vod). 영상 주소(m3u8)는 view.php 가 아니라 viewer.php 의 JW Player 설정에만 있다
+export const VOD_VIEWER_PATH = '/mod/vod/viewer.php';
+// 영상 CDN. 이 형태의 호스트에만, 세션 쿠키 없이 요청한다 (경로에 시간 제한 토큰이 있어 주소는 어디에도 남기지 않는다)
+export const VOD_MEDIA_HOST = /^[a-z0-9-]+\.edge\.naverncp\.com$/;
+export const VOD_PLAYLIST_MAX_BYTES = 2 * 1024 * 1024;
+// 세그먼트는 10초당 약 1.7MB
+export const VOD_SEGMENT_MAX_BYTES = 64 * 1024 * 1024;
+// 10초 세그먼트 기준 6시간
+export const VOD_MAX_SEGMENTS = 2160;
+export const VOD_MEDIA_MAX_BYTES = 3 * 1024 ** 3;
+export const VOD_MEDIA_TIMEOUT_MS = 60_000;
+export const TRANSCRIPT_MAX_BYTES = 20 * 1024 * 1024;

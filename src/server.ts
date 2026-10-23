@@ -4,6 +4,7 @@ import { registerSummarizeWeek } from './prompts/summarize-week.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
+import { registerTranscribeVod } from './tools/transcribe-vod.js';
 import { registerVodStatus } from './tools/vod-status.js';
 
 // 버전은 package.json 단일 출처 (src/·dist/ 모두 한 단계 아래라 같은 상대 경로)
@@ -16,6 +17,7 @@ export function createServer(): McpServer {
   registerVodStatus(server);
   registerGetAssignment(server);
   registerSyncMaterials(server);
+  registerTranscribeVod(server);
   registerSummarizeWeek(server);
   return server;
 }
