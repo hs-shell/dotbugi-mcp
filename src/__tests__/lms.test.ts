@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lmsFetch, SessionExpiredError, verifySession } from '../lms.js';
+import { lmsFetch, lmsLogout, SessionExpiredError, verifySession } from '../lms.js';
 
 const SESSION = 'abcdefghij0123456789';
 const fetchMock = vi.fn();
@@ -39,5 +39,25 @@ describe('lmsFetch', () => {
   it('200 이면 유효한 세션', async () => {
     fetchMock.mockResolvedValue(new Response('ok'));
     await expect(verifySession(SESSION)).resolves.toBe(true);
+  });
+});
+
+describe('lmsLogout', () => {
+  const home = () => new Response('<script>M.cfg = {"sesskey":"abc123XYZ"};</script>');
+  const toLogin = () =>
+    new Response(null, { status: 303, headers: { location: 'https://learn.hansung.ac.kr/login/index.php' } });
+
+  it('로그아웃 뒤 세션이 끊겼으면 true', async () => {
+    fetchMock.mockResolvedValueOnce(home()).mockResolvedValueOnce(toLogin()).mockResolvedValueOnce(toLogin());
+    await expect(lmsLogout(SESSION)).resolves.toBe(true);
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://learn.hansung.ac.kr/login/logout.php?sesskey=abc123XYZ');
+  });
+
+  it('확인 페이지만 오고 세션이 살아 있으면 false', async () => {
+    fetchMock
+      .mockResolvedValueOnce(home())
+      .mockResolvedValueOnce(new Response('confirm'))
+      .mockResolvedValueOnce(new Response('ok'));
+    await expect(lmsLogout(SESSION)).resolves.toBe(false);
   });
 });

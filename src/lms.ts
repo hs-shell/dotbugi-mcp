@@ -39,7 +39,7 @@ export async function verifySession(session: string): Promise<boolean> {
   }
 }
 
-// 서버 세션 종료. logout.php 는 페이지에 박힌 sesskey 를 요구한다. 이미 만료된 세션이면 false
+// 서버 세션 종료. logout.php 는 페이지에 박힌 sesskey 를 요구한다. 끝내 세션이 살아 있으면(또는 이미 만료) false
 export async function lmsLogout(session: string): Promise<boolean> {
   let page: string;
   try {
@@ -50,9 +50,9 @@ export async function lmsLogout(session: string): Promise<boolean> {
   }
   const sesskey = SESSKEY_PATTERN.exec(page)?.[1];
   if (!sesskey) return false;
-  // 로그아웃 후 로그인 페이지로 보내는 리다이렉트도 성공으로 본다
   await lmsFetch(`${LMS_LOGOUT_PATH}?sesskey=${sesskey}`, session).catch((err: unknown) => {
     if (!(err instanceof SessionExpiredError)) throw err;
   });
-  return true;
+  // sesskey 가 안 맞으면 Moodle 은 200 확인 페이지만 주고 세션을 유지하므로, 실제로 끊겼는지 다시 확인한다
+  return !(await verifySession(session));
 }
