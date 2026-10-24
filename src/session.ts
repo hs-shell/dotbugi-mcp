@@ -1,5 +1,6 @@
 import { SESSION_PATTERN } from './constants.js';
 import { getKeychain } from './keychain/index.js';
+import { setSessionExpiredHandler } from './lms.js';
 
 const LOGIN_METHODS = ['extension', 'browser'] as const;
 export type LoginMethod = (typeof LOGIN_METHODS)[number];
@@ -17,9 +18,27 @@ export class InvalidStoredSessionError extends Error {
   }
 }
 
+// getSession 이 읽은 세션을 서버 수명 동안 기억한다 (WSL 은 키체인 읽기마다 PowerShell 을 띄워 몇 초 걸린다).
+// 저장·삭제·세션 만료(SessionExpiredError) 때 비운다. 없음(null)·오류는 기억하지 않아 다른 프로세스(CLI)의 login 을 바로 읽는다.
+// 다른 프로세스가 logout·재로그인하면 이 캐시는 LMS 가 만료를 알릴 때까지 옛 세션을 쓰고, 그때 비워져 다시 읽는다
+let cached: StoredSession | undefined;
+// 읽는 도중 저장·삭제가 끼면 옛 값을 캐시에 넣지 않도록 세대를 센다
+let generation = 0;
+
+export function clearSessionCache(): void {
+  cached = undefined;
+  generation++;
+}
+setSessionExpiredHandler(clearSessionCache);
+
 export async function saveSession(session: string, method: LoginMethod): Promise<void> {
   const stored: StoredSession = { session, savedAt: new Date().toISOString(), method };
-  await getKeychain().set(JSON.stringify(stored));
+  // 쓰기가 끝난 뒤(실패해도) 비운다 — 쓰는 도중 시작된 읽기가 옛 값을 캐시에 넣지 못한다
+  try {
+    await getKeychain().set(JSON.stringify(stored));
+  } finally {
+    clearSessionCache();
+  }
 }
 
 // 저장된 세션이 없으면 null
@@ -48,11 +67,18 @@ function parseStoredSession(raw: string): StoredSession {
 
 // 다른 기능(도구)이 쓰는 진입점 — 없으면 사용자가 할 일을 알려준다
 export async function getSession(): Promise<StoredSession> {
+  if (cached) return cached;
+  const gen = generation;
   const stored = await readSession();
   if (!stored) throw new Error('저장된 LMS 세션이 없습니다. login 도구를 호출하세요.');
+  if (gen === generation) cached = stored;
   return stored;
 }
 
 export async function deleteSession(): Promise<boolean> {
-  return getKeychain().delete();
+  try {
+    return await getKeychain().delete();
+  } finally {
+    clearSessionCache();
+  }
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LMS_REQUEST_TIMEOUT_MS } from '../constants.js';
+import { createFetchHtml } from '../lms-html.js';
 import { lmsFetch, lmsLogout, SessionExpiredError, verifySession } from '../lms.js';
 
 const SESSION = 'abcdefghij0123456789';
@@ -72,5 +73,20 @@ describe('lmsLogout', () => {
       .mockResolvedValueOnce(new Response('confirm'))
       .mockResolvedValueOnce(new Response('ok'));
     await expect(lmsLogout(SESSION)).resolves.toBe(false);
+  });
+});
+
+describe('createFetchHtml', () => {
+  it('200 으로 온 로그인 화면(비밀번호 입력란)은 세션 만료로, login 도구를 안내한다', async () => {
+    fetchMock.mockResolvedValue(new Response('<form><input type="password" name="password"></form>'));
+    const err = (await createFetchHtml(SESSION)('/').catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(SessionExpiredError);
+    expect(err.message).toContain('login 도구');
+  });
+
+  it('보통 페이지는 그대로 파싱한다', async () => {
+    fetchMock.mockResolvedValue(new Response('<ul class="my-course-lists"></ul>'));
+    const doc = await createFetchHtml(SESSION)('/');
+    expect(doc.querySelector('.my-course-lists')).not.toBeNull();
   });
 });

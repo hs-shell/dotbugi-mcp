@@ -8,9 +8,17 @@ import {
   SESSKEY_PATTERN,
 } from './constants.js';
 
+// session.ts 가 세션 캐시를 비우려고 등록한다 (lms.ts 는 session.ts 를 가져오지 않는다)
+let onSessionExpired = () => {};
+export function setSessionExpiredHandler(handler: () => void): void {
+  onSessionExpired = handler;
+}
+
 export class SessionExpiredError extends Error {
   constructor() {
     super('LMS 세션이 만료되었습니다. login 도구를 다시 호출하세요.');
+    // 만료를 알아챈 곳이 어디든(리다이렉트·200 로그인 화면) 캐시된 세션을 버려 다음 호출이 키체인을 다시 읽게 한다
+    onSessionExpired();
   }
 }
 
