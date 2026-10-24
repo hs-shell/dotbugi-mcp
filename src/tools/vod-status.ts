@@ -38,7 +38,7 @@ export function registerVodStatus(server: McpServer): void {
       const player = state && { ...state, stale: isStale(state, now) };
       const line = renderStatusLine(state, now);
       try {
-        const result = await loadTasks(refresh, { type: 'vod', incompleteOnly: true }, now);
+        const result = await loadTasks(refresh, { type: 'vod', incompleteOnly: true, includePast: false }, now);
         const text = [line, toText(result.tasks, result.warnings)].filter(Boolean).join('\n');
         return { content: [{ type: 'text', text }], structuredContent: { ...result, player } };
       } catch (err) {

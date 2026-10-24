@@ -48,9 +48,12 @@ LMS 세션을 받아 OS 키체인에 저장합니다. **승인·로그인을 기
 | `incompleteOnly` | `true`  | 미출석·미제출·미응시만                       |
 | `withinDays`     | -       | 마감이 N일 이내인 것만 (마감 정보 없음 제외) |
 | `course`         | -       | 과목명 일부 (대소문자 무시, 100자까지)       |
+| `includePast`    | `false` | 마감이 지난 미완료 항목도 (`overdue: true`)  |
 | `refresh`        | `false` | 1시간 캐시를 무시하고 다시 가져오기          |
 
-- 출력(`structuredContent`): `fetchedAt`, `tasks`(종류·과목·제목·완료 여부·상태·시작·마감(한국 시간 ISO, 해석 못 하면 LMS 원문)·남은 시간·URL), `warnings`. 텍스트로는 한 줄씩 요약합니다.
+- 출력(`structuredContent`): `fetchedAt`, `tasks`(종류·과목·제목·완료 여부·상태·시작·마감(한국 시간 ISO, 해석 못 하면 LMS 원문)·남은 시간·URL·`cmid`·`overdue`), `warnings`. 텍스트로는 한 줄씩 요약합니다.
+- `cmid` 는 LMS 주소의 `id=` 숫자(LMS 출처가 아니면 `null`)로, `get_assignment`·`transcribe_vod` 에 그대로 넘깁니다.
+- `includePast` 로 나온 지난 항목은 마감 순 정렬상 맨 앞에 옵니다. `vod_status`·`play_vods` 는 지난 항목을 다루지 않습니다.
 - 결과는 메모리에 1시간 캐시합니다. 추적 강좌 설정이 바뀌면 새로 가져옵니다.
 - 일부 과목·항목을 가져오지 못하면 `warnings`(텍스트 맨 앞에도)에 실패 건수를 알리고, 그 결과는 캐시하지 않습니다.
 

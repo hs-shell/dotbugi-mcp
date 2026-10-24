@@ -12,6 +12,10 @@ export const listTasksInput = z.object({
   incompleteOnly: z.boolean().default(true).describe('미완료(미출석·미제출)만. 기본 true'),
   withinDays: z.number().positive().optional().describe('마감이 N일 이내인 것만 (마감 정보가 없는 항목은 제외)'),
   course: z.string().min(1).max(COURSE_FILTER_MAX_LENGTH).optional().describe('과목명 일부 (대소문자 무시)'),
+  includePast: z
+    .boolean()
+    .default(false)
+    .describe('마감이 지난 미완료 항목도 포함 (놓친 것 확인, overdue: true). 기본 false'),
   refresh: z.boolean().default(false).describe('1시간 캐시를 무시하고 LMS 에서 다시 가져오기'),
 });
 export type ListTasksInput = z.infer<typeof listTasksInput>;
@@ -26,10 +30,15 @@ const task = z.object({
   deadline: z.string().nullable().describe('마감(VOD는 출석 인정 종료). 오프셋 포함 ISO, 해석 불가 시 LMS 원문'),
   remaining: z.string().describe('남은 시간 (예: 2일 3시간)'),
   url: z.string().describe('LMS 주소 (LMS 출처가 아니면 빈 문자열)'),
+  cmid: z
+    .number()
+    .nullable()
+    .describe('LMS 항목 번호 (주소의 id=). get_assignment·transcribe_vod 의 cmid 로 넘긴다. 없으면 null'),
+  overdue: z.boolean().describe('마감이 지난 미완료 항목 (includePast 일 때만 나온다)'),
 });
 export type Task = z.infer<typeof task>;
-// 캐시에 담는 형태 — 남은 시간은 조회 시점에 계산한다. vod 는 VOD 스케줄러 내부용(list_tasks 로는 내보내지 않음)
-export type TaskItem = Omit<Task, 'remaining'> & { vod?: { courseId: string; week: number } };
+// 캐시에 담는 형태 — 남은 시간·cmid·overdue 는 조회 시점에 계산한다. vod 는 VOD 스케줄러 내부용(list_tasks 로는 내보내지 않음)
+export type TaskItem = Omit<Task, 'remaining' | 'cmid' | 'overdue'> & { vod?: { courseId: string; week: number } };
 
 export const listTasksOutput = z.object({
   fetchedAt: z.string().describe('LMS 에서 가져온 시각 (ISO)'),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TaskItem } from '../tasks/schema.js';
-import { selectTasks } from '../tasks/select.js';
+import { cmidOfUrl, selectTasks } from '../tasks/select.js';
 
 const now = Date.parse('2026-10-24T12:00:00+09:00');
 const item = (title: string, deadline: string | null, over: Partial<TaskItem> = {}): TaskItem => ({
@@ -50,5 +50,33 @@ describe('selectTasks', () => {
   });
   it('남은 시간을 붙인다', () => {
     expect(selectTasks(items, { incompleteOnly: true }, now)[0].remaining).toBe('6시간 0분');
+  });
+  it('includePast: 지난 미완료(VOD 포함)를 overdue 로 맨 앞에, 지난 완료는 여전히 제외', () => {
+    const past = [
+      ...items,
+      item('지난 완료', '2026-10-24T10:00:00+09:00', { done: true }),
+      item('놓친 강의', '2026-10-23T23:59:59+09:00', { type: 'vod', start: '2026-10-16T00:00:00+09:00' }),
+      item('아직 강의', '2026-11-03T23:59:59+09:00', { type: 'vod', start: '2026-10-28T00:00:00+09:00' }),
+    ];
+    const tasks = selectTasks(past, { incompleteOnly: false, includePast: true }, now);
+    expect(tasks.map((t) => t.title)).toEqual(['놓친 강의', '지남', '곧', '완료', '나중', '없음']);
+    expect(tasks.map((t) => t.overdue)).toEqual([true, true, false, false, false, false]);
+    expect(tasks[0].remaining).toBe('마감');
+    expect(selectTasks(past, { incompleteOnly: true, includePast: false }, now).some((t) => t.overdue)).toBe(false);
+  });
+  it('cmid 는 LMS 출처 주소의 숫자 id 만', () => {
+    expect(cmidOfUrl('https://learn.hansung.ac.kr/mod/assign/view.php?id=123')).toBe(123);
+    expect(cmidOfUrl('https://learn.hansung.ac.kr/mod/vod/view.php?id=1&x=2')).toBe(1);
+    expect(cmidOfUrl('https://evil.example/mod/assign/view.php?id=123')).toBeNull();
+    expect(cmidOfUrl('https://learn.hansung.ac.kr/mod/assign/view.php?id=12a')).toBeNull();
+    expect(cmidOfUrl('https://learn.hansung.ac.kr/x')).toBeNull();
+    expect(cmidOfUrl('')).toBeNull();
+    expect(
+      selectTasks(
+        [item('a', null, { url: 'https://learn.hansung.ac.kr/mod/quiz/view.php?id=7' })],
+        { incompleteOnly: true },
+        now
+      )[0].cmid
+    ).toBe(7);
   });
 });
