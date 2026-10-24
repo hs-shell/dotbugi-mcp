@@ -112,7 +112,7 @@ const shortcuts: Shortcut[] = [
         `2. \`list_tasks\` 를 ${withArgs(courseArg(c), 'type: "assign"')}불러 미완료 과제마다 \`get_assignment\` 를 하나씩 불러 지시사항을 가져와.`,
         '3. 바뀐 것만 요약해 줘:',
         '   - **강의자료**: added(새로 받음)·updated(새 버전으로 덮어씀) 파일 목록. 경고에 "덮어쓰지 않고 새 버전을 ... 에 저장" 이 있으면 내가 고친 파일이라 새 버전을 따로 저장했다고 표시. removed 는 LMS 에서 사라진 파일(지우려면 delete_materials)로 따로.',
-        '   - **과제**: instructionsStatus 가 added(새 과제)·updated(지시사항·첨부 바뀜)인 과제와 지시사항 md 경로. 첨부를 덮어쓰지 않고 새 이름으로 저장했다는 경고도 표시. unchanged 는 개수만.',
+        '   - **과제**: instructionsStatus 가 added(새 과제)·updated(지시사항·첨부 바뀜)인 과제와 지시사항 md 경로. updated 면 changes 의 diff 를 diff 코드 블록으로 보여 줘. 첨부를 덮어쓰지 않고 새 이름으로 저장했다는 경고도 표시. unchanged 는 개수만.',
         '   - 바뀐 게 없으면 "변경 없음" 한 줄.',
       ].join('\n'),
   },

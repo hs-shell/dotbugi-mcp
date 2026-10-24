@@ -45,6 +45,7 @@ describe('바로가기 프롬프트', () => {
     expect(text(await get('work', { work: '보고서' }))).toContain('"보고서"');
     expect(text(await get('transcribe', { target: '1, 2  3' }))).toContain('cmids: [1, 2, 3]');
     expect(text(await get('pull', { course: '자료구조' }))).toContain('`sync_materials` 를 course: "자료구조" 로');
+    expect(text(await get('pull'))).toContain('changes 의 diff');
     expect(text(await get('courses'))).toContain('`set_course_tracking` 을 인자 없이');
   });
 
