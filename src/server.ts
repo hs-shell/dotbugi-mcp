@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { registerSummarizeWeek } from './prompts/summarize-week.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
+import { registerPlayVods } from './tools/play-vods.js';
 import { registerLogin } from './tools/login.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
 import { registerTranscribeVod } from './tools/transcribe-vod.js';
@@ -17,6 +18,7 @@ export function createServer(): McpServer {
   registerLogin(server);
   registerListTasks(server);
   registerVodStatus(server);
+  registerPlayVods(server);
   registerGetAssignment(server);
   registerSyncMaterials(server);
   registerTranscribeVod(server);
