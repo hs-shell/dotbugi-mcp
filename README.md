@@ -43,7 +43,9 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 /plugin install dotbugi@dotbugi
 ```
 
-위 `claude mcp add` 로 이미 등록했다면 서버가 두 개 뜨지 않게 `claude mcp remove -s user dotbugi` 로 지우세요. 입력창 위 표시는 터미널 대화형 세션에서만 보이고(`-p`·SDK 제외), 상태 표시줄(`setup_statusline`)은 선택 사항입니다.
+위 `claude mcp add` 로 이미 등록했다면 서버가 두 개 뜨지 않게 `claude mcp remove -s user dotbugi` 로 지우세요. 플러그인은 늘 최신 버전(`@dotbugi/mcp@latest`)을 실행합니다. 입력창 위 표시는 대화형 세션(터미널·Desktop 앱)에서만 보이고(`-p`·SDK 제외), 상태 표시줄(`setup_statusline`)은 선택 사항입니다.
+
+플러그인으로 설치하면 Claude Code 가 서버 이름을 `plugin:dotbugi:dotbugi` 로 붙여, 아래 [슬래시 명령](#슬래시-명령)은 `/dotbugi:status` 대신 `/mcp__plugin_dotbugi_dotbugi__status` 처럼 입력합니다 (`/` 를 누르면 목록에 보입니다). 권한 규칙 등에 쓰는 도구 이름도 `mcp__plugin_dotbugi_dotbugi__get_status` 형태가 됩니다.
 
 **Claude Desktop** — `claude_desktop_config.json` 의 `mcpServers` 에 추가하고 Claude Desktop 을 다시 시작합니다.
 
