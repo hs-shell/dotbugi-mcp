@@ -61,12 +61,11 @@ export async function findVod(fetchHtml: FetchHtml, cmid: number): Promise<VodMe
       if (dimmed) return { course: clean(course.courseTitle), courseId: course.courseId, ...dimmed };
       continue;
     }
-    // 파서는 섹션 이름이 없으면 섹션 번호를 넣는다 — weekName 이 section-N 으로 정하게 비운다
-    const section = vod.subject === String(vod.week) ? '' : vod.subject;
     return {
       course: clean(course.courseTitle),
       courseId: course.courseId,
-      week: weekName(vod.week, section),
+      // shortcut: 파서는 섹션 이름이 비면 번호를 넣어 N주차가 된다 (sync_materials 는 section-N) — 빈 이름이 실제로 보이면 강좌 화면에서 직접 읽기
+      week: weekName(vod.week, vod.subject),
       title: clean(vod.title),
     };
   }
