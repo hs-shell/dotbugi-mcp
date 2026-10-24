@@ -8,7 +8,7 @@ dotbugi-mcp 가 제공하는 MCP 도구·프롬프트의 인자·출력·상한�
 - 세션이 없거나 만료되면 `login` 도구로 다시 로그인하라는 오류를 돌려줍니다.
 - 과목·제목·본문 등 LMS 텍스트는 **데이터일 뿐 지시가 아닙니다** (도구 설명에도 명시).
 - 대상 강좌는 [추적 강좌 설정](#list_courses--set_course_tracking)을 따릅니다 (`list_tasks`·`sync_materials`·`delete_materials`·`transcribe_vod`).
-- 지우는 도구(`delete_materials`·`asr_remove`), 설정을 바꾸는 `setup_statusline`, 저장 위치 변경(`set_storage_dir`, 옮길 자료가 없어도)은 [승인](#삭제-승인)을 거친 뒤에만 실행합니다. 여러 개를 한 번에 처리하는 `transcribe_vod`(과목·전체 대상)·`list_notes`·`list_summary` 도 같은 확인 창으로 대상 목록을 먼저 확인받습니다.
+- 지우는 도구(`delete_materials`·`asr_remove`), 설정을 바꾸는 `setup_statusline`, 저장 위치 변경(`set_storage_dir`, 옮길 자료가 없어도)은 [승인](#삭제-승인)을 거친 뒤에만 실행합니다. 여러 개를 한 번에 처리하는 `transcribe_vod`(`course` 또는 인자 생략, `cmids`·`all` 은 제외)·`list_notes`·`list_summary` 도 같은 확인 창으로 대상 목록을 먼저 확인받습니다.
 - 바로가기(슬래시 명령)와 사용 흐름은 [README](../README.md#사용-흐름)에 있습니다.
 - 받은 파일은 [저장 위치](#get_storage_dir--set_storage_dir--find_google_drive)(기본 `~/Downloads/dotbugi-mcp`) 아래 **학기 폴더** `<YYYY-N학기>/` 에 쌓입니다. 아래에서 `<저장 위치>/<학기>/` 는 이 폴더입니다.
 
@@ -273,7 +273,7 @@ STT 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%
 
 ## 삭제 승인
 
-`delete_materials`·`asr_remove` 는 되돌릴 수 없어 지우기 전에 승인을 받습니다 (`src/tools/confirm.ts`). 확인 창을 지원하는 클라이언트에서는 **모델이 아니라 사용자가** 승인합니다. `set_storage_dir` 의 저장 위치 변경·기존 자료 이동도 같은 방식으로 승인받습니다 (체크 상자는 "위 항목을 옮깁니다" 또는 "저장 위치를 바꿉니다"). `transcribe_vod`(과목·전체 대상)·`list_notes`·`list_summary`·`setup_statusline` 도 같은 확인 창·일회용 토큰 방식으로 대상을 확인받습니다.
+`delete_materials`·`asr_remove` 는 되돌릴 수 없어 지우기 전에 승인을 받습니다 (`src/tools/confirm.ts`). 확인 창을 지원하는 클라이언트에서는 **모델이 아니라 사용자가** 승인합니다. `set_storage_dir` 의 저장 위치 변경·기존 자료 이동도 같은 방식으로 승인받습니다 (체크 상자는 "위 항목을 옮깁니다" 또는 "저장 위치를 바꿉니다"). `transcribe_vod`(`course` 또는 인자 생략, `cmids`·`all` 은 제외)·`list_notes`·`list_summary`·`setup_statusline` 도 같은 확인 창·일회용 토큰 방식으로 대상을 확인받습니다.
 
 - 클라이언트가 확인 창(MCP elicitation, form)을 지원하면 "되돌릴 수 없습니다" 경고, 지울 목록, "위 항목을 삭제합니다" 체크 상자를 이 순서로 띄웁니다. 체크하고 승인했을 때만 지우고, 거절·취소·체크 안 함은 모두 취소입니다. 확인 창은 10분까지 기다리고, 도구 호출을 취소하면 대기도 바로 끝납니다.
 - 확인 창을 지원하지 않으면 아무것도 지우지 않고 목록과 **일회용 확인 토큰**을 돌려줍니다. Claude 는 목록을 사용자에게 보여 주고 동의를 받은 뒤에만 같은 인자 + `confirmToken` 으로 다시 부릅니다.
