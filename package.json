@@ -14,7 +14,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "dependencies": {
-    "@dotbugi/lms-parser": "^0.1.0",
+    "@dotbugi/lms-parser": "^0.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
     "@napi-rs/keyring": "^2.1.2",
     "linkedom": "^0.18.14",
