@@ -75,3 +75,10 @@ export function fakeLmsFetch(input: RequestInfo | URL): Promise<Response> {
 }
 
 export const LOGIN_REDIRECT = () => new Response(null, { status: 303, headers: { location: `${L}/login/index.php` } });
+
+// 만료 세션에 200 으로 오는 Moodle 로그인 화면 (익명화한 마크업 — 로그인 폼에도 sesskey 가 박혀 있다)
+export const LOGIN_PAGE = `<html><head><script>M.cfg = {"sesskey":"loginKey123"};</script></head><body>
+  <form action="${L}/login/index.php" method="post" id="login">
+    <input type="text" name="username" id="username"><input type="password" name="password" id="password">
+    <button type="submit" id="loginbtn">로그인</button>
+  </form></body></html>`;

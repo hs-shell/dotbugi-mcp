@@ -19,7 +19,7 @@ export function createFetchHtml(session: string, signal?: AbortSignal): FetchHtm
         throw new Error(`LMS 가 요청한 페이지 대신 다른 곳으로 이동시켰습니다 (HTTP ${res.status}).`);
       if (!res.ok) throw new Error(`LMS 응답 오류 HTTP ${res.status}`);
       const doc = new DOMParser().parseFromString(await res.text(), 'text/html') as unknown as Document;
-      // 만료 세션에 로그인 화면을 리다이렉트 없이 200 으로 줄 때가 있다. 도구가 읽는 페이지(강좌·과제·퀴즈 목록, 진도, VOD, 자료)엔 비밀번호 입력란이 없다
+      // 만료 세션의 200 로그인 화면 — isLoginPage 와 같은 셀렉터(로그인 폼 한정). 이미 파싱한 문서를 그대로 본다
       if (doc.querySelector(LMS_LOGIN_FORM_SELECTOR)) throw new SessionExpiredError();
       return doc;
     });

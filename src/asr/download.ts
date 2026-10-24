@@ -1,6 +1,7 @@
 import { createHash, type Hash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { open, rename, stat, unlink } from 'node:fs/promises';
+import { open, stat, unlink } from 'node:fs/promises';
+import { replaceFile } from '../player/state.js';
 import { isAllowedDownloadUrl, type FilePin } from './pins.js';
 
 const MAX_REDIRECTS = 5;
@@ -110,7 +111,7 @@ export async function download(
       await unlink(part);
       throw new Error(`${label} 의 크기·sha256 이 고정값과 달라 버렸습니다. 다시 시도해도 같으면 알려 주세요.`);
     }
-    await rename(part, dest);
+    await replaceFile(part, dest);
   } catch (err) {
     if (stall.signal.aborted)
       throw new Error(

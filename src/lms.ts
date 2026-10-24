@@ -1,5 +1,7 @@
+import { DOMParser } from 'linkedom';
 import {
   LMS_HOME_PATH,
+  LMS_LOGIN_FORM_SELECTOR,
   LMS_LOGOUT_PATH,
   LMS_ORIGIN,
   LMS_REQUEST_TIMEOUT_MS,
@@ -53,10 +55,21 @@ function isLoginUrl(location: string): boolean {
   return url.origin === LMS_ORIGIN && url.pathname.includes(LOGIN_URL_MARKER);
 }
 
-// 로그인된 세션이면 /my/ 가 200 을 준다 (만료 시 로그인 페이지로 303)
+// 만료 세션에 로그인 화면을 리다이렉트 없이 200 으로 줄 때가 있다 — 로그인 폼이 있는 페이지는 만료로 본다 (createFetchHtml·viewerHtml·verifySession 공용)
+export function isLoginPage(html: string): boolean {
+  const doc = new DOMParser().parseFromString(html, 'text/html') as unknown as Document;
+  return doc.querySelector(LMS_LOGIN_FORM_SELECTOR) !== null;
+}
+
+// 로그인된 세션이면 /my/ 가 200 을 준다 (만료 시 로그인 페이지로 303, 또는 200 로그인 화면)
 export async function verifySession(session: string): Promise<boolean> {
   try {
-    return (await lmsFetch(LMS_HOME_PATH, session)).status === 200;
+    const res = await lmsFetch(LMS_HOME_PATH, session);
+    if (res.status !== 200) {
+      await res.body?.cancel();
+      return false;
+    }
+    return !isLoginPage(await res.text());
   } catch (err) {
     if (err instanceof SessionExpiredError) return false;
     throw err;
@@ -72,6 +85,8 @@ export async function lmsLogout(session: string): Promise<boolean> {
     if (err instanceof SessionExpiredError) return false;
     throw err;
   }
+  // 로그인 화면에도 sesskey 가 박혀 있다 — 이미 만료된 세션으로 로그아웃을 보내지 않는다
+  if (isLoginPage(page)) return false;
   const sesskey = SESSKEY_PATTERN.exec(page)?.[1];
   if (!sesskey) return false;
   await lmsFetch(`${LMS_LOGOUT_PATH}?sesskey=${sesskey}`, session).catch((err: unknown) => {

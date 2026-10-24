@@ -86,8 +86,10 @@ export const PLAYER_STATE_MAX_BYTES = 16 * 1024;
 export const PLAYER_STATE_TEXT_MAX = 200;
 // 진도를 이만큼 연속으로 모르면(약 15분) 상태·로그로 알린다
 export const VOD_UNKNOWN_WARN_POLLS = 10;
-// 로그인 페이지가 200 으로 오면(리다이렉트 없이) 비밀번호 입력란으로 알아본다
-export const LMS_LOGIN_FORM_SELECTOR = 'input[type="password"]';
+// 로그인 페이지가 200 으로 오면(리다이렉트 없이) 로그인 폼의 비밀번호 입력란으로 알아본다.
+// 폼으로 한정한다 — 교수가 쓴 과제 본문·자료 HTML 에 비밀번호 입력란이 있어도 만료로 오판하지 않게
+export const LMS_LOGIN_FORM_SELECTOR =
+  'form#login input[type="password"], form[action*="/login/index.php"] input[type="password"]';
 // 진도 페이지(user_progress.php)의 진도 표
 export const VOD_PROGRESS_TABLE_SELECTOR = '.user_progress';
 
@@ -111,6 +113,9 @@ export const MCP_CALL_TIME_BUDGET_MS = 4 * 60_000;
 export const PROGRESS_INTERVAL_MS = 1000;
 // sync_materials·sync 를 한 번에 하나만 (같은 manifest 를 번갈아 덮지 않게)
 export const MATERIALS_LOCK_NAME = '.dotbugi-sync.lock';
+// 동기화와 겹친 짧은 작업(get_assignment·받아쓰기 폴더 확인)이 잠금을 기다리는 시간과 확인 간격
+export const SYNC_LOCK_WAIT_MS = 10_000;
+export const SYNC_LOCK_POLL_MS = 200;
 
 // VOD 받아쓰기(transcribe_vod). 영상 주소(m3u8)는 view.php 가 아니라 viewer.php 의 JW Player 설정에만 있다
 export const VOD_VIEWER_PATH = '/mod/vod/viewer.php';

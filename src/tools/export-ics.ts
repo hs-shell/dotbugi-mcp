@@ -1,10 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { randomUUID } from 'node:crypto';
-import { rename, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod/v4';
-import { LMS_DATA_NOTICE } from '../constants.js';
-import { ensureRealDir } from '../materials/sync.js';
+import { LMS_DATA_NOTICE, SYNC_LOCK_WAIT_MS } from '../constants.js';
+import { ensureRealDir, withSyncLock } from '../materials/sync.js';
+import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
 import { semesterDir, storageRoot } from '../storage.js';
 import { buildIcs } from '../tasks/ics.js';
@@ -20,22 +21,31 @@ const exportIcsOutput = z.object({
   warnings: z.array(z.string()),
 });
 
-// 쓰다 만 파일을 남기지 않게 새 임시 파일(wx: 기존 경로·링크를 따라가지 않음)에 쓰고 rename 한다. 0600
-export async function writeIcs(ics: string, now: Date): Promise<string> {
-  const root = storageRoot();
-  const dir = semesterDir(now, root);
-  await ensureRealDir(root, dir);
-  const path = join(dir, ICS_FILE_NAME);
-  // 점으로 시작해 폴더 목록에 보이지 않게 한다. 실패하면 남은 임시 파일을 지우고 오류를 그대로 알린다
-  const tmp = join(dir, `.${ICS_FILE_NAME}.${randomUUID()}.tmp`);
-  try {
-    await writeFile(tmp, ics, { mode: 0o600, flag: 'wx' });
-    await rename(tmp, path);
-  } catch (err) {
-    await rm(tmp, { force: true });
-    throw err;
-  }
-  return path;
+// 쓰다 만 파일을 남기지 않게 새 임시 파일(wx: 기존 경로·링크를 따라가지 않음)에 쓰고 바꿔 넣는다. 0600.
+// sync 잠금 안에서 — set_storage_dir 가 저장 위치를 옮기는 도중에 옛 위치에 쓰지 않게
+export function writeIcs(ics: string, now: Date): Promise<string> {
+  return withSyncLock(
+    async () => {
+      const root = storageRoot();
+      const dir = semesterDir(now, root);
+      await ensureRealDir(root, dir);
+      const path = join(dir, ICS_FILE_NAME);
+      // 점으로 시작해 폴더 목록에 보이지 않게 한다. 실패하면 남은 임시 파일을 지우고 오류를 그대로 알린다
+      const tmp = join(dir, `.${ICS_FILE_NAME}.${randomUUID()}.tmp`);
+      try {
+        await writeFile(tmp, ics, { mode: 0o600, flag: 'wx' });
+        await replaceFile(tmp, path);
+      } catch (err) {
+        await rm(tmp, { force: true });
+        throw err;
+      }
+      return path;
+    },
+    {
+      ms: SYNC_LOCK_WAIT_MS,
+      busy: '강의자료 동기화(또는 저장 위치 이동)가 실행 중입니다. 강의자료 동기화가 끝난 뒤 다시 시도하세요.',
+    }
+  );
 }
 
 export function registerExportIcs(server: McpServer): void {

@@ -40,13 +40,14 @@ export async function startPlayer(deps = WORKER_DEPS): Promise<boolean> {
       child.once('spawn', resolve);
       child.once('error', reject);
     });
+    // 시작 직후 vod_status 가 이전 재생 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신).
+    // 잠금을 넘기기 전에 써야 잠금을 받자마자 쓰는 작업 프로세스의 첫 기록을 덮지 않는다 (asr 와 같다)
+    await writePlayerState(PLAYER_STATE_FILE, idleState('playing', child.pid!)).catch(() => {});
     // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_vod 와 같은 이유)
     const tmp = `${PLAYER_LOCK_FILE}.${process.pid}.tmp`;
     await writeFile(tmp, String(child.pid), { mode: 0o600 });
     await replaceFile(tmp, PLAYER_LOCK_FILE);
     child.unref();
-    // 시작 직후 vod_status 가 이전 재생 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신)
-    await writePlayerState(PLAYER_STATE_FILE, idleState('playing', child.pid!)).catch(() => {});
     return true;
   } catch (err) {
     await release();

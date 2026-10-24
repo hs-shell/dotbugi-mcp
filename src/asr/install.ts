@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { chmod, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { log } from '../log.js';
 import { absolutePathDirs } from '../platform.js';
-import { ensurePrivateDir } from '../player/state.js';
+import { ensurePrivateDir, replaceFile } from '../player/state.js';
 import { assertPinned, download, fileSha256 } from './download.js';
 import {
   FFMPEG,
@@ -84,7 +84,7 @@ async function installFfmpeg(root: string, platform: AsrPlatform, report: Instal
     throw new Error('휠에서 꺼낸 ffmpeg 의 sha256 이 고정값과 다릅니다.');
   const tmp = `${ffmpeg}.part`;
   await writeFile(tmp, data, { mode: 0o700 });
-  await rename(tmp, ffmpeg);
+  await replaceFile(tmp, ffmpeg);
   await rm(wheel);
 }
 
@@ -180,6 +180,6 @@ export async function installAsr(config: AsrConfig, root: string, report: Instal
 
   const tmp = `${paths.config}.${process.pid}.tmp`;
   await writeFile(tmp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
-  await rename(tmp, paths.config);
+  await replaceFile(tmp, paths.config);
   log(`설치를 마쳤습니다: ${config.runtime} · ${config.model} (${root})`);
 }
