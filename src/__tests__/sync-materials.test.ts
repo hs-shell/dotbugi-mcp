@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmRemovals } from '../commands/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { fileKey, weekName } from '../materials/course-page.js';
-import { resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
+import { cliCaps, resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
 import { createServer } from '../server.js';
 import { previousSemester, semesterOf } from '../storage.js';
 
@@ -580,18 +580,29 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     caps.files = 2;
     const r = await sync();
     expect(r.files).toHaveLength(2);
-    expect(r.warnings).toContainEqual(expect.stringContaining('한 번에 받는 상한'));
+    expect(r.warnings).toContainEqual(expect.stringContaining('한 번에 받는 상한(2개 또는 2GB)'));
     expect(r.removed).toEqual([]);
     caps.files = 300;
     expect((await sync()).files.filter((f) => f.status === 'added')).toHaveLength(3);
   });
 
-  it('시간 상한이 지나면 파일 사이에서 멈추고, 못 받은 파일을 사라진 것으로 보지 않는다', async () => {
+  it('시간 상한이 지나면 받지 않고 남은 과목은 목록도 읽지 않으며, 그 과목 파일을 사라진 것으로 보지 않는다', async () => {
+    await sync();
+    Object.assign(lms, { slidesRev: 2, slides: 'slides v2', folder: false });
+    fetchMock.mockClear();
     const r = await syncMaterials(SESSION, undefined, { maxFiles: 300, maxBytes: 2 ** 40, maxMs: 0 });
-    expect(r.files).toEqual([]);
-    expect(r).toMatchObject({ more: true, removed: [] });
-    expect(r.warnings).toContainEqual(expect.stringContaining('0분)에 걸려'));
-    expect((await sync()).more).toBe(false);
+    expect(r).toMatchObject({ files: [], removed: [], more: true });
+    expect(r.warnings).toContainEqual(expect.stringContaining('확인하지 못한 과목 2개'));
+    expect(fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('/course/view.php'))).toEqual([]);
+    expect(await readFile(course('강의 개요', '강의 1.pdf'), 'utf8')).toBe('slides v1');
+    expect((await readdir(course('3주차'))).sort()).toEqual(['a.txt', 'b.txt']);
+  });
+
+  it('진행 보고는 큰 파일을 받는 중에도 나가고 값은 계속 는다', async () => {
+    const seen: [number, string][] = [];
+    await syncMaterials(SESSION, undefined, { ...cliCaps(), onProgress: (n, m) => seen.push([n, m]) });
+    expect(seen.some(([, m]) => m.startsWith('강의자료 받는 중'))).toBe(true);
+    expect(seen.every(([n], i) => i === 0 || n > seen[i - 1][0])).toBe(true);
   });
 });
 
@@ -668,6 +679,36 @@ describe('delete_materials 도구', () => {
     const { call } = await connect({ action: 'decline' });
     const text = await call();
     expect(text).toContain(`이번 동기화로 받은 파일 1개:\n- ${course('강의 개요', '강의 1.pdf')}`);
+  });
+
+  it('상한에 걸려도 목록은 끝까지 읽어 사라진 파일만 대상으로 삼는다', async () => {
+    await setup();
+    Object.assign(lms, { slidesRev: 2, slides: 'slides v2' });
+    caps.mcpFiles = 0;
+    const { call, asked } = await connect({ action: 'accept', content: { confirm: true } });
+    const text = await call();
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain(course('3주차', 'a.txt'));
+    expect(asked[0]).not.toContain('강의 1.pdf');
+    expect(await left()).toEqual([]);
+    expect(await readFile(course('강의 개요', '강의 1.pdf'), 'utf8')).toBe('slides v1');
+    expect(text).toContain('한 번에 받는 상한');
+  });
+
+  it('sync_materials 호출이 취소되면 받는 중인 요청을 끊고 sync 잠금을 푼다', async () => {
+    let release!: () => void;
+    const started = new Promise<void>((r) => (release = r));
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!String(input).includes('/pluginfile.php/')) return page(String(input));
+      release();
+      return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+    });
+    const { send, client } = await connect();
+    void send('tools/call', { name: 'sync_materials', arguments: {} });
+    await started;
+    await client.cancel();
+    await vi.waitFor(() => expect(withSyncLock(async () => 1)).resolves.toBe(1));
+    expect(fileFetches()).toHaveLength(1);
   });
 
   it('클라이언트가 호출을 취소하면 확인 대기를 끝내고 sync 잠금을 푼다', async () => {

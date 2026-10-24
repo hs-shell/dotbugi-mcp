@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { lstat, mkdir, open, readdir, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_REQUEST_TIMEOUT_MS,
@@ -44,6 +46,10 @@ export function attachmentName(url: URL): string {
 export interface DownloadLimits {
   maxBytes: number;
   timeoutMs: number;
+  // 도구 호출 취소
+  signal?: AbortSignal;
+  // 받은 바이트 수 — 큰 파일 하나를 받는 동안에도 진행 알림을 보내게
+  onBytes?: (received: number) => void;
 }
 const ATTACHMENT_LIMITS: DownloadLimits = { maxBytes: ATTACHMENT_MAX_BYTES, timeoutMs: ATTACHMENT_REQUEST_TIMEOUT_MS };
 
@@ -51,7 +57,7 @@ const tooLarge = (max: number) => new Error(`파일이 ${max / 1024 / 1024}MB �
 
 // 받은 내용의 sha256(hex)을 돌려준다
 async function writeBody(file: FileHandle, url: URL, session: string, limits: DownloadLimits): Promise<string> {
-  const res = await lmsFetch(url.href, session, limits.timeoutMs);
+  const res = await lmsFetch(url.href, session, limits.timeoutMs, limits.signal);
   // 리다이렉트(3xx)도 실패로 본다 — 다른 곳으로 세션을 들고 따라가지 않는다
   if (!res.ok || !res.body) throw new Error(`LMS 응답 오류 HTTP ${res.status}`);
   if (Number(res.headers.get('content-length')) > limits.maxBytes) throw tooLarge(limits.maxBytes);
@@ -65,6 +71,7 @@ async function writeBody(file: FileHandle, url: URL, session: string, limits: Do
       if (size > limits.maxBytes) throw tooLarge(limits.maxBytes);
       hash.update(chunk.value);
       await file.write(chunk.value);
+      limits.onBytes?.(size);
     }
   } catch (err) {
     await reader.cancel().catch(() => {});
@@ -99,6 +106,7 @@ export async function openNew(dir: string, name: string): Promise<{ file: FileHa
 const TEMP_NAME = /^\.dotbugi-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.part$/;
 
 // 이전 실행이 죽으며 남긴 임시 파일을 지운다. 요청 시간 상한보다 오래 안 바뀐 것만 — 받는 중인 파일일 수 없다
+// (저장 위치에 받는 쪽은 모두 sync 잠금 안이라 MCP 경로의 짧은 상한이어도 다른 호출의 임시 파일과 겹치지 않는다)
 async function sweepTemp(dir: string, maxAgeMs: number): Promise<void> {
   for (const entry of await readdir(dir)) {
     if (!TEMP_NAME.test(entry)) continue;
@@ -145,17 +153,46 @@ export async function placeNew(dir: string, name: string, tmpPath: string): Prom
   return { name: slot.name, path: slot.path };
 }
 
-// 첨부파일을 dir 아래 새 파일로 받는다. 같은 이름이 있으면 번호를 붙인 이름으로 저장한다
+// 로컬 파일 해시. 없으면 null, 정규 파일이 아니면(링크 등) 어떤 해시와도 다른 '' — 수정된 파일로 보고 건드리지 않는다
+export async function localHash(path: string): Promise<string | null> {
+  const st = await lstat(path).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  });
+  if (!st) return null;
+  if (!st.isFile()) return '';
+  const hash = createHash('sha256');
+  await pipeline(createReadStream(path), hash);
+  return hash.digest('hex');
+}
+
+// 같은 이름 후보("이름", "이름 (2)" …) 중 내용이 같은 파일. 링크는 따라가지 않는다 ('' 해시)
+async function findSame(dir: string, name: string, sha256: string): Promise<{ name: string; path: string } | null> {
+  for (let n = 1; n <= FILE_NAME_SUFFIX_MAX; n++) {
+    const candidate = withSuffix(name, n);
+    const path = join(dir, candidate);
+    if ((await localHash(path)) === sha256) return { name: candidate, path };
+  }
+  return null;
+}
+
+// 첨부파일을 dir 아래 새 파일로 받는다. 같은 이름이 있으면 번호를 붙인 이름으로 저장한다.
+// 같은 내용의 파일이 이미 있으면(다시 호출) 새로 두지 않고 그 경로를 돌려준다 (existing) — 재호출이 사본을 늘리지 않게
 export async function saveAttachment(
   url: URL,
   dir: string,
   name: string,
   session: string,
   limits = ATTACHMENT_LIMITS
-): Promise<{ name: string; path: string; sha256: string }> {
+): Promise<{ name: string; path: string; sha256: string; existing: boolean }> {
   const tmp = await downloadTemp(url, dir, session, limits);
   try {
-    return { ...(await placeNew(dir, name, tmp.path)), sha256: tmp.sha256 };
+    const same = await findSame(dir, name, tmp.sha256);
+    if (same) {
+      await unlink(tmp.path);
+      return { ...same, sha256: tmp.sha256, existing: true };
+    }
+    return { ...(await placeNew(dir, name, tmp.path)), sha256: tmp.sha256, existing: false };
   } catch (err) {
     await unlink(tmp.path).catch(() => {});
     throw err;

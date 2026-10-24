@@ -26,7 +26,9 @@ export class SessionExpiredError extends Error {
 export async function lmsFetch(
   pathOrUrl: string,
   session: string,
-  timeoutMs = LMS_REQUEST_TIMEOUT_MS
+  timeoutMs = LMS_REQUEST_TIMEOUT_MS,
+  // 도구 호출 취소(ctx.mcpReq.signal) — 끊기면 받는 중인 요청도 바로 멈춘다
+  signal?: AbortSignal
 ): Promise<Response> {
   const url = new URL(pathOrUrl, LMS_ORIGIN);
   if (url.origin !== LMS_ORIGIN || url.username || url.password)
@@ -34,7 +36,7 @@ export async function lmsFetch(
   const res = await fetch(url, {
     headers: { cookie: `${SESSION_COOKIE}=${session}` },
     redirect: 'manual',
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]) : AbortSignal.timeout(timeoutMs),
   }).catch((err: unknown) => {
     // 원래 오류 대신 고정 문구만 던진다 (요청 정보가 섞이지 않게)
     if (err instanceof Error && err.name === 'TimeoutError')

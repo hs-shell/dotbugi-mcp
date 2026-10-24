@@ -10,10 +10,10 @@ export const limit = createLimiter(LMS_MAX_CONCURRENT_REQUESTS);
 const isRedirect = (status: number) => status >= 300 && status < 400;
 
 // @dotbugi/lms-parser 에 주입할 Node 용 FetchHtml. 세션 쿠키는 lmsFetch 로만 붙인다 (출처 고정·리다이렉트 차단)
-export function createFetchHtml(session: string): FetchHtml {
+export function createFetchHtml(session: string, signal?: AbortSignal): FetchHtml {
   return (url) =>
     limit(async () => {
-      const res = await lmsFetch(url, session);
+      const res = await lmsFetch(url, session, undefined, signal);
       // 로그인 이외로의 리다이렉트는 따라가지 않는다 (이동할 주소는 알리지 않는다)
       if (isRedirect(res.status))
         throw new Error(`LMS 가 요청한 페이지 대신 다른 곳으로 이동시켰습니다 (HTTP ${res.status}).`);

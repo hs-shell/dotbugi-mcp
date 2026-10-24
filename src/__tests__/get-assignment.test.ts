@@ -62,6 +62,8 @@ vi.stubGlobal('fetch', fetchMock);
 
 let send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 const progress: Record<string, unknown>[] = [];
+let id = 0;
+let notify: (msg: JSONRPCMessage) => Promise<void>;
 beforeAll(async () => {
   const [client, server] = InMemoryTransport.createLinkedPair();
   const pending = new Map<number, (result: Record<string, unknown>) => void>();
@@ -71,7 +73,7 @@ beforeAll(async () => {
     if ('id' in msg) pending.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
   };
   await createServer().connect(server);
-  let id = 0;
+  notify = (msg) => client.send(msg);
   send = (method, params) =>
     new Promise((resolve) => {
       pending.set(++id, resolve);
@@ -214,7 +216,11 @@ describe('get_assignment', () => {
     const out = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
     expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
     expect(await readFile(join(dir(), '과제 (2).pdf'), 'utf8')).toBe('%PDF-1.4');
-    expect(out.attachments[0]).toEqual({ name: '과제 (2).pdf', path: join(dir(), '과제 (2).pdf') });
+    // 같은 이름 파일이 없는 첨부를 먼저 받는다
+    expect(out.attachments).toEqual([
+      { name: '_.._evil.sh', path: join(dir(), '_.._evil.sh') },
+      { name: '과제 (2).pdf', path: join(dir(), '과제 (2).pdf') },
+    ]);
     expect(out.warnings).toEqual(['같은 이름의 파일이 이미 있어 덮어쓰지 않고 과제 (2).pdf 으로 저장했습니다.']);
   });
 
@@ -268,5 +274,33 @@ describe('get_assignment', () => {
     expect(out.attachments).toEqual([]);
     expect(out.warnings).toEqual([expect.stringContaining('시간 상한(0분)에 걸려 첨부 2개는 받지 않았습니다')]);
     expect(await allFiles()).toEqual([]);
+  });
+
+  it('다시 호출하면 내용이 같은 파일은 새로 두지 않고 기존 경로를 돌려준다', async () => {
+    await mkdir(dir(), { recursive: true });
+    await writeFile(join(dir(), '과제.pdf'), '내 풀이');
+    const first = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[] };
+    const again = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
+    expect(again.attachments).toHaveLength(2);
+    expect(again.attachments).toEqual(expect.arrayContaining(first.attachments));
+    expect(again.warnings).toEqual([]);
+    expect((await readdir(dir())).sort()).toEqual(['_.._evil.sh', '과제 (2).pdf', '과제.pdf']);
+  });
+
+  it('호출이 취소되면 남은 첨부를 받지 않고 바로 끝내 잠금을 푼다', async () => {
+    let release!: () => void;
+    const started = new Promise<void>((r) => (release = r));
+    fetchMock.mockImplementation((input, init) => {
+      if (!String(input).includes('/pluginfile.php/')) return fakeFetch(input);
+      release();
+      // 취소 신호가 올 때까지 응답하지 않는 첨부
+      return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+    });
+    void send('tools/call', { name: 'get_assignment', arguments: { cmid: 5 } });
+    await started;
+    await notify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: id } });
+    // 잠금이 풀려 다음 호출이 바로 된다
+    await vi.waitFor(async () => expect(await withSyncLock(async () => 'ok')).toBe('ok'));
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/pluginfile.php/'))).toHaveLength(1);
   });
 });
