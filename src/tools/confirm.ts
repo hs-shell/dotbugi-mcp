@@ -1,10 +1,14 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  CLIENT_CAPABILITIES_META_KEY,
+  inputRequired,
+  inputResponse,
   SdkError,
   SdkErrorCode,
   type ClientCapabilities,
   type ElicitRequestFormParams,
   type ElicitResult,
+  type InputRequiredResult,
   type McpServer,
   type RequestOptions,
   type ServerContext,
@@ -17,12 +21,44 @@ export interface Asker {
   elicit: (params: ElicitRequestFormParams, options?: RequestOptions) => Promise<ElicitResult>;
 }
 
+// 2026-07-28 세대(#160)에는 서버가 클라이언트에 직접 묻지 못한다. 도구가 input_required 결과를 돌려주면 클라이언트가 창을 띄우고
+// 답을 실어 같은 호출을 다시 보낸다. 묻는 지점은 도구 처리 깊숙이 있어 결과를 여기 맡기고 던진 뒤, serveInputRequests 가 도구 결과를 바꾼다
+const pendingInput = new WeakMap<ServerContext, InputRequiredResult>();
+
 export const askerOf = (server: McpServer, ctx: ServerContext): Asker => ({
-  // 2025 세대는 initialize 때 값, 2026-07-28 세대는 요청마다 채워진다 (SDK 설명)
-  caps: server.server.getClientCapabilities(),
-  // 클라이언트가 도구 호출을 취소하면 확인 대기도 바로 끝나 잡고 있던 잠금이 풀린다
-  elicit: (params, options) => ctx.mcpReq.elicitInput(params, { ...options, signal: ctx.mcpReq.signal }),
+  // 2025 세대는 initialize 때 값, 2026-07-28 세대는 요청 _meta(SDK 가 검증한 envelope)에 실려 온다.
+  // 이때 getClientCapabilities() 는 비어 있어 확인 창 없이 토큰 방식으로 빠졌다 (#160). envelope 타입은 SDK 선언에서 {} 로 빠져 있다
+  caps:
+    (ctx.mcpReq.envelope as { [CLIENT_CAPABILITIES_META_KEY]?: ClientCapabilities } | undefined)?.[
+      CLIENT_CAPABILITIES_META_KEY
+    ] ?? server.server.getClientCapabilities(),
+  elicit: async (params, options) => {
+    // 키를 창 내용(대상 목록 포함)에 묶는다 — 다시 불렸을 때 대상이 바뀌었으면 이전 답을 쓰지 않고 새로 묻는다
+    const key = `confirm-${createHash('sha256').update(JSON.stringify(params)).digest('hex').slice(0, 16)}`;
+    const prior = inputResponse(ctx.mcpReq.inputResponses, key);
+    if (prior.kind === 'elicit') return { action: prior.action, content: prior.content as ElicitResult['content'] };
+    try {
+      // 클라이언트가 도구 호출을 취소하면 확인 대기도 바로 끝나 잡고 있던 잠금이 풀린다
+      return await ctx.mcpReq.elicitInput(params, { ...options, signal: ctx.mcpReq.signal });
+    } catch (err) {
+      if (!(err instanceof SdkError && err.code === SdkErrorCode.MethodNotSupportedByProtocolVersion)) throw err;
+      pendingInput.set(ctx, inputRequired({ inputRequests: { [key]: inputRequired.elicit(params) } }));
+      throw new Error('사용자 확인을 기다립니다.');
+    }
+  },
 });
+
+// 모든 도구 결과에 적용: 처리 중 askerOf 가 확인 요청을 맡겼으면 (도구의 오류 결과 대신) input_required 결과를 돌려준다.
+// 도구마다 오류를 잡아 결과로 바꾸므로 던진 오류가 아니라 요청별 보관값으로 판단한다. 도구 등록 전에 불러야 한다
+export function serveInputRequests(server: McpServer): void {
+  const register = server.registerTool.bind(server);
+  server.registerTool = ((name: string, config: never, cb: (...a: unknown[]) => unknown) =>
+    register(name, config, (async (...a: unknown[]) => {
+      const result = await cb(...a);
+      // 도구 콜백의 마지막 인자가 요청 ctx (inputSchema 가 없으면 유일한 인자)
+      return pendingInput.get(a.at(-1) as ServerContext) ?? result;
+    }) as never)) as typeof server.registerTool;
+}
 
 export const confirmTokenInput = z
   .string()
@@ -125,32 +161,24 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
     };
   }
   if (asker.caps?.elicitation?.form) {
-    const result = await asker
-      .elicit(
-        {
-          mode: 'form',
-          message: `${req.message}${w.warn}\n\n${list}\n\n${w.preset ? GUIDE_PRESET : GUIDE_CHECK}`,
-          requestedSchema: {
-            type: 'object',
-            properties: { confirm: { type: 'boolean', title: w.label, default: w.preset } },
-            required: ['confirm'],
-          },
+    const result = await asker.elicit(
+      {
+        mode: 'form',
+        message: `${req.message}${w.warn}\n\n${list}\n\n${w.preset ? GUIDE_PRESET : GUIDE_CHECK}`,
+        requestedSchema: {
+          type: 'object',
+          properties: { confirm: { type: 'boolean', title: w.label, default: w.preset } },
+          required: ['confirm'],
         },
-        { timeout: ELICIT_TIMEOUT_MS }
-      )
-      .catch((err: unknown) => {
-        // 2026-07-28 세대 요청은 서버→클라이언트 요청을 보내기 전에 SDK 가 막는다 — 확인 창 없음으로 보고 토큰 방식으로 넘어간다.
-        // 보낸 뒤의 실패(취소·시간 초과 등)는 그대로 던진다 (사용자가 답하지 않은 것을 토큰으로 바꾸지 않게)
-        if (err instanceof SdkError && err.code === SdkErrorCode.MethodNotSupportedByProtocolVersion) return null;
-        throw err;
-      });
+      },
+      { timeout: ELICIT_TIMEOUT_MS }
+    );
     // 사용자가 직접 누른 accept + confirm=true 만 승인. decline·cancel·체크 안 함은 모두 취소 — 이유는 구분해 알린다.
     // 엔터만 누르면 기본값 필드를 content 에 싣지 않는 클라이언트가 있을 수 있어, 필드가 없으면 창에 띄운 기본값(preset)으로 본다
     // (스펙상 default 는 클라이언트 초기값). 명시적 false 는 취소이고, 삭제(preset=false)는 필드가 없으면 취소다
-    const confirm = result?.content?.confirm;
-    if (result?.action === 'accept' && (confirm === undefined ? w.preset : confirm) === true) return { ok: true };
-    if (result)
-      return { ok: false, text: `사용자가 승인하지 않아 ${w.none} — ${refusalReason(result.action, w.preset)}` };
+    const confirm = result.content?.confirm;
+    if (result.action === 'accept' && (confirm === undefined ? w.preset : confirm) === true) return { ok: true };
+    return { ok: false, text: `사용자가 승인하지 않아 ${w.none} — ${refusalReason(result.action, w.preset)}` };
   }
   // 확인 창을 못 띄우는 클라이언트 — 목록과 일회용 토큰을 돌려주고 두 번째 호출에서만 지운다
   const now = Date.now();
