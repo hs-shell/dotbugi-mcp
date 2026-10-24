@@ -1,14 +1,40 @@
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MATERIALS_MANIFEST_NAME } from '../constants.js';
-import { readStorageConfig, semesterOf, storageRoot, writeStorageConfig } from '../storage.js';
+import { defaultStorageRoot, readStorageConfig, semesterOf, storageRoot, writeStorageConfig } from '../storage.js';
 import type { Asker } from '../tools/confirm.js';
 import { resolveStorageDir, setStorageDir } from '../tools/storage-dir.js';
 
-const state = vi.hoisted(() => ({ home: '', wsl: false, localAppData: null as string | null, mount: '/mnt/' }));
-vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => state.home }));
+const state = vi.hoisted(() => ({
+  home: '',
+  wsl: false,
+  localAppData: null as string | null,
+  mount: '/mnt/',
+  driveRoots: [] as string[],
+  // 이 경로 아래에서 나가는 rename 은 다른 드라이브인 것처럼 EXDEV 로 실패시킨다
+  exdevFrom: null as string | null,
+}));
+vi.mock('node:os', async (orig) => {
+  const os = await orig<typeof import('node:os')>();
+  return { ...os, homedir: () => state.home, userInfo: () => ({ ...os.userInfo(), homedir: state.home }) };
+});
+vi.mock('node:fs/promises', async (orig) => {
+  const fs = await orig<typeof import('node:fs/promises')>();
+  return {
+    ...fs,
+    rename: async (from: string, to: string) => {
+      if (state.exdevFrom && from.startsWith(state.exdevFrom))
+        throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+      return fs.rename(from, to);
+    },
+  };
+});
+vi.mock('../drive.js', async (orig) => ({
+  ...(await orig<typeof import('../drive.js')>()),
+  detectGoogleDrive: () => ({ roots: state.driveRoots, unmounted: [] }),
+}));
 vi.mock('../platform.js', () => ({ isWsl: () => state.wsl }));
 vi.mock('../wsl-paths.js', async (orig) => ({
   ...(await orig<typeof import('../wsl-paths.js')>()),
@@ -32,6 +58,9 @@ const asker = (confirm: boolean): Asker & { asked: string[] } => {
 beforeEach(async () => {
   state.home = await mkdtemp(join(tmpdir(), 'dotbugi-storage-dir-'));
   state.wsl = false;
+  state.localAppData = null;
+  state.driveRoots = [];
+  state.exdevFrom = null;
 });
 afterEach(async () => {
   await rm(state.home, { recursive: true, force: true });
@@ -80,6 +109,19 @@ describe('resolveStorageDir', () => {
     await expect(resolveStorageDir('C:\\Users\\other\\x')).rejects.toThrow('홈 폴더');
     await expect(resolveStorageDir('C:\\Users\\u')).rejects.toThrow('홈 폴더');
     await rm(mnt, { recursive: true, force: true });
+  });
+
+  it('Google Drive "내 드라이브" 아래는 받고, 공유 드라이브·Drive 루트 자체는 거부한다', async () => {
+    const drive = await mkdtemp(join(tmpdir(), 'dotbugi-drive-'));
+    await mkdir(join(drive, '내 드라이브'));
+    state.driveRoots = [join(drive, '내 드라이브')];
+    expect((await resolveStorageDir(join(drive, '내 드라이브', '돋부기'))).path).toBe(
+      join(drive, '내 드라이브', '돋부기')
+    );
+    await expect(resolveStorageDir(join(drive, '공유 드라이브', '팀'))).rejects.toThrow('홈 폴더');
+    await expect(resolveStorageDir(join(drive, '내 드라이브'))).rejects.toThrow('홈 폴더');
+    await expect(resolveStorageDir(join(drive, '내 드라이브', '.x'))).rejects.toThrow('숨김');
+    await rm(drive, { recursive: true, force: true });
   });
 });
 
@@ -145,6 +187,7 @@ describe('setStorageDir', () => {
   it('새 위치에 같은 이름이 있으면 덮어쓰지 않고 남겨 둔다', async () => {
     await seed();
     await mkdir(home('Documents', '돋부기', 'assign-5'), { recursive: true });
+    await writeFile(home('Documents', '돋부기', 'assign-5', 'b.txt'), 'B');
     const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
     expect(text).toContain('옮긴 항목 1개');
     expect(text).toContain('같은 이름이 있어 그대로 둠');
@@ -176,10 +219,64 @@ describe('setStorageDir', () => {
     expect((await readdir(dl())).sort()).toEqual(['2026-1학기', 'assign-x', '가짜과목', '사진.jpg'].sort());
   });
 
+  it('다른 드라이브면 복사·검증한 뒤 새 위치를 저장하고 원본을 지운다', async () => {
+    await seed();
+    state.exdevFrom = oldRoot();
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(text).toContain('옮긴 항목 2개');
+    const to = home('Documents', '돋부기');
+    expect((await readdir(to)).sort()).toEqual(['2026-2학기', 'assign-5']);
+    expect(await readFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'utf8')).toBe('A');
+    expect(await readdir(home('Downloads'))).toEqual([]);
+    expect(storageRoot()).toBe(to);
+  });
+
+  it('지난번 복사가 원본 삭제 전에 끊겼으면 같은 내용을 옮긴 것으로 보고 원본만 지운다 (남은 임시 폴더도 정리)', async () => {
+    await seed();
+    const to = home('Documents', '돋부기');
+    await mkdir(join(to, '2026-2학기', '자료구조'), { recursive: true });
+    await writeFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'A');
+    // assign-5 는 복사 도중 끊겨 임시 폴더만 남은 상태
+    await mkdir(join(to, '.dotbugi-moving-assign-5', 'half'), { recursive: true });
+    state.exdevFrom = oldRoot();
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(text).toContain('옮긴 항목 2개');
+    expect((await readdir(to)).sort()).toEqual(['2026-2학기', 'assign-5']);
+    expect(await readdir(home('Downloads'))).toEqual([]);
+  });
+
+  it('다른 드라이브로 옮길 항목에 링크가 있으면 그 항목은 원본 그대로 두고 임시 폴더도 남기지 않는다', async () => {
+    await seed();
+    await symlink(join(oldRoot(), '2026-2학기', '자료구조', 'a.txt'), join(oldRoot(), 'assign-5', 'link'));
+    state.exdevFrom = oldRoot();
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(text).toContain('옮긴 항목 1개');
+    expect(text).toContain('링크');
+    expect(await readdir(home('Documents', '돋부기'))).toEqual(['2026-2학기']);
+    expect(await readdir(join(oldRoot(), 'assign-5'))).toEqual(['link']);
+  });
+
   it('지금 위치의 안쪽·상위 폴더는 거부한다', async () => {
     await writeStorageConfig(home('Documents', '돋부기'));
     await expect(setStorageDir({ path: '~/Documents/돋부기/sub' }, asker(true))).rejects.toThrow('안쪽이나 상위');
     await expect(setStorageDir({ path: '~/Documents' }, asker(true))).rejects.toThrow('안쪽이나 상위');
     expect(storageRoot()).toBe(home('Documents', '돋부기'));
+  });
+});
+
+describe('WSL 기본 저장 위치', () => {
+  it('WSL 이면 Windows 다운로드 폴더, 단 WSL 안에 받아 둔 자료가 있으면 그대로', async () => {
+    const mnt = await mkdtemp(join(tmpdir(), 'dotbugi-mnt-'));
+    state.wsl = true;
+    state.localAppData = join(mnt, 'c', 'Users', 'u', 'AppData', 'Local');
+    expect(defaultStorageRoot()).toBe(join(mnt, 'c', 'Users', 'u', 'Downloads', 'dotbugi-mcp'));
+    await mkdir(home('Downloads', 'dotbugi-mcp'), { recursive: true });
+    expect(defaultStorageRoot()).toBe(home('Downloads', 'dotbugi-mcp'));
+    await rm(mnt, { recursive: true, force: true });
+  });
+
+  it('Windows 사용자 폴더를 못 찾으면 WSL 안 기본값', () => {
+    state.wsl = true;
+    expect(defaultStorageRoot()).toBe(home('Downloads', 'dotbugi-mcp'));
   });
 });
