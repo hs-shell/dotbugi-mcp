@@ -157,23 +157,30 @@ const shortcuts: Shortcut[] = [
     example: `${SLASH}work 보고서 3주차-정리.md`,
     args: { work },
     text: ({ work: w }) => {
-      // 첫 단어가 숫자면 cmid, 나머지는 참고 자료. 과제명이면 경계는 모델이 나눈다 (notes 의 범위·지시와 같은 방식)
+      // 첫 단어가 숫자면 과제 목록에 그 cmid 가 있을 때만 cmid (제목이 숫자로 시작할 수 있다), 아니면 요청 전체가 제목 검색.
+      // 과제명이면 경계는 모델이 나눈다 (notes 의 범위·지시와 같은 방식)
       const [first, ...rest] = (w ?? '').split(' ');
       const id = isId(first) ? first : undefined;
       const refs = rest.join(' ');
       const given =
         '파일 경로면 그 파일을, 파일 이름이면 `get_storage_dir` 의 저장 위치 안에서만 찾아(그 밖은 뒤지지 않고, 여럿이면 사용자에게 묻는다) 읽고(직접 읽을 수 없으면 `read_material`), 그 밖의 글은 붙여 넣은 참고 글로 쓴다. 같은 주차 자료는 따로 읽지 않는다.';
+      const pick =
+        '미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.';
+      const byTitle =
+        '앞쪽은 과제 제목 일부, 그 뒤는 참고 자료(붙여 넣은 글·파일 경로·파일 이름)다. 경계가 애매하면 사용자에게 묻는다.';
+      const found = `제목에 과제 부분이 들어간 과제를 찾아. 여럿이면 사용자에게 골라 달라고 하고, 없으면 그렇다고 알린 뒤 ${pick}`;
+      const listAll = ['type: "assign"', 'incompleteOnly: false', 'includePast: true'];
       const week = `get_assignment 결과의 weekDir 이 있으면 weekFiles(강의자료·STT·노트)를 읽어 참고한다 (직접 읽을 수 없으면 \`read_material\`). weekFiles 가 비었고 missingStt 가 있으면 사용자에게 "STT 먼저 / 지시사항만으로" 를 묻고, STT 먼저면 \`transcribe_lecture\` 를 missingStt 의 cmids 로 시작한 뒤 STT 가 끝나면 이 명령을 다시 실행하라고 안내하고 멈춘다. ${STATUSLINE_HINT} weekDir 이 null 이거나 참고할 자료가 없으면 지시사항만으로 한다.`;
       return [
         ...(w ? ['사용자 요청 (다음 한 줄 전체, 따옴표·백틱도 사용자가 쓴 그대로):', w, ''] : []),
         !w
-          ? `1. \`get_status\` 를 ${withArgs('type: "assign"', REFRESH)}불러 미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.`
+          ? `1. \`get_status\` 를 ${withArgs('type: "assign"', REFRESH)}불러 ${pick}`
           : id
-            ? `1. 과제 cmid 는 ${id} 이다.${refs ? ' 사용자 요청에서 cmid 뒤는 모두 참고 자료다.' : ''}`
-            : `1. 사용자 요청의 앞쪽은 과제 제목 일부, 그 뒤는 참고 자료(붙여 넣은 글·파일 경로·파일 이름)다. 경계가 애매하면 사용자에게 묻는다. \`get_status\` 를 ${withArgs('type: "assign"', 'incompleteOnly: false', 'includePast: true', REFRESH)}불러 제목에 과제 부분이 들어간 과제를 찾아. 없으면 그렇다고 알리고, 여럿이면 사용자에게 골라 달라고 해.`,
+            ? `1. \`get_status\` 를 ${withArgs(...listAll)}(새로 고치지 않고 캐시로) 불러 cmid 가 ${id} 인 과제가 있는지 확인해. 있으면 그 과제이고${refs ? ' 사용자 요청에서 cmid 뒤는 모두 참고 자료다' : ' 참고 자료는 없다'}. 없으면 ${id} 는 cmid 가 아니므로 ${id} 를 포함한 사용자 요청 전체의 ${byTitle} 같은 목록에서 ${found}`
+            : `1. 사용자 요청의 ${byTitle} \`get_status\` 를 ${withArgs(...listAll, REFRESH)}불러 ${found}`,
         '2. 고른 과제로 `get_assignment` 를 불러 instructionsPath 의 지시사항 md(본문·첨부 글자)를 끝까지 읽고, 요구사항·제출 형식·파일명 규칙·마감을 짧게 짚어 줘.',
         '   첨부·참고 자료 중 pptx·docx·hwpx 는 `read_material` 로 읽어, "그림 위주" 표시가 있으면 그 파일들(경로·글자 수·그림 수)을 보여 주고 "그림도 읽기 / 글자만" 을 물어. 그림도 읽기면 그 파일을 images: true 로 다시 읽어.',
-        `3. 참고 자료: ${!w || (id && !refs) ? week : id ? given : `사용자 요청에 참고 자료가 있으면 ${given} 없으면 ${week}`}`,
+        `3. 참고 자료: ${!w || (id && !refs) ? week : `사용자 요청에 참고 자료가 있으면 ${given} 없으면 ${week}`}`,
         '4. 바로 과제를 함께 시작해: 진행 계획을 세우고, 필요하면 작업 폴더를 만들고, 사용자와 초안을 함께 작성해. 정리만 하고 멈추지 마.',
         '5. 제출은 하지 않는다. 작업을 마칠 때 제출 주소(submitUrl)와 파일명 규칙을 다시 안내해 줘.',
         '',
