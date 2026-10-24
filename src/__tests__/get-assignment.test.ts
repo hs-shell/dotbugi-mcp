@@ -66,7 +66,9 @@ const ASSIGN_PAGE = `<html><body class="path-mod-assign course-100"><div role="m
 const COURSE_PAGE = `<ul><li id="section-0"><span class="sectionname">공지</span><ul>
   <li id="module-9" class="modtype_assign"><a href="${L}/mod/assign/view.php?id=9">공지 과제</a></li></ul></li>
   <li id="section-8"><span class="sectionname">8주차</span><ul>
-  <li id="module-5" class="modtype_assign"><a href="${L}/mod/assign/view.php?id=5">과제1</a></li></ul></li></ul>`;
+  <li id="module-5" class="modtype_assign"><a href="${L}/mod/assign/view.php?id=5">과제1</a></li>
+  <li id="module-7" class="modtype_vod"><div class="activityinstance"><a href="${L}/mod/vod/view.php?id=7">
+    <span class="instancename">트리 강의</span></a></div></li></ul></li></ul>`;
 
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = String(input);
@@ -635,6 +637,33 @@ describe('get_assignment — 과제 지시사항 md', () => {
     );
     const out = (await call({ cmid: 9 })).structuredContent as Placed;
     expect(out.downloadDir).toBe(join(courseDir(), '과제-과제1'));
+  });
+
+  it('같은 주차 폴더의 자료(과제 폴더·숨김 파일 제외)를 weekFiles 로 돌려준다', async () => {
+    const week = join(courseDir(), '8주차');
+    await mkdir(join(week, '과제-다른 과제'), { recursive: true });
+    await writeFile(join(week, '강의자료.pdf'), 'x');
+    await writeFile(join(week, 'STT-트리 강의.md'), 'x');
+    await writeFile(join(week, '.dotbugi-manifest.json'), '{}');
+    const out = (await call({ cmid: 5 })).structuredContent as Record<string, unknown>;
+    expect(out).toMatchObject({ weekDir: week, weekFiles: ['STT-트리 강의.md', '강의자료.pdf'], missingStt: [] });
+  });
+
+  it('같은 주차에 자료가 없으면 그 주차의 동영상 강의를 missingStt 로 알린다', async () => {
+    const result = await call({ cmid: 5 });
+    expect(result.structuredContent).toMatchObject({
+      weekDir: join(courseDir(), '8주차'),
+      weekFiles: [],
+      missingStt: [{ cmid: 7, title: '트리 강의' }],
+    });
+    expect((result.content as { text: string }[])[0].text).toContain('STT 없는 같은 주차 동영상 강의 cmid: `7`');
+  });
+
+  it('주차 폴더 밖의 과제는 weekDir 이 null 이다', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input) === `${L}/mod/assign/view.php?id=9` ? new Response(PAGE()) : fakeFetch(input)
+    );
+    expect((await call({ cmid: 9 })).structuredContent).toMatchObject({ weekDir: null, weekFiles: [], missingStt: [] });
   });
 
   it('실제 과제 화면: 화면의 지시사항만 담고, 숨은 hwp 편집기 JSON·제출자 본인 첨부는 빼며 받지 않는다', async () => {
