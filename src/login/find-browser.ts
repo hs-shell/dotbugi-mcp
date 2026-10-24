@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { WSL_PROGRAM_FILES } from '../constants.js';
 import { absolutePathDirs, isWsl } from '../platform.js';
+import { wslLocalAppData, wslProgramFiles } from '../wsl-paths.js';
 
 // 설치된 Chromium 계열 브라우저 탐색 순서: Chrome → Edge → Brave → Whale
 const WINDOWS_PATHS = [
@@ -27,8 +27,15 @@ const LINUX_NAMES = [
 ];
 
 export function findBrowser(): string | null {
-  return candidates().find((p) => existsSync(p)) ?? null;
+  const found = candidates().find((p) => existsSync(p));
+  if (found || !isWsl()) return found ?? null;
+  // 사용자 폴더 설치는 Program Files 에 없을 때만 찾는다 (powershell 실행 비용)
+  const local = wslLocalAppData();
+  return local ? (wslPaths([local]).find((p) => existsSync(p)) ?? null) : null;
 }
+
+const wslPaths = (roots: string[]): string[] =>
+  WINDOWS_PATHS.flatMap((p) => roots.map((r) => join(r, ...p.split('\\'))));
 
 function candidates(): string[] {
   const env = process.env;
@@ -38,7 +45,7 @@ function candidates(): string[] {
   }
   if (process.platform === 'darwin') return MAC_PATHS;
   // WSL 에선 Windows 브라우저(평소 프로필)를 interop 으로 직접 실행한다
-  if (isWsl()) return WINDOWS_PATHS.flatMap((p) => WSL_PROGRAM_FILES.map((r) => join(r, ...p.split('\\'))));
+  if (isWsl()) return wslPaths(wslProgramFiles());
   const dirs = absolutePathDirs();
   return LINUX_NAMES.flatMap((name) => dirs.map((d) => join(d, name)));
 }

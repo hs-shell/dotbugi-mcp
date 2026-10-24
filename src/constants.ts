@@ -34,9 +34,11 @@ export const BROWSER_EXIT_WAIT_MS = 5000;
 // 셸 관례: 128 + 시그널 번호
 export const SIGNAL_EXIT_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const;
 
-// shortcut: Windows C: 드라이브가 /mnt/c 에 마운트됐다고 가정, automount root 를 바꾼 환경이면 wslpath 로 해석하도록 바꾼다
-export const WSL_POWERSHELL = '/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe';
-export const WSL_RUNDLL32 = '/mnt/c/WINDOWS/System32/rundll32.exe';
+// Windows 드라이브 마운트 위치는 이 파일의 [automount] root 를 따른다 (src/wsl-paths.ts)
+export const WSL_CONF_FILE = '/etc/wsl.conf';
+export const WSL_DEFAULT_AUTOMOUNT_ROOT = '/mnt/';
+// %LOCALAPPDATA% 조회용 powershell 이 멈춰도 브라우저 탐색이 끝나도록
+export const WSL_LOOKUP_TIMEOUT_MS = 5000;
 export const WSL_INTEROP_FILE = '/proc/sys/fs/binfmt_misc/WSLInterop';
 
 // LMS 화면의 날짜는 한국 시간이다 (실행 환경 시간대와 무관하게 해석)
@@ -82,8 +84,6 @@ export const VOD_UNKNOWN_WARN_POLLS = 10;
 export const LMS_LOGIN_FORM_SELECTOR = 'input[type="password"]';
 // 진도 페이지(user_progress.php)의 진도 표
 export const VOD_PROGRESS_TABLE_SELECTOR = '.user_progress';
-// shortcut: 사용자 폴더 설치(%LOCALAPPDATA%) 브라우저는 못 찾는다, 요청이 있으면 cmd.exe /c echo %LOCALAPPDATA% 로 해석한다
-export const WSL_PROGRAM_FILES = ['/mnt/c/Program Files', '/mnt/c/Program Files (x86)'];
 
 // 강의자료 동기화(sync_materials). 파일 모듈은 redirect=1 로 실제 파일(pluginfile) 주소를 리다이렉트로 받는다
 export const RESOURCE_VIEW_PATH = '/mod/resource/view.php';
