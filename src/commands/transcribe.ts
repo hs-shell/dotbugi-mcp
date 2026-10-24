@@ -15,6 +15,7 @@ import {
   TRANSCRIBE_BUSY,
   TRANSCRIBE_HEARTBEAT_MS,
   TRANSCRIBE_LOCK_FILE,
+  TRANSCRIBE_PHASE_LABELS as PHASE_LABELS,
   TRANSCRIBE_TMP_DIR,
   writeTranscribeState,
   type TranscribeState,
@@ -22,12 +23,6 @@ import {
 
 type StopSignal = keyof typeof SIGNAL_EXIT_CODES;
 const STOP_SIGNALS = Object.keys(SIGNAL_EXIT_CODES) as StopSignal[];
-const PHASE_LABELS: Record<Phase, string> = {
-  prepare: '준비',
-  download: '영상 받는 중',
-  extract: '소리 추출',
-  transcribe: '받아쓰는 중',
-};
 
 const viewerHtml = (session: string, cmid: number) =>
   limit(async () => {

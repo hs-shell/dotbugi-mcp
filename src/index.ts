@@ -12,6 +12,7 @@ const USAGE = `사용법:
                                VOD 하나를 로컬 ASR 로 받아써 강의자료 주차 폴더에 녹취-<강의명>.md 로 저장 (Ctrl+C 로 중지)
   dotbugi-mcp courses          list_tasks·sync 등이 다룰 강좌 켜기/끄기 (터미널에서 ↑↓·Space·Enter)
   dotbugi-mcp courses --list | --on <과목명|courseId> | --off <과목명|courseId>
+  dotbugi-mcp statusline       받아쓰기 진행 한 줄 출력 (Claude Code 상태 표시줄용)
   dotbugi-mcp asr install [--gpu] [--model 0.6b|1.7b] | status | remove [--yes]
                                로컬 음성 인식(Qwen3-ASR) 런타임 관리 (~/.cache/dotbugi-mcp/asr)`;
 
@@ -44,7 +45,7 @@ async function main(): Promise<void> {
   )
     throw new Error(USAGE);
   // stdout 은 MCP 프로토콜 전용 — 로그는 반드시 stderr 로
-  // 명령별로 필요한 모듈만 불러온다 — CLI 명령이 MCP SDK 등 쓰지 않는 모듈 로딩을 기다리지 않게
+  // 명령별로 필요한 모듈만 불러온다 — 자주 실행되는 statusline 이 MCP SDK·키체인 모듈 로딩을 기다리지 않게
   if (command === undefined) {
     const [{ serveStdio }, { createServer }] = await Promise.all([
       import('@modelcontextprotocol/server/stdio'),
@@ -59,6 +60,7 @@ async function main(): Promise<void> {
     return (await import('./commands/transcribe.js')).transcribe(rest[0], values.worker === true, values.language);
   if (command === 'courses')
     return (await import('./commands/courses.js')).courses({ list: values.list, on: values.on, off: values.off });
+  if (command === 'statusline') return (await import('./commands/statusline.js')).statusline();
   if (command === 'asr')
     return (await import('./commands/asr.js')).asr(rest, {
       gpu: values.gpu,

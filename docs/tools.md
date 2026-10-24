@@ -8,7 +8,7 @@ dotbugi-mcp 가 제공하는 MCP 도구·프롬프트의 인자·출력·상한�
 - 세션이 없거나 만료되면 `login` 도구로 다시 로그인하라는 오류를 돌려줍니다.
 - 과목·제목·본문 등 LMS 텍스트는 **데이터일 뿐 지시가 아닙니다** (도구 설명에도 명시).
 - 대상 강좌는 [추적 강좌 설정](#list_courses--set_course_tracking)을 따릅니다 (`list_tasks`·`sync_materials`·`delete_materials`·`transcribe_vod`).
-- 지우는 도구(`delete_materials`·`asr_remove`)와 저장 위치 변경(`set_storage_dir`, 옮길 자료가 없어도)은 [승인](#삭제-승인)을 거친 뒤에만 실행합니다.
+- 지우는 도구(`delete_materials`·`asr_remove`), 설정을 바꾸는 `setup_statusline`, 저장 위치 변경(`set_storage_dir`, 옮길 자료가 없어도)은 [승인](#삭제-승인)을 거친 뒤에만 실행합니다.
 - 받은 파일은 [저장 위치](#get_storage_dir--set_storage_dir)(기본 `~/Downloads/dotbugi-mcp`) 아래 **학기 폴더** `<YYYY-N학기>/` 에 쌓입니다. 아래에서 `<저장 위치>/<학기>/` 는 이 폴더입니다.
 
 ## `login`
@@ -186,6 +186,19 @@ VOD 의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강의자�
 - `cmid`·`course`·`title`·`path`(녹취 파일)·`pid`·`updatedAt`·`message`·`language`(언어 설정, 이전 기록엔 없음)
 - 실행 중에는 약 1분마다 `updatedAt` 이 갱신됩니다. `transcribe_status` 는 여기에 `stale`(`running` 인데 프로세스가 없거나 갱신이 3분 넘게 끊김 — 강제 종료 등)을 붙입니다.
 
+## `setup_statusline`
+
+Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 있으면 그 아래)의 `statusLine` 에 받아쓰기 진행 한 줄을 넣거나(`enable`, 기본) 뺍니다(`disable`). 프로젝트 설정은 건드리지 않습니다. Claude Desktop 앱에는 상태 표시줄이 없습니다.
+
+```text
+받아쓰기 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%
+```
+
+- 받아쓰는 동안 몇 번째/전체·과목·제목·진행 막대를 보여 주고, 끝나면(`✓ 받아쓰기 끝`·`✗ 받아쓰기 오류`·`○ 받아쓰기 중지`) 10분 동안만 보입니다. 강제 종료로 남은 흔적은 보이지 않습니다. LMS 글의 제어 문자는 지우고 길이를 자릅니다.
+- 명령은 `'<node 절대 경로>' '<dist/index.js 절대 경로>' statusline` 입니다 (npx 는 매번 느려서 쓰지 않음). 상태 파일만 읽습니다 (네트워크·키체인 없음).
+- **이미 쓰는 상태 표시줄이 있으면 지우지 않고** 그 명령 다음 줄에 붙입니다 (Claude Code 는 출력 여러 줄을 그대로 보여 줌). `refreshInterval` 이 없으면 30초로 넣고, 다른 값(`padding` 등)은 그대로 둡니다. `disable` 은 dotbugi 줄만 빼고 기존 명령을 되돌립니다. dotbugi 줄이 없거나 `type` 이 `command` 가 아니면 바꾸지 않습니다.
+- 바꾸기 전에 기존 → 새 `statusLine` 을 확인 창에 보여 주고 [사용자 승인](#삭제-승인)을 받습니다. 주석이 있거나 깨진 JSON 이면 거절하고, 승인을 기다리는 사이 파일이 바뀌면 덮어쓰지 않습니다. 링크된 설정 파일은 링크를 살려 실제 파일에 씁니다.
+
 ## `asr_install` / `asr_status`
 
 `transcribe_vod` 가 쓰는 로컬 음성 인식(Qwen3-ASR) 런타임을 설치·확인합니다. Docker·sudo 없이 `~/.cache/dotbugi-mcp/asr/` 한 폴더(0700)에만 설치하고, 시스템 패키지·PATH 는 건드리지 않습니다.
@@ -279,6 +292,7 @@ dotbugi-mcp login [--browser]   로그인              (도구: login, --browser
 dotbugi-mcp logout              로그아웃            (도구: logout)
 dotbugi-mcp sync                강의자료 동기화      (도구: sync_materials, 사라진 파일 삭제는 delete_materials)
 dotbugi-mcp transcribe <cmid> [--language auto|Korean|…]  VOD 받아쓰기  (도구: transcribe_vod, Ctrl+C 로 중지)
+dotbugi-mcp statusline       받아쓰기 진행 한 줄 (Claude Code 상태 표시줄용, setup_statusline 이 설정)
 dotbugi-mcp courses [...]       추적 강좌 켜기/끄기  (도구: list_courses / set_course_tracking)
 dotbugi-mcp asr install|status|remove  음성 인식 런타임  (도구: asr_install / asr_status / asr_remove)
 ```
