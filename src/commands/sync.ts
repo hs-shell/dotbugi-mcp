@@ -17,9 +17,9 @@ export async function confirmRemovals(removed: RemovedFile[], ask?: (question: s
     if (item.locallyModified) log('⚠ 받은 뒤 수정된 파일입니다. 삭제하면 수정한 내용도 사라집니다.');
     const answer = (await ask('삭제할까요? [y/N] ')).trim().toLowerCase();
     const remove = answer === 'y' || answer === 'yes';
-    const deleted = await resolveRemoved(item, remove);
+    const outcome = await resolveRemoved(item, remove);
     if (!remove) log('남겨 둡니다 (다시 묻지 않습니다).');
-    else log(deleted ? '삭제했습니다.' : '확인한 뒤 파일이 바뀌었거나 옮겨져 지우지 않았습니다.');
+    else log(outcome === 'deleted' ? '삭제했습니다.' : '확인한 뒤 파일이 바뀌었거나 옮겨져 지우지 않았습니다.');
   }
 }
 

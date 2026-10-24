@@ -26,9 +26,7 @@ export const syncMaterialsOutput = z.object({
     .describe('LMS 에 있는 강의자료 전부의 로컬 경로'),
   removed: z
     .array(z.object({ course: z.string(), path: z.string(), locallyModified: z.boolean() }))
-    .describe(
-      'LMS 에서 사라진 파일. 로컬 파일은 지우지 않았다 — 삭제는 사용자가 터미널에서 dotbugi-mcp sync 로 확인한다'
-    ),
+    .describe('LMS 에서 사라진 파일. 로컬 파일은 지우지 않았다 — 삭제는 delete_materials(사용자 승인)'),
   warnings: z.array(z.string()).describe('받지 못했거나 덮어쓰지 않고 따로 저장한 파일 등 안내 (없으면 빈 배열)'),
 });
 export type SyncMaterialsOutput = z.infer<typeof syncMaterialsOutput>;

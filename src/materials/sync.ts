@@ -30,7 +30,7 @@ export interface SyncedFile {
   path: string;
   status: FileStatus;
 }
-// LMS 에서 사라진 파일. courseDir·key·sha256(보고 시점 로컬 해시)은 CLI 가 삭제할 때 다시 확인하는 데 쓴다 (MCP 결과로는 내보내지 않음)
+// LMS 에서 사라진 파일. courseDir·key·sha256(보고 시점 로컬 해시)은 CLI·delete_materials 가 삭제할 때 다시 확인하는 데 쓴다 (MCP 결과로는 내보내지 않음)
 export interface RemovedFile {
   course: string;
   path: string;
@@ -258,7 +258,7 @@ async function syncCourse(
       warn(`${attachmentName(file.url)} 을(를) 받지 못했습니다: ${errorMessage(err)}`);
     }
   }
-  // LMS 에서 사라진 파일은 지우지 않고 알리기만 한다 (삭제는 CLI 에서 사용자가 하나씩 확인)
+  // LMS 에서 사라진 파일은 지우지 않고 알리기만 한다 (삭제는 CLI 확인 또는 delete_materials 의 사용자 승인)
   for (const [key, entry] of manifest.files) {
     if (seen.has(key) || failed.has(entry.cmid) || entry.keep) continue;
     const path = resolveInside(courseDir, entry.path);
@@ -302,27 +302,34 @@ export async function syncMaterials(session: string, course?: string): Promise<S
   return out;
 }
 
-// CLI 확인 결과 반영. 기록·경로를 다시 읽어 검증하고, 보고한 그 파일(같은 경로·같은 내용)일 때만 지운다.
-// 남기면 keep 으로 표시해 다시 묻지 않는다. 지웠으면 true
-export async function resolveRemoved(item: RemovedFile, remove: boolean): Promise<boolean> {
+export type RemoveOutcome = 'deleted' | 'kept' | 'missing' | 'modified' | 'outside';
+
+// 삭제 확인 결과 반영 (CLI·delete_materials 공용). 기록·경로를 다시 읽어 검증하고, 보고한 그 파일(같은 경로·같은 내용)일 때만 지운다.
+// 남기면 keep 으로 표시해 다시 묻지 않는다. 경로 단계가 링크면 ensureRealDir 가 던진다
+export async function resolveRemoved(item: RemovedFile, remove: boolean): Promise<RemoveOutcome> {
   const root = materialsRoot();
   await ensureRealDir(root, item.courseDir, false);
   const manifest = await readManifest(item.courseDir);
   const entry = manifest?.files.get(item.key);
-  if (!manifest || !entry) return false;
-  let removed = false;
+  if (!manifest || !entry) return 'missing';
+  let outcome: RemoveOutcome = 'kept';
   if (remove) {
     const path = resolveInside(item.courseDir, entry.path);
-    if (path !== item.path) return false;
+    if (path === null) return 'outside';
+    if (path !== item.path) return 'modified';
     await ensureRealDir(root, dirname(path), false);
-    if ((await localHash(path)) !== item.sha256) return false;
+    const local = await localHash(path);
+    // '' 은 정규 파일이 아님(링크 등) — 따라가지 않는다
+    if (local === null) return 'missing';
+    if (local === '') return 'outside';
+    if (local !== item.sha256) return 'modified';
     await unlink(path);
-    removed = true;
+    outcome = 'deleted';
     manifest.files.delete(item.key);
   } else {
     manifest.files.set(item.key, { ...entry, keep: true });
   }
   await ensureRealDir(root, item.courseDir);
   await writeManifest(item.courseDir, manifest);
-  return removed;
+  return outcome;
 }
