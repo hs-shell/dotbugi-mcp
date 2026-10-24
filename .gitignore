@@ -4,3 +4,6 @@ dist/
 
 # 임시 시제품 스크립트 — 커밋하지 않음
 /scripts/
+
+# Claude Code 로컬 작업물 (worktree 등)
+.claude/
