@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmRemovals } from '../commands/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { fileKey, weekName } from '../materials/course-page.js';
-import { resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
+import { cliCaps, resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
 import { createServer } from '../server.js';
 import { previousSemester, semesterOf } from '../storage.js';
 
@@ -18,11 +18,14 @@ vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
 // 한 번 실행 상한은 테스트에서만 줄인다
-const caps = vi.hoisted(() => ({ files: 300 }));
+const caps = vi.hoisted(() => ({ files: 300, mcpFiles: 60 }));
 vi.mock('../constants.js', async (orig) => ({
   ...(await orig<typeof import('../constants.js')>()),
   get MATERIAL_MAX_FILES_PER_RUN() {
     return caps.files;
+  },
+  get MATERIAL_MCP_MAX_FILES() {
+    return caps.mcpFiles;
   },
 }));
 
@@ -130,6 +133,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   caps.files = 300;
+  caps.mcpFiles = 60;
   fetchMock.mockClear();
   fetchMock.mockImplementation(async (input) => page(String(input)));
   await rm(state.home, { recursive: true, force: true });
@@ -331,6 +335,52 @@ describe('sync_materials 도구', () => {
     expect(JSON.stringify(result)).not.toContain(SESSION);
     expect((result.content as { text: string }[])[0].text).toContain('delete_materials');
   });
+
+  it('한 번 호출은 MCP 상한까지만 받고 more 로 알리며, 다시 호출하면 중복 없이 이어 받는다. 진행 알림은 토큰이 있을 때만', async () => {
+    getSession.mockResolvedValue({ session: SESSION, savedAt: '', method: 'extension' });
+    caps.mcpFiles = 2;
+    const [client, server] = InMemoryTransport.createLinkedPair();
+    const replies = new Map<number, (r: Record<string, unknown>) => void>();
+    const progress: Record<string, unknown>[] = [];
+    client.onmessage = (msg: JSONRPCMessage) => {
+      if ('method' in msg && msg.method === 'notifications/progress')
+        progress.push(msg.params as Record<string, unknown>);
+      if ('id' in msg) replies.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
+    };
+    await createServer().connect(server);
+    let id = 0;
+    const send = (method: string, params?: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        replies.set(++id, resolve);
+        void client.send({ jsonrpc: '2.0', id, method, params });
+      });
+    await send('initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 't', version: '0' },
+    });
+    type Out = { files: { status: string }[]; removed: unknown[]; more: boolean };
+    const first = await send('tools/call', { name: 'sync_materials', arguments: { course: '자료구조' } });
+    const a = first.structuredContent as Out;
+    expect(a.files.filter((f) => f.status === 'added')).toHaveLength(2);
+    expect(a).toMatchObject({ more: true, removed: [] });
+    expect((first.content as { text: string }[])[0].text).toContain('다시 호출하면 이어서 받습니다');
+    expect(progress).toEqual([]);
+
+    const second = await send('tools/call', {
+      name: 'sync_materials',
+      arguments: { course: '자료구조' },
+      _meta: { progressToken: 7 },
+    });
+    const b = second.structuredContent as Out;
+    expect(b.more).toBe(false);
+    expect(b.files.map((f) => f.status).sort()).toEqual(['added', 'added', 'unchanged', 'unchanged']);
+    expect((await readdir(course('3주차'))).sort()).toEqual(['a.txt', 'b.txt']);
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress.every((p) => p.progressToken === 7 && typeof p.message === 'string')).toBe(true);
+    // 진행 메시지에 과목명(LMS 데이터)을 넣지 않는다
+    expect(JSON.stringify(progress)).not.toContain('자료구조');
+  });
 });
 
 describe('삭제 확인 (CLI)', () => {
@@ -530,10 +580,29 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     caps.files = 2;
     const r = await sync();
     expect(r.files).toHaveLength(2);
-    expect(r.warnings).toContainEqual(expect.stringContaining('한 번에 받는 상한'));
+    expect(r.warnings).toContainEqual(expect.stringContaining('한 번에 받는 상한(2개 또는 2GB)'));
     expect(r.removed).toEqual([]);
     caps.files = 300;
     expect((await sync()).files.filter((f) => f.status === 'added')).toHaveLength(3);
+  });
+
+  it('시간 상한이 지나면 받지 않고 남은 과목은 목록도 읽지 않으며, 그 과목 파일을 사라진 것으로 보지 않는다', async () => {
+    await sync();
+    Object.assign(lms, { slidesRev: 2, slides: 'slides v2', folder: false });
+    fetchMock.mockClear();
+    const r = await syncMaterials(SESSION, undefined, { maxFiles: 300, maxBytes: 2 ** 40, maxMs: 0 });
+    expect(r).toMatchObject({ files: [], removed: [], more: true });
+    expect(r.warnings).toContainEqual(expect.stringContaining('확인하지 못한 과목 2개'));
+    expect(fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('/course/view.php'))).toEqual([]);
+    expect(await readFile(course('강의 개요', '강의 1.pdf'), 'utf8')).toBe('slides v1');
+    expect((await readdir(course('3주차'))).sort()).toEqual(['a.txt', 'b.txt']);
+  });
+
+  it('진행 보고는 큰 파일을 받는 중에도 나가고 값은 계속 는다', async () => {
+    const seen: [number, string][] = [];
+    await syncMaterials(SESSION, undefined, { ...cliCaps(), onProgress: (n, m) => seen.push([n, m]) });
+    expect(seen.some(([, m]) => m.startsWith('강의자료 받는 중'))).toBe(true);
+    expect(seen.every(([n], i) => i === 0 || n > seen[i - 1][0])).toBe(true);
   });
 });
 
@@ -610,6 +679,36 @@ describe('delete_materials 도구', () => {
     const { call } = await connect({ action: 'decline' });
     const text = await call();
     expect(text).toContain(`이번 동기화로 받은 파일 1개:\n- ${course('강의 개요', '강의 1.pdf')}`);
+  });
+
+  it('상한에 걸려도 목록은 끝까지 읽어 사라진 파일만 대상으로 삼는다', async () => {
+    await setup();
+    Object.assign(lms, { slidesRev: 2, slides: 'slides v2' });
+    caps.mcpFiles = 0;
+    const { call, asked } = await connect({ action: 'accept', content: { confirm: true } });
+    const text = await call();
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain(course('3주차', 'a.txt'));
+    expect(asked[0]).not.toContain('강의 1.pdf');
+    expect(await left()).toEqual([]);
+    expect(await readFile(course('강의 개요', '강의 1.pdf'), 'utf8')).toBe('slides v1');
+    expect(text).toContain('한 번에 받는 상한');
+  });
+
+  it('sync_materials 호출이 취소되면 받는 중인 요청을 끊고 sync 잠금을 푼다', async () => {
+    let release!: () => void;
+    const started = new Promise<void>((r) => (release = r));
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!String(input).includes('/pluginfile.php/')) return page(String(input));
+      release();
+      return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+    });
+    const { send, client } = await connect();
+    void send('tools/call', { name: 'sync_materials', arguments: {} });
+    await started;
+    await client.cancel();
+    await vi.waitFor(() => expect(withSyncLock(async () => 1)).resolves.toBe(1));
+    expect(fileFetches()).toHaveLength(1);
   });
 
   it('클라이언트가 호출을 취소하면 확인 대기를 끝내고 sync 잠금을 푼다', async () => {

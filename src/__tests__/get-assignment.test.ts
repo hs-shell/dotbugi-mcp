@@ -18,6 +18,14 @@ const state = vi.hoisted(() => ({ home: '' }));
 vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => state.home }));
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
+// 한 번 호출 시간 상한은 테스트에서만 줄인다
+const budget = vi.hoisted(() => ({ ms: 4 * 60_000 }));
+vi.mock('../constants.js', async (orig) => ({
+  ...(await orig<typeof import('../constants.js')>()),
+  get MCP_CALL_TIME_BUDGET_MS() {
+    return budget.ms;
+  },
+}));
 
 // 익명화한 Moodle 3.2 과제 화면 (본문·첨부는 #intro, 제출 상황 표)
 const ASSIGN_PAGE = `<html><body><div role="main"><h2>과제1</h2>
@@ -53,14 +61,19 @@ const fetchMock = vi.fn<typeof fetch>(fakeFetch);
 vi.stubGlobal('fetch', fetchMock);
 
 let send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+const progress: Record<string, unknown>[] = [];
+let id = 0;
+let notify: (msg: JSONRPCMessage) => Promise<void>;
 beforeAll(async () => {
   const [client, server] = InMemoryTransport.createLinkedPair();
   const pending = new Map<number, (result: Record<string, unknown>) => void>();
   client.onmessage = (msg: JSONRPCMessage) => {
+    if ('method' in msg && msg.method === 'notifications/progress')
+      progress.push(msg.params as Record<string, unknown>);
     if ('id' in msg) pending.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
   };
   await createServer().connect(server);
-  let id = 0;
+  notify = (msg) => client.send(msg);
   send = (method, params) =>
     new Promise((resolve) => {
       pending.set(++id, resolve);
@@ -86,6 +99,8 @@ beforeEach(async () => {
   fetchMock.mockImplementation(fakeFetch);
 });
 afterEach(async () => {
+  budget.ms = 4 * 60_000;
+  progress.length = 0;
   fetchMock.mockClear();
   await rm(state.home, { recursive: true, force: true });
 });
@@ -201,7 +216,11 @@ describe('get_assignment', () => {
     const out = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
     expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
     expect(await readFile(join(dir(), '과제 (2).pdf'), 'utf8')).toBe('%PDF-1.4');
-    expect(out.attachments[0]).toEqual({ name: '과제 (2).pdf', path: join(dir(), '과제 (2).pdf') });
+    // 같은 이름 파일이 없는 첨부를 먼저 받는다
+    expect(out.attachments).toEqual([
+      { name: '_.._evil.sh', path: join(dir(), '_.._evil.sh') },
+      { name: '과제 (2).pdf', path: join(dir(), '과제 (2).pdf') },
+    ]);
     expect(out.warnings).toEqual(['같은 이름의 파일이 이미 있어 덮어쓰지 않고 과제 (2).pdf 으로 저장했습니다.']);
   });
 
@@ -237,5 +256,51 @@ describe('get_assignment', () => {
     const result = await call({ cmid: 5 });
     expect(result.isError).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('progressToken 이 있을 때만 첨부 진행 알림을 보낸다', async () => {
+    await call({ cmid: 5 });
+    expect(progress).toEqual([]);
+    await send('tools/call', { name: 'get_assignment', arguments: { cmid: 5 }, _meta: { progressToken: 'p1' } });
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress.every((p) => p.progressToken === 'p1' && p.total === 2)).toBe(true);
+    // 마지막(끝) 알림은 간격과 상관없이 보낸다
+    expect(progress.at(-1)).toMatchObject({ progress: 2 });
+  });
+
+  it('시간 상한에 걸리면 남은 첨부는 받지 않고 알린다', async () => {
+    budget.ms = 0;
+    const out = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
+    expect(out.attachments).toEqual([]);
+    expect(out.warnings).toEqual([expect.stringContaining('시간 상한(0분)에 걸려 첨부 2개는 받지 않았습니다')]);
+    expect(await allFiles()).toEqual([]);
+  });
+
+  it('다시 호출하면 내용이 같은 파일은 새로 두지 않고 기존 경로를 돌려준다', async () => {
+    await mkdir(dir(), { recursive: true });
+    await writeFile(join(dir(), '과제.pdf'), '내 풀이');
+    const first = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[] };
+    const again = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
+    expect(again.attachments).toHaveLength(2);
+    expect(again.attachments).toEqual(expect.arrayContaining(first.attachments));
+    expect(again.warnings).toEqual([]);
+    expect((await readdir(dir())).sort()).toEqual(['_.._evil.sh', '과제 (2).pdf', '과제.pdf']);
+  });
+
+  it('호출이 취소되면 남은 첨부를 받지 않고 바로 끝내 잠금을 푼다', async () => {
+    let release!: () => void;
+    const started = new Promise<void>((r) => (release = r));
+    fetchMock.mockImplementation((input, init) => {
+      if (!String(input).includes('/pluginfile.php/')) return fakeFetch(input);
+      release();
+      // 취소 신호가 올 때까지 응답하지 않는 첨부
+      return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+    });
+    void send('tools/call', { name: 'get_assignment', arguments: { cmid: 5 } });
+    await started;
+    await notify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: id } });
+    // 잠금이 풀려 다음 호출이 바로 된다
+    await vi.waitFor(async () => expect(await withSyncLock(async () => 'ok')).toBe('ok'));
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/pluginfile.php/'))).toHaveLength(1);
   });
 });

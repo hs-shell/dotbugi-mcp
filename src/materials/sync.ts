@@ -1,18 +1,18 @@
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
 import { lstat, mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import { getIndexPageLink, type CourseBase, type FetchHtml } from '@dotbugi/lms-parser';
-import { attachmentName, downloadTemp, placeNew, safeFileName } from '../assign/download.js';
+import { attachmentName, downloadTemp, localHash, placeNew, safeFileName } from '../assign/download.js';
 import {
   LMS_NUMERIC_ID,
   MATERIAL_MAX_BYTES,
   MATERIAL_MAX_BYTES_PER_RUN,
   MATERIAL_MAX_FILES_PER_RUN,
+  MATERIAL_MCP_MAX_BYTES,
+  MATERIAL_MCP_MAX_FILES,
   MATERIAL_REQUEST_TIMEOUT_MS,
   MATERIALS_LOCK_NAME,
+  MCP_CALL_TIME_BUDGET_MS,
 } from '../constants.js';
 import { createFetchHtml, limit } from '../lms-html.js';
 import { SessionExpiredError } from '../lms.js';
@@ -45,9 +45,36 @@ export interface SyncResult {
   files: SyncedFile[];
   removed: RemovedFile[];
   warnings: string[];
+  // 상한에 걸려 받지 못한 파일이 남았다 — 다시 실행하면 이어서 받는다
+  more: boolean;
 }
 
-const LIMITS = { maxBytes: MATERIAL_MAX_BYTES, timeoutMs: MATERIAL_REQUEST_TIMEOUT_MS };
+// 한 번 실행에서 새로 받는 양의 상한과 진행 보고. maxMs 는 경과 시간 — 파일 사이에서만 멈춘다
+export interface SyncCaps {
+  maxFiles: number;
+  maxBytes: number;
+  maxMs: number;
+  onProgress?: (done: number, message: string) => void;
+  // 클라이언트가 호출을 취소하면 받는 중인 요청을 끊고 바로 던진다 — 잠금을 빨리 풀어 다시 호출이 막히지 않게
+  signal?: AbortSignal;
+  // 상한에 걸린 뒤에도 남은 과목 목록을 읽는다. delete_materials 는 사라진 파일 판정에 전체 목록이 필요하다
+  listAfterCap?: boolean;
+}
+// 상수는 부를 때 읽는다 (테스트가 상한을 바꿀 수 있게)
+export const cliCaps = (): SyncCaps => ({
+  maxFiles: MATERIAL_MAX_FILES_PER_RUN,
+  maxBytes: MATERIAL_MAX_BYTES_PER_RUN,
+  maxMs: Infinity,
+});
+export const mcpCaps = (opts: Pick<SyncCaps, 'onProgress' | 'signal' | 'listAfterCap'> = {}): SyncCaps => ({
+  maxFiles: MATERIAL_MCP_MAX_FILES,
+  maxBytes: MATERIAL_MCP_MAX_BYTES,
+  maxMs: MCP_CALL_TIME_BUDGET_MS,
+  ...opts,
+});
+
+// 상한 표시용 — CLI(2GB)는 GB, MCP(500MB)는 MB
+const sizeLabel = (bytes: number) => (bytes >= 1024 ** 3 ? `${bytes / 1024 ** 3}GB` : `${bytes / 1024 ** 2}MB`);
 
 // MCP 도구와 CLI 가 같은 manifest 를 번갈아 덮지 않게 한 번에 하나만 돌린다.
 // 잠금은 저장 위치가 아니라 캐시 폴더에 둔다 — set_storage_dir 가 저장 위치를 옮기는 동안에도 모두 같은 잠금을 보게
@@ -92,26 +119,19 @@ export async function ensureRealDir(root: string, dir: string, create = true): P
   }
 }
 
-// 로컬 파일 해시. 없으면 null, 정규 파일이 아니면(링크 등) 어떤 해시와도 다른 '' — 수정된 파일로 보고 건드리지 않는다
-export async function localHash(path: string): Promise<string | null> {
-  const st = await lstat(path).catch((err: NodeJS.ErrnoException) => {
-    if (err.code === 'ENOENT') return null;
-    throw err;
-  });
-  if (!st) return null;
-  if (!st.isFile()) return '';
-  const hash = createHash('sha256');
-  await pipeline(createReadStream(path), hash);
-  return hash.digest('hex');
-}
-
 type Remote = CourseModule & { url: URL };
 type Step = { status: FileStatus; path: string; entry: ManifestEntry; downloaded: boolean; warning?: string };
 interface Budget {
   files: number;
   bytes: number;
   capped: boolean;
+  deadline: number;
+  // 진행 알림용 — 과목·파일을 하나 볼 때마다 는다
+  done: number;
+  caps: SyncCaps;
 }
+const overBudget = (b: Budget) =>
+  b.files >= b.caps.maxFiles || b.bytes >= b.caps.maxBytes || Date.now() >= b.deadline || !!b.caps.signal?.aborted;
 
 // 파일 하나 — 새 파일·리비전이 바뀐 파일만 받는다. 받은 내용이 같으면 쓰지 않고, 사용자가 고친 파일은 덮어쓰지 않는다.
 // 한 번 실행의 상한에 걸리면 null (받지 않음)
@@ -137,7 +157,7 @@ async function syncFile(
   // 리비전이 같고 파일이 있으면 요청하지 않는다
   if (prev && prevPath && prev.url === url && (await lstat(prevPath).catch(() => null)))
     return { status: 'unchanged', path: prevPath, entry: { ...prev, keep: undefined }, downloaded: false };
-  if (budget.files >= MATERIAL_MAX_FILES_PER_RUN || budget.bytes >= MATERIAL_MAX_BYTES_PER_RUN) {
+  if (overBudget(budget)) {
     budget.capped = true;
     return null;
   }
@@ -146,7 +166,24 @@ async function syncFile(
   await ensureRealDir(root, weekDir);
   const name = attachmentName(file.url);
   // 임시 이름으로 받고 다 받은 뒤에만 제자리로 옮긴다
-  const part = await limit(() => downloadTemp(file.url, weekDir, session, LIMITS));
+  const { caps } = budget;
+  const part = await limit(() =>
+    downloadTemp(file.url, weekDir, session, {
+      maxBytes: MATERIAL_MAX_BYTES,
+      // 남은 호출 시간 안에서만 기다린다 — 큰 파일 하나가 한 번 호출의 시간 상한을 넘기지 않게 (CLI 는 시간 상한 없음)
+      timeoutMs: Math.min(
+        MATERIAL_REQUEST_TIMEOUT_MS,
+        Math.max(1000, Math.ceil((budget.deadline - Date.now()) / 1000) * 1000)
+      ),
+      signal: caps.signal,
+      // 파일 하나를 받는 동안에도 알림을 보낸다 (resetTimeoutOnProgress 클라이언트). 다음 파일의 done + 1 보다 작게 둬 값이 계속 늘게
+      onBytes: (n) =>
+        caps.onProgress?.(
+          budget.done + Math.min(n / MATERIAL_MAX_BYTES, 0.99),
+          `강의자료 받는 중 ${Math.round(n / 1024 ** 2)}MB`
+        ),
+    })
+  );
   budget.files++;
   try {
     budget.bytes += (await stat(part.path)).size;
@@ -242,7 +279,7 @@ async function syncCourse(
   const title = clean(course.courseTitle);
   const warn = (message: string) => out.warnings.push(redact(`[${title}] ${message}`, [session]));
   const errorMessage = (err: unknown) => {
-    if (err instanceof SessionExpiredError) throw err;
+    if (err instanceof SessionExpiredError || budget.caps.signal?.aborted) throw err;
     return err instanceof Error ? err.message : String(err);
   };
   if (!LMS_NUMERIC_ID.test(course.courseId)) throw new Error('과목 번호 형식이 올바르지 않습니다.');
@@ -262,7 +299,9 @@ async function syncCourse(
       modules.map(async (m): Promise<Remote[]> => {
         try {
           const urls =
-            m.type === 'resource' ? [await resourceFileUrl(m.cmid, session)] : await folderFileUrls(m.cmid, fetchHtml);
+            m.type === 'resource'
+              ? [await resourceFileUrl(m.cmid, session, budget.caps.signal)]
+              : await folderFileUrls(m.cmid, fetchHtml);
           return urls.map((url) => ({ ...m, url }));
         } catch (err) {
           failed.add(m.cmid);
@@ -277,6 +316,7 @@ async function syncCourse(
   let dirty = false;
   // 하나씩 받는다 — LMS 에 큰 요청을 겹쳐 보내지 않는다
   for (const file of remote) {
+    budget.caps.signal?.throwIfAborted();
     const key = fileKey(file.cmid, file.url);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -291,6 +331,10 @@ async function syncCourse(
       if (step.warning) warn(step.warning);
     } catch (err) {
       warn(`${attachmentName(file.url)} 을(를) 받지 못했습니다: ${errorMessage(err)}`);
+      // 남은 시간이 다 돼 끊긴 파일이면 다음 호출에서 다시 받아야 한다
+      if (overBudget(budget)) budget.capped = true;
+    } finally {
+      budget.caps.onProgress?.(++budget.done, `강의자료 확인 ${seen.size}개 · 받음 ${budget.files}개`);
     }
   }
   // LMS 에서 사라진 파일은 지우지 않고 알리기만 한다 (삭제는 CLI 확인 또는 delete_materials 의 사용자 승인)
@@ -310,30 +354,43 @@ async function syncCourse(
 }
 
 // 추적 중인 강좌(dotbugi-mcp courses, 기본: 비교과 제외)의 강의자료를 <저장 위치>/<학기>/<과목>/<N주차>/ 에 맞춘다. course 는 과목명 일부(대소문자 무시)
-export async function syncMaterials(session: string, course?: string): Promise<SyncResult> {
-  const fetchHtml = createFetchHtml(session);
-  const out: SyncResult = { root: storageRoot(), files: [], removed: [], warnings: [] };
-  const budget: Budget = { files: 0, bytes: 0, capped: false };
+export async function syncMaterials(session: string, course?: string, caps = cliCaps()): Promise<SyncResult> {
+  const fetchHtml = createFetchHtml(session, caps.signal);
+  const out: SyncResult = { root: storageRoot(), files: [], removed: [], warnings: [], more: false };
+  const budget: Budget = { files: 0, bytes: 0, capped: false, deadline: Date.now() + caps.maxMs, done: 0, caps };
   const filter = course?.toLowerCase();
   const courses = (await listCourses(fetchHtml)).filter(
     (c) => !filter || clean(c.courseTitle).toLowerCase().includes(filter)
   );
   if (courses.length === 0) out.warnings.push('조건에 맞는 과목이 없습니다.');
   // 과목은 차례로 — 동시 요청은 전역 limiter 가 3개로 묶는다
-  for (const c of courses) {
+  let unchecked = 0;
+  for (const [i, c] of courses.entries()) {
+    caps.signal?.throwIfAborted();
+    // 상한에 걸리면 남은 과목은 목록도 읽지 않는다 — 읽지 않은 과목은 removed 로 보고하지 않으니 안전하다
+    if (!caps.listAfterCap && (budget.capped || overBudget(budget))) {
+      budget.capped = true;
+      unchecked = courses.length - i;
+      break;
+    }
+    // 진행 메시지에는 과목명(LMS 데이터)을 넣지 않는다
+    caps.onProgress?.(++budget.done, `과목 ${i + 1}/${courses.length} 확인 중`);
     try {
       await syncCourse(c, out.root, session, fetchHtml, out, budget);
     } catch (err) {
-      if (err instanceof SessionExpiredError) throw err;
+      if (err instanceof SessionExpiredError || caps.signal?.aborted) throw err;
       out.warnings.push(
         redact(`[${clean(c.courseTitle)}] ${err instanceof Error ? err.message : String(err)}`, [session])
       );
     }
   }
-  if (budget.capped)
+  if (budget.capped) {
+    out.more = true;
+    const time = Number.isFinite(caps.maxMs) ? ` 또는 ${caps.maxMs / 60_000}분` : '';
     out.warnings.push(
-      `한 번에 받는 상한(${MATERIAL_MAX_FILES_PER_RUN}개 또는 ${MATERIAL_MAX_BYTES_PER_RUN / 1024 ** 3}GB)에 걸려 나머지는 받지 않았습니다. 다시 실행하면 이어서 받습니다.`
+      `한 번에 받는 상한(${caps.maxFiles}개 또는 ${sizeLabel(caps.maxBytes)}${time})에 걸려 남은 자료는 받지 않았습니다${unchecked ? ` (확인하지 못한 과목 ${unchecked}개)` : ''}. 다시 실행하면 이어서 받습니다.`
     );
+  }
   return out;
 }
 
