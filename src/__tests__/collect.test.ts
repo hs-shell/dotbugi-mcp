@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GRADING_VIEW_STATUS } from '../constants.js';
 import { SessionExpiredError } from '../lms.js';
 import { collectTasks, toTaskItems } from '../tasks/collect.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, PAGES } from './fixtures/lms-pages.js';
@@ -169,6 +170,22 @@ describe('collectTasks', () => {
     // lms-parser 0.1.1 은 외부 링크 행을 url '' 로 남기고, 0.1.2 부터는 행을 아예 뺀다 — 어느 쪽이든 외부 주소는 쓰지 않는다
     const external = items.find((i) => i.title === '외부 과제');
     if (external) expect(external.url).toBe('');
+  });
+
+  it('교수자 화면(제출 칸이 제출 인원 숫자)의 과제는 제출로 믿지 않고 미완료·알 수 없음으로 둔다', async () => {
+    // 실제 LMS 교수자 화면 형태: [주][과제][종료 일시][제출 인원][성적]
+    const row = (id: number, title: string) =>
+      `<tr><td class="cell c0">1</td><td class="cell c1"><a href="/mod/assign/view.php?id=${id}">${title}</a></td>
+      <td class="cell c2">2026-10-31 00:00</td><td class="cell c3">0</td><td class="cell c4">-</td></tr>`;
+    withPages({
+      [`${L}/mod/assign/index.php?id=200`]: `<table class="generaltable"><tbody>${row(31, '교수자 화면 과제')}</tbody></table>`,
+    });
+    const { items } = await collectTasks(SESSION);
+    expect(items).toContainEqual(
+      expect.objectContaining({ title: '교수자 화면 과제', done: false, status: GRADING_VIEW_STATUS })
+    );
+    // 학생 화면 과목(100)은 그대로
+    expect(items).toContainEqual(expect.objectContaining({ title: '과제2', done: true, status: '제출' }));
   });
 
   it('VOD 시간 형식을 못 읽으면 진도 NaN% 대신 진도를 뺀다', () => {

@@ -75,4 +75,28 @@ describe('parseAssignPage', () => {
       expect(() => parseAssignPage(doc(html))).toThrow('과제 화면을 읽지 못했습니다');
     }
   );
+
+  it('교수자(채점) 화면: 내 제출 상황 대신 채점 요약 — status 는 비우고 마감은 읽고 gradingView', () => {
+    const page = parseAssignPage(
+      doc(`<div role="main"><h2>과제</h2><div id="intro"><p>지시사항</p></div>
+        <div class="box boxaligncenter gradingsummarytable"><table class="generaltable"><tbody>
+        <tr><td class="cell c0">대상자 수</td><td class="cell c1 lastcol">0</td></tr>
+        <tr><td class="cell c0">종료 일시</td><td class="cell c1 lastcol">2026-10-31 00:00</td></tr>
+        </tbody></table></div></div>`)
+    );
+    expect(page.status).toEqual([]);
+    expect(page.gradingView).toBe(true);
+    expect(page.deadline).toBe('2026-10-31T00:00:00+09:00');
+  });
+
+  it('학생 화면(제출 안 함)은 gradingView 가 아니다', () => {
+    const page = parseAssignPage(
+      doc(`<div role="main"><h2>과제</h2><div class="submissionstatustable"><table><tbody>
+        <tr><td class="cell c0">제출 여부</td><td class="cell c1">제출 안 함</td></tr>
+        <tr><td class="cell c0">종료 일시</td><td class="cell c1">2026-10-31 00:00</td></tr>
+        </tbody></table></div></div>`)
+    );
+    expect(page.gradingView).toBe(false);
+    expect(page.status[0]).toEqual({ label: '제출 여부', value: '제출 안 함' });
+  });
 });
