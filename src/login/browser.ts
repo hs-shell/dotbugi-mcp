@@ -72,11 +72,13 @@ export async function loginWithBrowser(): Promise<string> {
   const cleanup = () => (cleaning ??= closeBrowser(browser, exited, cdp).then(() => removeProfile(profileDir)));
   const onSignal = (signal: keyof typeof SIGNAL_EXIT_CODES) =>
     void cleanup().finally(() => process.exit(SIGNAL_EXIT_CODES[signal]));
-  process.once('SIGINT', onSignal).once('SIGTERM', onSignal);
+  // 터미널 창을 닫을 때(SIGHUP)도 세션 쿠키가 든 임시 프로필을 지운다
+  const signals = Object.keys(SIGNAL_EXIT_CODES) as (keyof typeof SIGNAL_EXIT_CODES)[];
+  for (const s of signals) process.once(s, onSignal);
   try {
     return await waitForSession(cdp, () => isClosed(browser));
   } finally {
-    process.off('SIGINT', onSignal).off('SIGTERM', onSignal);
+    for (const s of signals) process.off(s, onSignal);
     await cleanup();
   }
 }
