@@ -60,10 +60,26 @@ describe('confirmDestructive — 조작 안내·기본값·취소 이유', () =>
     expect(paramsOf(elicit).message).toContain('엔터: 승인');
   });
 
+  it.each<ElicitResult>([{ action: 'accept' }, { action: 'accept', content: {} }])(
+    '기본값이 켜진 확인은 %o 처럼 confirm 필드가 없어도 기본값대로 승인한다',
+    async (result) => {
+      expect(await confirmDestructive(withElicit(result).asker, { ...req(), kind: 'relocate' })).toEqual({ ok: true });
+    }
+  );
+
+  it('기본값이 켜진 확인도 명시적 confirm=false 는 취소한다', async () => {
+    const out = await confirmDestructive(withElicit({ action: 'accept', content: { confirm: false } }).asker, {
+      ...req(),
+      kind: 'relocate',
+    });
+    expect(out).toEqual({ ok: false, text: expect.stringContaining('체크를 해제하고 제출했습니다') });
+  });
+
   it.each<[ElicitResult, string]>([
     [{ action: 'decline' }, '거절을 눌렀습니다'],
     [{ action: 'cancel' }, '확인 창이 닫혔습니다'],
     [{ action: 'accept', content: { confirm: false } }, '스페이스로 체크한 뒤 엔터'],
+    [{ action: 'accept' }, '체크하지 않고 제출했습니다'],
   ])('%o 는 취소 이유를 구분해 알린다', async (result, reason) => {
     const out = await confirmDestructive(withElicit(result).asker, req());
     expect(out).toEqual({ ok: false, text: expect.stringContaining(reason) });

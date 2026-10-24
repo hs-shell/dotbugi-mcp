@@ -144,8 +144,11 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
         if (err instanceof SdkError && err.code === SdkErrorCode.MethodNotSupportedByProtocolVersion) return null;
         throw err;
       });
-    // 사용자가 직접 누른 accept + confirm=true 만 승인. decline·cancel·체크 안 함은 모두 취소 — 이유는 구분해 알린다
-    if (result?.action === 'accept' && result.content?.confirm === true) return { ok: true };
+    // 사용자가 직접 누른 accept + confirm=true 만 승인. decline·cancel·체크 안 함은 모두 취소 — 이유는 구분해 알린다.
+    // 엔터만 누르면 기본값 필드를 content 에 싣지 않는 클라이언트가 있을 수 있어, 필드가 없으면 창에 띄운 기본값(preset)으로 본다
+    // (스펙상 default 는 클라이언트 초기값). 명시적 false 는 취소이고, 삭제(preset=false)는 필드가 없으면 취소다
+    const confirm = result?.content?.confirm;
+    if (result?.action === 'accept' && (confirm === undefined ? w.preset : confirm) === true) return { ok: true };
     if (result)
       return { ok: false, text: `사용자가 승인하지 않아 ${w.none} — ${refusalReason(result.action, w.preset)}` };
   }
