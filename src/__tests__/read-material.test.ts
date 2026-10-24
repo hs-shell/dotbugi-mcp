@@ -172,12 +172,12 @@ describe('readMaterial — 문서 안 그림', () => {
   it('images: true 면 글과 함께 그림을 슬라이드 순서·꼬리표와 함께, 개수 상한을 넘으면 imageOffset 으로 이어 읽는다', async () => {
     await writeFile(join(root, week, '그림.pptx'), slides(12));
     const r = await read(`${week}/그림.pptx`, { images: true });
-    expect(imagesOf(r)).toEqual(['00', '01', '02', '03', '04', '05', '06', '07', '08', '09']);
+    expect(imagesOf(r)).toEqual(['00', '01', '02', '03', '04', '05', '06', '07']);
     expect(textOf(r)).toContain('[슬라이드 1 · 그림 1/12]');
     expect(textOf(r)).toContain('## 슬라이드 1');
-    expect(textOf(r)).toContain('imageOffset: 10');
-    const next = await read(`${week}/그림.pptx`, { images: true, imageOffset: 10 });
-    expect(imagesOf(next)).toEqual(['10', '11']);
+    expect(textOf(r)).toContain('imageOffset: 8');
+    const next = await read(`${week}/그림.pptx`, { images: true, imageOffset: 8 });
+    expect(imagesOf(next)).toEqual(['08', '09', '10', '11']);
     expect(textOf(next)).not.toContain('## 슬라이드');
     expect(textOf(next)).not.toContain('imageOffset:');
   });
@@ -203,6 +203,16 @@ describe('readMaterial — 문서 안 그림', () => {
     expect(text).toContain('너무 커서');
   });
 
+  it('꺼내지 못하는 그림 항목(깨진 zip 항목)은 도구를 실패시키지 않고 건너뛴다', async () => {
+    const buf = pptx([['', ['bad.png', 'ok.png']]], { 'bad.png': png('xx'), 'ok.png': png('ok') });
+    // 첫 등장(로컬 헤더 뒤 이름) 앞 30바이트가 로컬 헤더 — 서명을 깨뜨린다
+    buf.writeUInt32LE(0, buf.indexOf('ppt/media/bad.png') - 30);
+    await writeFile(join(root, week, '깨짐.pptx'), buf);
+    const r = await read(`${week}/깨짐.pptx`, { images: true });
+    expect(imagesOf(r)).toEqual(['ok']);
+    expect(textOf(r)).toContain('그림을 꺼내지 못해 건너뜀');
+  });
+
   it('총량 상한을 넘기 전에 멈추고 이어 읽게 한다', async () => {
     const big = (t: string) => Buffer.concat([png(''), Buffer.alloc(3 * 1024 * 1024), Buffer.from(t)]);
     await writeFile(
@@ -215,7 +225,7 @@ describe('readMaterial — 문서 안 그림', () => {
       })
     );
     const r = await read(`${week}/큰.pptx`, { images: true });
-    expect(imagesOf(r)).toEqual(['aa', 'bb', 'cc']);
-    expect(textOf(r)).toContain('imageOffset: 3');
+    expect(imagesOf(r)).toEqual(['aa']);
+    expect(textOf(r)).toContain('imageOffset: 1');
   });
 });

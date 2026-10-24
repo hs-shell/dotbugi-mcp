@@ -238,7 +238,17 @@ function docImages(head: string, doc: DocContent, start = 0): CallToolResult {
   for (; i < n && i - start < DOC_IMAGES_MAX; i++) {
     const { label, entry } = doc.images[i];
     const tag = `[${label} · 그림 ${i + 1}/${n}]`;
-    const data = doc.readEntry(entry);
+    let data: Buffer | null;
+    try {
+      data = doc.readEntry(entry);
+    } catch (err) {
+      // 항목이 깨졌거나 압축 해제 예산을 넘음 — 도구 전체를 실패시키지 않고 이 그림만 건너뛴다
+      parts.push({
+        type: 'text',
+        text: `${tag} 그림을 꺼내지 못해 건너뜀: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      continue;
+    }
     const mime = data && imageMime(data);
     if (!data || !mime) {
       parts.push({
