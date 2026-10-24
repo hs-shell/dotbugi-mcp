@@ -108,7 +108,7 @@ export async function collectTasks(
   cachedQuizzes?: CachedQuiz[],
   config: CoursesConfig = readCoursesConfig()
 ): Promise<CollectResult> {
-  // 파서는 개별 요청 실패를 빈 값으로 삼킨다(퀴즈 상세 실패도 '미응시'가 된다).
+  // 파서는 개별 요청 실패를 빈 값으로 삼킨다(퀴즈 상세 실패는 이전 제출 상태, 없으면 '미응시'가 된다).
   // 그래서 모든 요청이 지나는 여기서 실패 수와 세션 만료를 직접 센다
   let expired = false;
   let failures = 0;
