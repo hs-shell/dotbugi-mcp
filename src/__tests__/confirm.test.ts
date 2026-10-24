@@ -1,4 +1,4 @@
-import { SdkError, SdkErrorCode, type ElicitResult } from '@modelcontextprotocol/server';
+import type { ElicitResult } from '@modelcontextprotocol/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { confirmDestructive, type Asker } from '../tools/confirm.js';
 
@@ -122,14 +122,7 @@ describe('confirmDestructive — 확인 창 요청 실패', () => {
     },
   });
 
-  it('2026-07-28 세대라 SDK 가 보내기 전에 막으면 토큰 방식으로 넘어간다', async () => {
-    const asker = failing(new SdkError(SdkErrorCode.MethodNotSupportedByProtocolVersion, 'modern era'));
-    const out = (await confirmDestructive(asker, req())) as { ok: false; text: string };
-    expect(out.ok).toBe(false);
-    expect(await confirmDestructive(asker, req(['/a', '/b'], tokenOf(out.text)))).toEqual({ ok: true });
-  });
-
-  it('보낸 뒤의 실패(취소·시간 초과)는 토큰 없이 그대로 던진다', async () => {
+  it('확인 창 요청이 실패하면(취소·시간 초과 등) 토큰 없이 그대로 던진다', async () => {
     await expect(confirmDestructive(failing(new Error('cancelled')), req())).rejects.toThrow('cancelled');
   });
 });

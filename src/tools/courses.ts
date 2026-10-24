@@ -1,5 +1,5 @@
 import type { CourseBase } from '@dotbugi/lms-parser';
-import { SdkError, SdkErrorCode, type McpServer } from '@modelcontextprotocol/server';
+import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { COURSE_FILTER_MAX_LENGTH, LMS_DATA_NOTICE } from '../constants.js';
 import { redact } from '../redact.js';
@@ -75,29 +75,22 @@ export async function chooseCourses(asker: Asker, courses: CourseEntry[]): Promi
   if (!asker.caps?.elicitation?.form) return null;
   // 폼 필드 키가 되는 courseId 는 LMS 링크에서 온 값 — Moodle id 형식(숫자)만 넣어 __proto__ 같은 키가 클라이언트로 가지 않게
   const shown = courses.filter((c) => /^\d{1,20}$/.test(c.courseId));
-  const result = await asker
-    .elicit(
-      {
-        mode: 'form',
-        message: '추적 과목 선택 — 체크한 과목만 할 일·강의자료 대상\n\n스페이스: 켜기·끄기 · 엔터: 저장',
-        requestedSchema: {
-          type: 'object',
-          properties: Object.fromEntries(
-            shown.map((c) => [
-              c.courseId,
-              { type: 'boolean', title: `${c.title.slice(0, FORM_TITLE_MAX)} · ${c.kind}`, default: c.tracked },
-            ])
-          ),
-        },
+  const result = await asker.elicit(
+    {
+      mode: 'form',
+      message: '추적 과목 선택 — 체크한 과목만 할 일·강의자료 대상\n\n스페이스: 켜기·끄기 · 엔터: 저장',
+      requestedSchema: {
+        type: 'object',
+        properties: Object.fromEntries(
+          shown.map((c) => [
+            c.courseId,
+            { type: 'boolean', title: `${c.title.slice(0, FORM_TITLE_MAX)} · ${c.kind}`, default: c.tracked },
+          ])
+        ),
       },
-      { timeout: ELICIT_TIMEOUT_MS }
-    )
-    .catch((err: unknown) => {
-      // 2026-07-28 세대 요청은 SDK 가 서버→클라이언트 요청을 막는다 — 창 없음으로 보고 폴백
-      if (err instanceof SdkError && err.code === SdkErrorCode.MethodNotSupportedByProtocolVersion) return null;
-      throw err;
-    });
-  if (!result) return null;
+    },
+    { timeout: ELICIT_TIMEOUT_MS }
+  );
   if (result.action !== 'accept')
     return {
       ok: false,
