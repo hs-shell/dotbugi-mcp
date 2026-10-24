@@ -48,5 +48,10 @@ export const listTasksOutput = z.object({
   fetchedAt: z.string().describe('LMS 에서 가져온 시각 (ISO)'),
   tasks: z.array(task).describe('마감 임박 순'),
   warnings: z.array(z.string()).describe('일부 과목·항목을 가져오지 못한 경우의 안내 (없으면 빈 배열)'),
+  lastPullAt: z
+    .string()
+    .nullable()
+    .describe('마지막으로 pull_materials 를 과목 지정 없이 끝까지 마친 시각 (ISO, 기록 없으면 null)'),
+  pullStale: z.boolean().describe('마지막 pull 이 1시간 넘게 지났거나 기록이 없음 — true 면 pull 부터 해야 한다'),
 });
 export type ListTasksOutput = z.infer<typeof listTasksOutput>;

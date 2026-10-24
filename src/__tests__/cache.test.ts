@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TASKS_CACHE_TTL_MS } from '../constants.js';
 import type { CollectResult } from '../tasks/collect.js';
 import type { CoursesConfig } from '../tasks/courses.js';
 import type { TaskItem } from '../tasks/schema.js';
@@ -42,11 +43,18 @@ describe('getTaskItems', () => {
     expect(collectTasks).toHaveBeenLastCalledWith('B', undefined, config);
   });
 
-  it('두 번째 조회에는 직전 성공 결과의 퀴즈 제출 상태를 cachedQuizzes 로 넘긴다', async () => {
-    await getTaskItems('A', false);
+  it('캐시가 만료돼 다시 가져올 때는 직전 성공 결과의 퀴즈 제출 상태를 cachedQuizzes 로 넘긴다', async () => {
+    await getTaskItems('A', false, 0);
     expect(collectTasks).toHaveBeenLastCalledWith('A', undefined, config);
-    await getTaskItems('A', true);
+    await getTaskItems('A', false, TASKS_CACHE_TTL_MS);
     expect(collectTasks).toHaveBeenLastCalledWith('A', [{ url: quiz.url, isSubmit: true }], config);
+  });
+
+  it('명시적 refresh 면 퀴즈 제출 상태 캐시도 쓰지 않고 다시 조회한다', async () => {
+    await getTaskItems('A', false);
+    await getTaskItems('A', true);
+    expect(collectTasks).toHaveBeenCalledTimes(2);
+    expect(collectTasks).toHaveBeenLastCalledWith('A', undefined, config);
   });
 
   it('실패하면 캐시에서 빼고 다음 호출이 다시 가져온다', async () => {

@@ -10,6 +10,7 @@ import { cliCaps, resolveRemoved, syncMaterials, withSyncLock, type SyncResult }
 import { createServer } from '../server.js';
 import { previousSemester, semesterOf } from '../storage.js';
 import { transcribeVod } from '../transcribe/pipeline.js';
+import { pullState } from '../tasks/last-pull.js';
 
 const SESSION = 'abcdefghij0123456789';
 const L = 'https://learn.hansung.ac.kr';
@@ -386,6 +387,11 @@ describe('pull_materials 도구', () => {
     expect(progress.every((p) => p.progressToken === 7 && typeof p.message === 'string')).toBe(true);
     // 진행 메시지에 과목명(LMS 데이터)을 넣지 않는다
     expect(JSON.stringify(progress)).not.toContain('자료구조');
+    // 과목 하나만 받으면 마지막 pull 로 기록하지 않고, 전체를 끝까지 받았을 때만 기록한다
+    expect(pullState().lastPullAt).toBeNull();
+    const all = await send('tools/call', { name: 'pull_materials', arguments: {} });
+    expect((all.structuredContent as Out).more).toBe(false);
+    expect(pullState()).toMatchObject({ pullStale: false });
   });
 });
 

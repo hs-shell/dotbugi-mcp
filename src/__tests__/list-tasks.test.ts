@@ -1,8 +1,10 @@
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LMS_DATA_NOTICE, TASKS_CACHE_TTL_MS } from '../constants.js';
+import { rm } from 'node:fs/promises';
+import { LMS_DATA_NOTICE, PULL_STALE_MS, TASKS_CACHE_TTL_MS } from '../constants.js';
 import { createServer } from '../server.js';
-import { toText } from '../tools/list-tasks.js';
+import { lastPullFile, recordPull } from '../tasks/last-pull.js';
+import { PULL_FIRST, toText } from '../tools/list-tasks.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, NOW } from './fixtures/lms-pages.js';
 
 // 추적 설정(~/.config)을 실제 홈에서 읽지 않게 빈 테스트 홈을 쓴다
@@ -40,8 +42,10 @@ beforeAll(async () => {
 
 const call = (args: Record<string, unknown> = {}, name = 'get_status') => send('tools/call', { name, arguments: args });
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+  // 기본은 방금 pull 한 상태 — pull 안내가 다른 기대값에 섞이지 않게
+  await recordPull(NOW.getTime());
   getSession.mockResolvedValue({ session: SESSION, savedAt: '', method: 'extension' });
   fetchMock.mockImplementation(fakeLmsFetch);
 });
@@ -100,6 +104,23 @@ describe('get_status', () => {
     const lines = (result.content as { text: string }[])[0].text.split('\n');
     expect(lines[1]).toBe('※ 일부 과목/항목을 가져오지 못했습니다 (1건).');
     expect(lines.some((l) => l.includes('과제\\|1 |'))).toBe(true);
+  });
+
+  it('마지막 pull 이 없거나 1시간 지나면 pullStale 과 pull 먼저 안내를 붙인다', async () => {
+    const now = NOW.getTime();
+    let result = await call({ refresh: true });
+    expect(result.structuredContent).toMatchObject({ lastPullAt: new Date(now).toISOString(), pullStale: false });
+
+    await rm(lastPullFile(), { force: true });
+    result = await call();
+    expect(result.structuredContent).toMatchObject({ lastPullAt: null, pullStale: true });
+    expect((result.content as { text: string }[])[0].text.split('\n')[1]).toBe(
+      `※ 마지막 pull: 기록 없음 — ${PULL_FIRST}`
+    );
+
+    await recordPull(now - PULL_STALE_MS);
+    result = await call();
+    expect(result.structuredContent).toMatchObject({ pullStale: true });
   });
 
   it('LMS 원문의 \\| 도 표 칸을 쪼개지 않는다', () => {

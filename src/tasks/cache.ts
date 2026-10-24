@@ -30,7 +30,8 @@ export async function getTaskItems(
     entry.tracking !== tracking ||
     now - entry.fetchedAt >= TASKS_CACHE_TTL_MS
   ) {
-    const cachedQuizzes = known?.session === session ? known.quizzes : undefined;
+    // 명시적 refresh 면 지난 퀴즈 제출 상태도 다시 조회한다 (캐시 재사용 없음)
+    const cachedQuizzes = !refresh && known?.session === session ? known.quizzes : undefined;
     const current: Entry = { session, tracking, fetchedAt: now, result: collectTasks(session, cachedQuizzes, config) };
     entry = current;
     const evict = () => {

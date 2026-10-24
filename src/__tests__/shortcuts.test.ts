@@ -73,9 +73,30 @@ describe('바로가기 프롬프트', () => {
     expect(t).toContain('course: "크롬", incompleteOnly: false, includePast: true');
     expect(t).toContain('맨 앞에 따로');
     expect(text(await get('status', { course: 'past' }))).toContain(
-      '`get_status` 를 includePast: true 로 불러 과목별로'
+      '`get_status` 를 includePast: true, refresh: true 로 불러'
     );
     expect(text(await get('status', { course: '크롬' }))).not.toContain('맨 앞에 따로');
+  });
+
+  it('사용자가 직접 실행한 명령은 get_status 를 refresh: true 로 부른다', async () => {
+    for (const [name, args] of [
+      ['status', {}],
+      ['status', { course: '크롬' }],
+      ['pull', {}],
+      ['work', {}],
+      ['work', { work: '보고서' }],
+    ] as const) {
+      const calls = text(await get(name, args)).match(/`get_status` 를 [^불]*불러/g) ?? [];
+      expect(calls.length, name).toBeGreaterThan(0);
+      for (const c of calls) expect(c, name).toContain('refresh: true');
+    }
+  });
+
+  it('status 는 pullStale 이면 pull 흐름을 먼저 하고 get_status 는 다시 부르지 않는다', async () => {
+    const t = text(await get('status', {}));
+    expect(t).toContain('pullStale 이 true 면');
+    expect(t).toContain('`pull_materials`');
+    expect(t).toContain('get_status 는 다시 부르지 않는다');
   });
 
   it('work 는 지시사항을 읽고 바로 함께 작업하며 제출은 하지 않는다', async () => {
