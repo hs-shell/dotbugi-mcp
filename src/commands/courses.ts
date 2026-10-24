@@ -1,11 +1,17 @@
 import { emitKeypressEvents, type Key } from 'node:readline';
 import type { CourseBase } from '@dotbugi/lms-parser';
-import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES } from '../constants.js';
-import { createFetchHtml } from '../lms-html.js';
+import { SIGNAL_EXIT_CODES } from '../constants.js';
 import { log } from '../log.js';
 import { getSession } from '../session.js';
-import { listAllCourses } from '../tasks/collect.js';
-import { isTracked, readCoursesConfig, writeCoursesConfig, type CoursesConfig } from '../tasks/courses.js';
+import { listConfigurableCourses } from '../tasks/collect.js';
+import {
+  isTracked,
+  matchCourses,
+  readCoursesConfig,
+  saveCourseTracking,
+  writeCoursesConfig,
+  type CoursesConfig,
+} from '../tasks/courses.js';
 import { clean } from '../tasks/text.js';
 
 export interface CoursesOptions {
@@ -20,12 +26,9 @@ const label = (c: CourseBase) => `${clean(c.courseTitle)}${c.isCommunity ? ' (�
 export const formatList = (all: CourseBase[], config: CoursesConfig) =>
   all.map((c) => `${isTracked(c, config) ? '켜짐' : '꺼짐'}\t${c.courseId}\t${label(c)}`).join('\n');
 
-// courseId 정확히 일치 또는 과목명 일부(대소문자 무시). 0개·여러 개면 오류
+// matchCourses 결과가 0개·여러 개면 오류
 export function findCourse(all: CourseBase[], query: string): CourseBase {
-  const byId = all.find((c) => c.courseId === query);
-  if (byId) return byId;
-  const q = query.toLowerCase();
-  const matches = all.filter((c) => clean(c.courseTitle).toLowerCase().includes(q));
+  const matches = matchCourses(all, query);
   if (matches.length === 1) return matches[0];
   if (matches.length === 0) throw new Error(`일치하는 강좌가 없습니다: ${clean(query)}`);
   throw new Error(
@@ -143,15 +146,14 @@ export async function courses(opts: CoursesOptions): Promise<void> {
   if (query !== undefined && !query.trim()) throw new Error('--on/--off 에 과목명 일부나 courseId 를 적어 주세요.');
   const interactive = query === undefined && !opts.list && !!process.stdin.isTTY && !!process.stderr.isTTY;
   const { session } = await getSession();
-  // 설정 파일 키는 숫자 courseId 만 받는다
-  const all = (await listAllCourses(createFetchHtml(session))).filter((c) => LMS_NUMERIC_ID.test(c.courseId));
+  const all = await listConfigurableCourses(session);
   if (all.length === 0) return log('LMS 메인에 강좌가 없습니다.');
   // 저장하는 경로에서는 깨진 설정 파일을 덮어쓰지 않는다
   const config = readCoursesConfig(undefined, query !== undefined || interactive);
 
   if (query !== undefined) {
     const course = findCourse(all, query.trim());
-    await writeCoursesConfig({ ...config, courses: { ...config.courses, [course.courseId]: opts.on !== undefined } });
+    await saveCourseTracking(course.courseId, opts.on !== undefined);
     return log(`${opts.on !== undefined ? '켰습니다' : '껐습니다'}: ${label(course)}`);
   }
   if (!interactive) {

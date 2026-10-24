@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerSummarizeWeek } from './prompts/summarize-week.js';
+import { registerListCourses, registerSetCourseTracking } from './tools/courses.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerPlayVods } from './tools/play-vods.js';
@@ -17,6 +18,8 @@ export function createServer(): McpServer {
   const server = new McpServer({ name: 'dotbugi-mcp', version });
   registerLogin(server);
   registerListTasks(server);
+  registerListCourses(server);
+  registerSetCourseTracking(server);
   registerVodStatus(server);
   registerPlayVods(server);
   registerGetAssignment(server);
