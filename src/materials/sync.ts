@@ -81,7 +81,7 @@ const sizeLabel = (bytes: number) => (bytes >= 1024 ** 3 ? `${bytes / 1024 ** 3}
 // MCP 도구와 CLI 가 같은 manifest 를 번갈아 덮지 않게 한 번에 하나만 돌린다.
 // 잠금은 저장 위치가 아니라 캐시 폴더에 둔다 — set_storage_dir 가 저장 위치를 옮기는 동안에도 모두 같은 잠금을 보게
 const SYNC_BUSY =
-  '다른 강의자료 동기화(sync_materials 또는 dotbugi-mcp sync)가 실행 중입니다. 끝난 뒤 다시 실행하세요.';
+  '다른 강의자료 동기화(pull_materials 또는 dotbugi-mcp sync)가 실행 중입니다. 끝난 뒤 다시 실행하세요.';
 // wait 를 주면 잠금이 풀리기를 그만큼 기다리고, 끝내 잡지 못하면 그 안내로 실패한다 — 동기화와 겹친 짧은 작업(과제 첨부 등)이 바로 실패하지 않게
 export async function withSyncLock<T>(task: () => Promise<T>, wait?: { ms: number; busy: string }): Promise<T> {
   const file = join(homedir(), '.cache', 'dotbugi-mcp', MATERIALS_LOCK_NAME);

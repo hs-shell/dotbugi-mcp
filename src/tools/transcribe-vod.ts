@@ -239,7 +239,7 @@ export async function resolveTargets(
     );
   if (!input.all) {
     const confirmed = await confirmDestructive(asker, {
-      action: 'transcribe_vod',
+      action: 'transcribe_lecture',
       kind: 'transcribe',
       message: [`동영상 강의 ${picked.length}개를 차례로 STT 변환합니다 (강의당 수 분~수십 분).`, ...notes].join('\n'),
       targets: picked.map((t) => `${t.course} · ${t.week} · ${t.title}`),
@@ -253,7 +253,7 @@ export async function resolveTargets(
 
 export function registerTranscribeVod(server: McpServer): void {
   server.registerTool(
-    'transcribe_vod',
+    'transcribe_lecture',
     {
       title: '동영상 강의 STT 변환 시작',
       description:
@@ -365,7 +365,7 @@ export function registerTranscribeVod(server: McpServer): void {
     {
       title: '동영상 강의 STT 중지',
       description:
-        'transcribe_vod 로 실행 중인 STT 변환을 멈추고 남은 대기열도 취소한다. 임시 파일은 지우고, 덜 된 결과는 남기지 않는다.',
+        'transcribe_lecture 로 실행 중인 STT 변환을 멈추고 남은 대기열도 취소한다. 임시 파일은 지우고, 덜 된 결과는 남기지 않는다.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },

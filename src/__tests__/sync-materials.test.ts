@@ -304,7 +304,7 @@ describe('syncMaterials', () => {
   });
 });
 
-describe('sync_materials 도구', () => {
+describe('pull_materials 도구', () => {
   it('로컬 파일을 만드는 비파괴 도구로 등록되고, 결과에 세션·내부 키를 내보내지 않는다', async () => {
     getSession.mockResolvedValue({ session: SESSION, savedAt: '', method: 'extension' });
     const [client, server] = InMemoryTransport.createLinkedPair();
@@ -325,13 +325,13 @@ describe('sync_materials 도구', () => {
       clientInfo: { name: 't', version: '0' },
     });
     const { tools } = (await send('tools/list')) as { tools: { name: string; annotations: unknown }[] };
-    expect(tools.find((t) => t.name === 'sync_materials')?.annotations).toMatchObject({
+    expect(tools.find((t) => t.name === 'pull_materials')?.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: false,
     });
     await sync();
     lms.folder = false;
-    const result = await send('tools/call', { name: 'sync_materials', arguments: { course: '자료구조' } });
+    const result = await send('tools/call', { name: 'pull_materials', arguments: { course: '자료구조' } });
     const out = result.structuredContent as { files: unknown[]; removed: Record<string, unknown>[] };
     expect(out.files).toHaveLength(2);
     expect(out.removed[0]).toEqual({ course: '자료구조', path: course('3주차', 'a.txt'), locallyModified: false });
@@ -366,7 +366,7 @@ describe('sync_materials 도구', () => {
       clientInfo: { name: 't', version: '0' },
     });
     type Out = { files: { status: string }[]; removed: unknown[]; more: boolean };
-    const first = await send('tools/call', { name: 'sync_materials', arguments: { course: '자료구조' } });
+    const first = await send('tools/call', { name: 'pull_materials', arguments: { course: '자료구조' } });
     const a = first.structuredContent as Out;
     expect(a.files.filter((f) => f.status === 'added')).toHaveLength(2);
     expect(a).toMatchObject({ more: true, removed: [] });
@@ -374,7 +374,7 @@ describe('sync_materials 도구', () => {
     expect(progress).toEqual([]);
 
     const second = await send('tools/call', {
-      name: 'sync_materials',
+      name: 'pull_materials',
       arguments: { course: '자료구조' },
       _meta: { progressToken: 7 },
     });
@@ -751,7 +751,7 @@ describe('delete_materials 도구', () => {
     expect(text).toContain('한 번에 받는 상한');
   });
 
-  it('sync_materials 호출이 취소되면 받는 중인 요청을 끊고 sync 잠금을 푼다', async () => {
+  it('pull_materials 호출이 취소되면 받는 중인 요청을 끊고 sync 잠금을 푼다', async () => {
     let release!: () => void;
     const started = new Promise<void>((r) => (release = r));
     fetchMock.mockImplementation(async (input, init) => {
@@ -760,7 +760,7 @@ describe('delete_materials 도구', () => {
       return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
     });
     const { send, client } = await connect();
-    void send('tools/call', { name: 'sync_materials', arguments: {} });
+    void send('tools/call', { name: 'pull_materials', arguments: {} });
     await started;
     await client.cancel();
     await vi.waitFor(() => expect(withSyncLock(async () => 1)).resolves.toBe(1));

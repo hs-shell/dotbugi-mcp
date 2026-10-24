@@ -55,7 +55,7 @@ export async function resolveMaterial(root: string, input: string): Promise<{ ab
   if (isAbsolute(rel) || rel.split(sep)[0] === '..') throw new Error('저장 위치 밖의 경로는 읽지 않습니다.');
   const rootSt = await stat(base).catch(() => null);
   if (!rootSt?.isDirectory())
-    throw new Error(`저장 위치(${base})가 아직 없습니다. 먼저 자료를 받으세요 (sync_materials 등).`);
+    throw new Error(`저장 위치(${base})가 아직 없습니다. 먼저 자료를 받으세요 (pull_materials 등).`);
   let st = rootSt;
   let current = base;
   const parts = rel ? rel.split(sep) : [];

@@ -30,7 +30,7 @@ function toText(r: SyncMaterialsOutput): string {
 
 export function registerSyncMaterials(server: McpServer): void {
   server.registerTool(
-    'sync_materials',
+    'pull_materials',
     {
       title: 'LMS 강의자료 동기화',
       description:

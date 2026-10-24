@@ -41,7 +41,7 @@ type Item = { cmid: number; language: AsrLanguage };
 type Outcome = { status: 'done' | 'skipped' | 'error' | 'stopped'; title: string | null; error?: Error };
 
 // 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음, 잠금은 도구가 넘겨준다)이 같이 쓴다. 진행은 상태 파일에 남긴다.
-// 하나를 끝내면 대기열(transcribe_vod 가 붙인 강의)을 비울 때까지 이어서 받아쓴다
+// 하나를 끝내면 대기열(transcribe_lecture 가 붙인 강의)을 비울 때까지 이어서 받아쓴다
 export async function transcribe(arg: string, worker = false, languageArg?: string): Promise<void> {
   if (!LMS_NUMERIC_ID.test(arg)) throw new Error('강의 번호(cmid)는 숫자여야 합니다.');
   const cmid = Number(arg);

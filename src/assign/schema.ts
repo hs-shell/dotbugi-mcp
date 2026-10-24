@@ -5,7 +5,7 @@ export const getAssignmentInput = z.object({
     .number()
     .int()
     .positive()
-    .describe('과제 id — 과제 주소 mod/assign/view.php?id=<cmid> 의 id (list_tasks 결과 url 에서 확인)'),
+    .describe('과제 id — 과제 주소 mod/assign/view.php?id=<cmid> 의 id (get_status 결과 url 에서 확인)'),
 });
 
 export const getAssignmentOutput = z.object({

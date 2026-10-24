@@ -10,7 +10,7 @@ const USAGE = `사용법:
   dotbugi-mcp sync             강의자료를 <저장 위치>/<YYYY-N학기>/<과목>/<N주차>/ 에 받기 (기본 ~/Downloads/dotbugi-mcp) (LMS 에서 사라진 파일은 하나씩 삭제 여부 확인)
   dotbugi-mcp transcribe <cmid> [--language auto|Korean|English|Japanese|…]
                                동영상 강의 하나를 로컬 ASR 로 STT 변환해 강의자료 주차 폴더에 STT-<강의명>.md 로 저장 (Ctrl+C 로 중지)
-  dotbugi-mcp courses          list_tasks·sync 등이 다룰 강좌 켜기/끄기 (터미널에서 ↑↓·Space·Enter)
+  dotbugi-mcp courses          get_status·sync 등이 다룰 강좌 켜기/끄기 (터미널에서 ↑↓·Space·Enter)
   dotbugi-mcp courses --list | --on <과목명|courseId> | --off <과목명|courseId>
   dotbugi-mcp statusline       STT 진행 한 줄 출력 (Claude Code 상태 표시줄용)
   dotbugi-mcp asr install [--gpu] [--model 0.6b|1.7b] | status | remove [--yes]
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   const [command, ...rest] = positionals;
   const asrOnly = values.gpu || values.model !== undefined || values.yes;
   const coursesOnly = values.list || values.on !== undefined || values.off !== undefined;
-  // --worker 는 transcribe_vod·asr_install 도구가 띄우는 백그라운드 작업용 (출력 없음)
+  // --worker 는 transcribe_lecture·asr_install 도구가 띄우는 백그라운드 작업용 (출력 없음)
   if (
     rest.length !== (command === 'transcribe' || command === 'asr' ? 1 : 0) ||
     (values.browser && command !== 'login') ||

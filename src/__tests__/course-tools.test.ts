@@ -167,12 +167,12 @@ describe('set_course_tracking', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('바꾸면 list_tasks 캐시를 쓰지 않고 다시 가져온다', async () => {
-    const before = await call('list_tasks', { refresh: true });
+  it('바꾸면 get_status 캐시를 쓰지 않고 다시 가져온다', async () => {
+    const before = await call('get_status', { refresh: true });
     expect(JSON.stringify(before.structuredContent)).toContain('자료구조');
     await call('set_course_tracking', { course: '100', tracked: false });
     const fetched = fetchMock.mock.calls.length;
-    const after = await call('list_tasks');
+    const after = await call('get_status');
     expect(fetchMock.mock.calls.length).toBeGreaterThan(fetched);
     expect(JSON.stringify(after.structuredContent)).not.toContain('자료구조');
   });

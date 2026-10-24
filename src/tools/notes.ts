@@ -150,7 +150,7 @@ export function registerNotesTools(server: McpServer): void {
               text: [
                 LMS_DATA_NOTICE,
                 '사용자가 승인했습니다. 주차마다 dir 의 files 를 읽고 노트를 써서 save_notes(dir, content, instructions, replace: status 가 stale 이면 true) 로 저장하세요.',
-                'missingStt 가 있는 주차는 먼저 "STT 먼저 / 강의자료만으로" 를 사용자에게 묻고, STT 먼저면 transcribe_vod(cmids) 를 시작한 뒤 그 주차는 STT 가 끝나면 다시 만들도록 안내하세요. stt-only 주차는 STT 없이는 만들 자료가 없습니다.',
+                'missingStt 가 있는 주차는 먼저 "STT 먼저 / 강의자료만으로" 를 사용자에게 묻고, STT 먼저면 transcribe_lecture(cmids) 를 시작한 뒤 그 주차는 STT 가 끝나면 다시 만들도록 안내하세요. stt-only 주차는 STT 없이는 만들 자료가 없습니다.',
                 ...tail,
                 '',
                 JSON.stringify(result, null, 2),
