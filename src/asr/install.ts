@@ -65,12 +65,18 @@ function run(command: string, args: string[], env: Record<string, string>): Prom
   });
 }
 
-async function installFfmpeg(root: string, platform: AsrPlatform): Promise<void> {
+export type InstallPhase = 'ffmpeg' | 'qwen_asr' | 'venv' | 'model';
+export type InstallReport = (phase: InstallPhase, file: { label: string; done: number; total: number } | null) => void;
+
+const fileProgress = (report: InstallReport, phase: InstallPhase, label: string) => (done: number, total: number) =>
+  report(phase, { label, done, total });
+
+async function installFfmpeg(root: string, platform: AsrPlatform, report: InstallReport): Promise<void> {
   const pin = FFMPEG[platform];
   const { ffmpeg, bin } = asrPaths(root);
   const wheel = join(bin, 'ffmpeg.whl');
   if ((await fileSha256(ffmpeg)) === pin.entrySha256) return rm(wheel, { force: true });
-  await download(pin.url, wheel, pin, 'ffmpeg');
+  await download(pin.url, wheel, pin, 'ffmpeg', fileProgress(report, 'ffmpeg', 'ffmpeg'));
   const data = extractZipEntry(await readFile(wheel), pin.entry);
   if (createHash('sha256').update(data).digest('hex') !== pin.entrySha256)
     throw new Error('휠에서 꺼낸 ffmpeg 의 sha256 이 고정값과 다릅니다.');
@@ -80,17 +86,30 @@ async function installFfmpeg(root: string, platform: AsrPlatform): Promise<void>
   await rm(wheel);
 }
 
-async function installModel(root: string, model: AsrModel): Promise<void> {
+async function installModel(root: string, model: AsrModel, report: InstallReport): Promise<void> {
   await ensurePrivateDir(join(asrPaths(root).models, model));
-  for (const [file, pin] of Object.entries(MODELS[model].files))
-    await download(modelFileUrl(model, file), modelFilePath(root, model, file), pin, `모델 ${model} ${file}`);
+  for (const [file, pin] of Object.entries(MODELS[model].files)) {
+    const label = `모델 ${model} ${file}`;
+    await download(
+      modelFileUrl(model, file),
+      modelFilePath(root, model, file),
+      pin,
+      label,
+      fileProgress(report, 'model', label)
+    );
+  }
 }
 
-async function installGpuVenv(root: string): Promise<void> {
+function findUv(): string {
   const uv = absolutePathDirs()
     .map((d) => join(d, 'uv'))
     .find((p) => existsSync(p));
   if (!uv) throw new Error('--gpu 설치에는 uv 가 필요합니다: https://docs.astral.sh/uv/getting-started/installation/');
+  return uv;
+}
+
+async function installGpuVenv(root: string): Promise<void> {
+  const uv = findUv();
   const { venv, venvPython } = asrPaths(root);
   // uv 캐시·uv 가 받는 Python 도 이 폴더 안에 두어 asr remove 가 전부 지우게 한다
   const env = { UV_CACHE_DIR: join(root, 'uv-cache'), UV_PYTHON_INSTALL_DIR: join(root, 'python') };
@@ -116,30 +135,46 @@ async function installGpuVenv(root: string): Promise<void> {
   );
 }
 
-// 이미 검증된 파일은 건너뛰므로 중단 후 다시 실행해도 된다. config.json 은 모든 구성요소가 갖춰진 뒤 마지막에 쓴다
-export async function installAsr(config: AsrConfig, root: string): Promise<void> {
+// 받기 전에 확인 — 미지원 플랫폼·고정값 없음·uv 없음이면 아무것도 받지 않는다. asr_install 은 작업 프로세스를 띄우기 전에 부른다
+export function checkInstallable(config: AsrConfig): AsrPlatform {
   const platform = detectPlatform();
   if (config.runtime === 'gpu' && platform !== 'linux-x64')
     throw new Error('--gpu 는 NVIDIA GPU 가 있는 Linux(x64)·WSL 에서만 지원합니다.');
-  // 받기 전에 확인 — 고정값이 없으면 아무것도 받지 않는다
   if (config.runtime === 'cpu') assertPinned(QWEN_ASR_BINARY[platform].sha256, 'qwen_asr 바이너리');
+  else findUv();
+  return platform;
+}
+
+// 받을 파일 크기 상한의 합 (안내용). GPU venv 는 uv 가 받으므로 빠진다
+export function estimateBytes(config: AsrConfig, platform: AsrPlatform): number {
+  const model = Object.values(MODELS[config.model].files).reduce((a, f) => a + f.maxBytes, 0);
+  return FFMPEG[platform].maxBytes + model + (config.runtime === 'cpu' ? QWEN_ASR_BINARY[platform].maxBytes : 0);
+}
+
+// 이미 검증된 파일은 건너뛰므로 중단 후 다시 실행해도 된다. config.json 은 모든 구성요소가 갖춰진 뒤 마지막에 쓴다
+export async function installAsr(config: AsrConfig, root: string, report: InstallReport = () => {}): Promise<void> {
+  const platform = checkInstallable(config);
   const paths = asrPaths(root);
   await ensurePrivateDir(root);
   await ensurePrivateDir(paths.bin);
 
   log('[1/3] ffmpeg');
-  await installFfmpeg(root, platform);
+  report('ffmpeg', null);
+  await installFfmpeg(root, platform, report);
   if (config.runtime === 'cpu') {
     log('[2/3] qwen_asr');
+    report('qwen_asr', null);
     const pin = QWEN_ASR_BINARY[platform];
-    await download(pin.url, paths.qwenAsr, pin, 'qwen_asr');
+    await download(pin.url, paths.qwenAsr, pin, 'qwen_asr', fileProgress(report, 'qwen_asr', 'qwen_asr'));
     await chmod(paths.qwenAsr, 0o700);
   } else {
     log('[2/3] GPU venv (uv, 수 GB)');
+    report('venv', null);
     await installGpuVenv(root);
   }
   log(`[3/3] 모델 ${config.model}`);
-  await installModel(root, config.model);
+  report('model', null);
+  await installModel(root, config.model, report);
 
   const tmp = `${paths.config}.${process.pid}.tmp`;
   await writeFile(tmp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });

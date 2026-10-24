@@ -51,8 +51,15 @@ function progress(label: string, done: number, total: number): void {
 }
 
 // dest 가 이미 sha256 과 같으면 건너뛴다. 아니면 dest.part 에 이어 받아(중단돼도 다음 실행이 이어 받음)
-// 전체 해시가 맞을 때만 dest 로 rename 한다. 틀리거나 크기 상한을 넘으면 .part 를 지우고 실패
-export async function download(url: string, dest: string, pin: FilePin, label: string): Promise<void> {
+// 전체 해시가 맞을 때만 dest 로 rename 한다. 틀리거나 크기 상한을 넘으면 .part 를 지우고 실패.
+// onProgress 는 asr_install 작업 프로세스가 상태 파일에 진행률을 남기는 데 쓴다 (터미널이 없어 stderr 진행 표시를 못 본다)
+export async function download(
+  url: string,
+  dest: string,
+  pin: FilePin,
+  label: string,
+  onProgress?: (done: number, total: number) => void
+): Promise<void> {
   assertPinned(pin.sha256, label);
   if ((await fileSha256(dest)) === pin.sha256) return;
   await unlink(dest).catch(() => {});
@@ -76,7 +83,7 @@ export async function download(url: string, dest: string, pin: FilePin, label: s
     if (!resumed && res.status !== 200) {
       await res.body?.cancel();
       // 이어 받기를 거절(416 등)하면 .part 를 버리고 처음부터 한 번 더
-      if (from) return await unlink(part).then(() => download(url, dest, pin, label));
+      if (from) return await unlink(part).then(() => download(url, dest, pin, label, onProgress));
       throw new Error(`${label} 을(를) 받지 못했습니다 (HTTP ${res.status}).`);
     }
     if (!res.body) throw new Error(`${label} 응답 본문이 없습니다.`);
@@ -93,6 +100,7 @@ export async function download(url: string, dest: string, pin: FilePin, label: s
         hash.update(chunk);
         await file.write(chunk);
         progress(label, done, total);
+        onProgress?.(done, total);
       }
     } finally {
       await file.close();
