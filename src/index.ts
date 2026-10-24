@@ -33,11 +33,11 @@ async function main(): Promise<void> {
   const [command, ...rest] = positionals;
   const asrOnly = values.gpu || values.model !== undefined || values.yes;
   const coursesOnly = values.list || values.on !== undefined || values.off !== undefined;
-  // --worker 는 transcribe_vod 도구가 띄우는 백그라운드 작업용 (출력 없음)
+  // --worker 는 transcribe_vod·play_vods 도구가 띄우는 백그라운드 작업용 (출력 없음)
   if (
     rest.length !== (command === 'transcribe' || command === 'asr' ? 1 : 0) ||
     (values.browser && command !== 'login') ||
-    (values.worker && command !== 'transcribe') ||
+    (values.worker && command !== 'transcribe' && command !== 'play') ||
     (asrOnly && command !== 'asr') ||
     (coursesOnly && command !== 'courses')
   )
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   }
   if (command === 'login') return (await import('./commands/login.js')).login(values.browser ? 'browser' : 'extension');
   if (command === 'logout') return (await import('./commands/logout.js')).logout();
-  if (command === 'play') return (await import('./commands/play.js')).play();
+  if (command === 'play') return (await import('./commands/play.js')).play(values.worker === true);
   if (command === 'sync') return (await import('./commands/sync.js')).sync();
   if (command === 'transcribe')
     return (await import('./commands/transcribe.js')).transcribe(rest[0], values.worker === true);

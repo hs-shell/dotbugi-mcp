@@ -35,8 +35,23 @@ export const playerStateSchema = z.object({
     .nullable(),
   next: playerVod.nullable(),
   message: text.nullable(),
+  // 쓴 재생 프로세스 — stop_vods 가 잠금의 pid 와 맞춰 보고 우리 재생 작업일 때만 신호를 보낸다 (이전 버전 파일엔 없음)
+  pid: z.number().int().positive().optional(),
 });
 export type PlayerState = z.infer<typeof playerStateSchema>;
+
+// 강의 목록을 모으기 전(또는 그 단계에서 끝날 때)의 상태
+export const idleState = (status: PlayerState['status'], pid: number, message: string | null = null): PlayerState => ({
+  version: 1,
+  status,
+  updatedAt: new Date().toISOString(),
+  total: 0,
+  index: 0,
+  current: null,
+  next: null,
+  message,
+  pid,
+});
 
 // 상태 표시줄이 자주 부르므로 동기로 읽는다. 링크를 따라가지 않고(O_NOFOLLOW), FIFO 에 막히지 않으며(O_NONBLOCK),
 // 정규 파일·크기 상한·스키마를 통과한 것만 돌려준다. 없거나 이상하면 null
