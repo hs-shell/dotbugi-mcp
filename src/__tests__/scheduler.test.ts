@@ -189,7 +189,7 @@ describe('playVods', () => {
     expect(states.at(-1)).toMatchObject({
       status: 'error',
       index: 1,
-      message: expect.stringContaining('dotbugi-mcp login'),
+      message: expect.stringContaining('login 도구'),
     });
   });
 

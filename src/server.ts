@@ -6,6 +6,7 @@ import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerPlayVods } from './tools/play-vods.js';
 import { registerLogin } from './tools/login.js';
+import { registerLogout } from './tools/logout.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
 import { registerTranscribeVod } from './tools/transcribe-vod.js';
 import { registerVodStatus } from './tools/vod-status.js';
@@ -17,6 +18,7 @@ const { version } = createRequire(import.meta.url)('../package.json') as { versi
 export function createServer(): McpServer {
   const server = new McpServer({ name: 'dotbugi-mcp', version });
   registerLogin(server);
+  registerLogout(server);
   registerListTasks(server);
   registerListCourses(server);
   registerSetCourseTracking(server);

@@ -11,17 +11,31 @@ const opened: string[] = [];
 vi.mock('../platform.js', async (orig) => ({
   ...(await orig<object>()),
   openUrl: vi.fn(async (url: string) => void opened.push(url)),
+  isWsl: () => wsl.value,
+}));
+const wsl = vi.hoisted(() => ({ value: false }));
+// 임시 프로필 창(CDP)은 띄우지 않고, 사용자가 로그인을 끝내는 시점을 테스트가 정한다
+vi.mock('../login/find-browser.js', () => ({ findBrowser: () => '/fake/chrome' }));
+const loginWithBrowser = vi.fn<() => Promise<string>>();
+vi.mock('../login/browser.js', async (orig) => ({
+  ...(await orig<object>()),
+  loginWithBrowser: () => loginWithBrowser(),
 }));
 const keychain = vi.hoisted(() => ({ value: null as string | null }));
 vi.mock('../keychain/index.js', () => ({
   getKeychain: () => ({
     get: async () => keychain.value,
     set: async (v: string) => void (keychain.value = v),
-    delete: async () => true,
+    delete: async () => ((keychain.value = null), true),
   }),
 }));
 const verifySession = vi.fn<(s: string) => Promise<boolean>>(async () => true);
-vi.mock('../lms.js', async (orig) => ({ ...(await orig<object>()), verifySession: (s: string) => verifySession(s) }));
+const lmsLogout = vi.fn<(s: string) => Promise<boolean>>(async () => true);
+vi.mock('../lms.js', async (orig) => ({
+  ...(await orig<object>()),
+  verifySession: (s: string) => verifySession(s),
+  lmsLogout: (s: string) => lmsLogout(s),
+}));
 
 let send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 beforeAll(async () => {
@@ -45,8 +59,11 @@ beforeAll(async () => {
   await client.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
 });
 
-const login = async () =>
-  ((await send('tools/call', { name: 'login', arguments: {} })).content as { text: string }[])[0].text;
+const call = async (name: string, args: Record<string, unknown> = {}) => {
+  const result = await send('tools/call', { name, arguments: args });
+  return { text: (result.content as { text: string }[])[0].text, isError: result.isError === true };
+};
+const login = async (args?: Record<string, unknown>) => (await call('login', args)).text;
 // 브라우저로 연 URL 해시의 포트·일회용 코드
 const connect = (url: string) => {
   const [port, code] = new URL(url).hash.split('=')[1].split('.');
@@ -58,6 +75,9 @@ const post = (port: string, body: unknown) =>
 afterEach(() => {
   opened.length = 0;
   keychain.value = null;
+  wsl.value = false;
+  verifySession.mockResolvedValue(true);
+  loginWithBrowser.mockReset();
 });
 
 describe('login 도구', () => {
@@ -102,6 +122,91 @@ describe('login 도구', () => {
     // 직전 실패 이유는 다음 응답에 한 번만 보여 준다
     expect(await login()).toContain('직전 로그인 실패');
     expect(opened).toHaveLength(2);
+    // 다음 테스트가 진행 중 연결에 묶이지 않게 두 번째 연결도 끝날 때까지 기다린다
+    await vi.waitFor(
+      () => expect(stderr.mock.calls.filter((c) => String(c[0]).includes('시간이 초과'))).toHaveLength(2),
+      { timeout: 2000 }
+    );
+    stderr.mockRestore();
+  });
+});
+
+describe('login 도구 method=browser', () => {
+  it('바로 안내를 돌려주고, 진행 중 재호출은 창을 다시 띄우지 않으며, 로그인되면 browser 방식으로 저장한다 (비밀값 비노출)', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let finish!: (s: string) => void;
+    loginWithBrowser.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const first = await login({ method: 'browser' });
+    expect(first).toContain('로그인을 시작했습니다');
+    expect(first).toContain('자동으로 닫히고');
+    expect(await login({ method: 'browser' })).toContain('진행 중');
+    // 진행 중에는 다른 방식으로 불러도 새로 시작하지 않는다
+    expect(await login()).toContain('진행 중');
+    expect(loginWithBrowser).toHaveBeenCalledTimes(1);
+    expect(opened).toEqual([]);
+
+    finish(SESSION);
+    await vi.waitFor(() => expect(keychain.value).toContain('"method":"browser"'));
+    const logs = stderr.mock.calls.map((c) => String(c[0])).join('');
+    expect(`${first}${logs}`).not.toContain(SESSION);
+    expect(await login()).toContain('이미 로그인');
+    stderr.mockRestore();
+  });
+
+  it('백그라운드 실패는 서버를 죽이지 않고 다음 호출에 한 번 알린다', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    loginWithBrowser.mockRejectedValueOnce(new Error('로그인 전에 브라우저 창이 닫혔습니다.'));
+    await login({ method: 'browser' });
+    await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('창이 닫혔습니다')));
+    let fail!: (err: Error) => void;
+    loginWithBrowser.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    const next = await login({ method: 'browser' });
+    expect(next).toContain('직전 로그인 실패: 로그인 전에 브라우저 창이 닫혔습니다.');
+    expect(next).toContain('로그인을 시작했습니다');
+    fail(new Error('시간이 초과되었습니다.'));
+    await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('시간이 초과')));
+    stderr.mockRestore();
+  });
+
+  it('WSL 에서는 창을 띄우지 않고 method=extension 을 안내한다', async () => {
+    wsl.value = true;
+    const result = await call('login', { method: 'browser' });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('WSL 에서는 임시 브라우저 창 로그인을 지원하지 않습니다');
+    expect(result.text).toContain('method=extension');
+    expect(loginWithBrowser).not.toHaveBeenCalled();
+    // 이미 로그인돼 있으면 WSL 이어도 거절하지 않는다
+    keychain.value = JSON.stringify({ session: SESSION, savedAt: '', method: 'extension' });
+    expect(await login({ method: 'browser' })).toContain('이미 로그인');
+  });
+});
+
+describe('logout 도구', () => {
+  it('browser 세션은 서버 로그아웃 후 키체인에서 지우고, 세션 값은 응답에 넣지 않는다', async () => {
+    keychain.value = JSON.stringify({ session: SESSION, savedAt: '', method: 'browser' });
+    const result = await call('logout');
+    expect(result.isError).toBe(false);
+    expect(lmsLogout).toHaveBeenCalledWith(SESSION);
+    expect(result.text).toContain('LMS 서버 세션을 종료했습니다');
+    expect(result.text).toContain('OS 키체인에서 세션을 삭제했습니다');
+    expect(result.text).not.toContain(SESSION);
+    expect(keychain.value).toBeNull();
+    // 다시 불러도 오류 없이 없다고만 알린다
+    expect((await call('logout')).text).toContain('저장된 세션이 없습니다');
+  });
+
+  it('대기 중인 로그인을 취소해, 나중에 세션이 도착해도 저장하지 않는다', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let finish!: (s: string) => void;
+    loginWithBrowser.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await login({ method: 'browser' });
+    expect((await call('logout')).text).toContain('진행 중이던 로그인을 취소했습니다');
+    finish(SESSION);
+    await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('저장하지 않았습니다')));
+    expect(keychain.value).toBeNull();
+    // 취소 뒤에는 새 로그인을 시작할 수 있다
+    loginWithBrowser.mockReturnValue(new Promise(() => {}));
+    expect(await login({ method: 'browser' })).toContain('로그인을 시작했습니다');
     stderr.mockRestore();
   });
 });

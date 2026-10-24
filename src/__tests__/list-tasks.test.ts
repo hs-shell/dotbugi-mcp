@@ -115,11 +115,11 @@ describe('list_tasks', () => {
     fetchMock.mockImplementation(async () => LOGIN_REDIRECT());
     const result = await call({ refresh: true });
     expect(result.isError).toBe(true);
-    expect((result.content as { text: string }[])[0].text).toContain('dotbugi-mcp login');
+    expect((result.content as { text: string }[])[0].text).toContain('login 도구');
   });
 
   it('저장된 세션이 없으면 LMS 에 요청하지 않고 안내한다', async () => {
-    getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. 터미널에서 dotbugi-mcp login 을 실행하세요.'));
+    getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. login 도구를 호출하세요.'));
     const result = await call({ refresh: true });
     expect(result).toMatchObject({ isError: true });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -166,13 +166,13 @@ describe('vod_status', () => {
 
   it('세션이 없어도 실패하지 않고 재생 상태와 login 안내를 돌려준다', async () => {
     writeFileSync(PLAYER_STATE_FILE, JSON.stringify(state));
-    getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. 터미널에서 dotbugi-mcp login 을 실행하세요.'));
+    getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. login 도구를 호출하세요.'));
     const result = await call({}, 'vod_status');
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toMatchObject({
       fetchedAt: null,
       tasks: [],
-      warnings: [expect.stringContaining('dotbugi-mcp login')],
+      warnings: [expect.stringContaining('login 도구')],
       player: { status: 'playing', stale: false },
     });
     expect((result.content as { text: string }[])[0].text.split('\n')[0]).toMatch(/^🎬 VOD 1\/1/);

@@ -22,7 +22,7 @@ describe('readSession', () => {
   ])('형식이 깨지면 고정 메시지만 낸다 (입력을 담지 않음): %#', async (raw) => {
     get.mockResolvedValue(raw);
     const err = (await readSession().catch((e: unknown) => e)) as Error;
-    expect(err.message).toBe('저장된 세션 형식이 올바르지 않습니다. dotbugi-mcp logout 후 다시 login 하세요');
+    expect(err.message).toBe('저장된 세션 형식이 올바르지 않습니다. logout 도구를 호출한 뒤 다시 login 하세요');
     expect(err.message).not.toContain('secret');
   });
 });

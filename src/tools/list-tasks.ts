@@ -57,7 +57,7 @@ export function registerListTasks(server: McpServer): void {
         const result = await loadTasks(refresh, filters);
         return { content: [{ type: 'text', text: toText(result.tasks, result.warnings) }], structuredContent: result };
       } catch (err) {
-        // 세션 없음·만료 메시지는 dotbugi-mcp login 안내를 담고 있다. 그 밖의 오류도 마스킹 후 그대로 알린다
+        // 세션 없음·만료 메시지는 login 도구 안내를 담고 있다. 그 밖의 오류도 마스킹 후 그대로 알린다
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: redact(message) }], isError: true };
       }

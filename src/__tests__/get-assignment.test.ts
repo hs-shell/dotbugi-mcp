@@ -204,7 +204,7 @@ describe('get_assignment', () => {
     fetchMock.mockImplementation(async () => LOGIN_REDIRECT());
     const result = await call({ cmid: 5 });
     expect(result.isError).toBe(true);
-    expect((result.content as { text: string }[])[0].text).toContain('dotbugi-mcp login');
+    expect((result.content as { text: string }[])[0].text).toContain('login 도구');
   });
 
   it('과제 화면이 아니면 오류로 알린다', async () => {

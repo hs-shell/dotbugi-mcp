@@ -21,6 +21,8 @@ import { createCdpClient, type CdpClient } from './cdp-pipe.js';
 import { findBrowser } from './find-browser.js';
 import { pickSessionCookie, type CdpCookie } from './session-cookie.js';
 
+export const WSL_UNSUPPORTED = 'WSL 에서는 임시 브라우저 창 로그인을 지원하지 않습니다.';
+
 const NOTICE = `임시 Chrome 창을 엽니다.
   - 창의 주소가 ${LMS_ORIGIN} 인지 확인한 뒤 로그인하세요.
   - 이 창은 새 임시 프로필이라 평소 브라우저의 정보(쿠키·비밀번호·기록)에 접근하지 않습니다.
@@ -31,18 +33,22 @@ interface CdpTarget {
   url: string;
 }
 
-// 대체 방식: 임시 프로필 브라우저 창에서 사용자가 직접 로그인 → CDP 로 LMS 세션 쿠키만 꺼낸다
-export async function loginWithBrowser(): Promise<string> {
+// 임시 프로필 로그인을 쓸 수 있는지 먼저 확인한다 (login 도구는 창을 띄우기 전에 바로 거절하려고 따로 부른다)
+export function findLoginBrowser(): string {
   // CDP 파이프(fd 3·4)는 WSL interop 을 넘어 Windows 프로세스로 전달되지 않는다 (stdin/stdout/stderr 만 중계).
   // PowerShell 로 CDP 를 한 벌 더 구현하는 대신 지원하지 않는다 (WSL 은 확장 방식 사용)
   if (isWsl()) {
-    throw new Error(
-      'WSL 에서는 --browser 를 지원하지 않습니다. dotbugi 확장 방식(dotbugi-mcp login)을 쓰거나 Windows 터미널에서 실행하세요.'
-    );
+    // 다음 행동 안내는 호출부(CLI·도구)가 각자 붙인다
+    throw new Error(WSL_UNSUPPORTED);
   }
   const browserPath = findBrowser();
   if (!browserPath) throw new Error('Chrome·Edge·Brave·Whale 중 설치된 브라우저를 찾지 못했습니다.');
+  return browserPath;
+}
 
+// 대체 방식: 임시 프로필 브라우저 창에서 사용자가 직접 로그인 → CDP 로 LMS 세션 쿠키만 꺼낸다
+export async function loginWithBrowser(): Promise<string> {
+  const browserPath = findLoginBrowser();
   log(NOTICE);
   const profileDir = await mkdtemp(join(tmpdir(), 'dotbugi-login-'));
   // 디버깅은 TCP 포트 대신 파이프로 연다 — 로그인 대기 중 같은 기기의 다른 사용자·프로세스가 붙을 수 없다.
@@ -95,7 +101,7 @@ async function waitForSession(cdp: CdpClient, closed: () => boolean): Promise<st
     }
     await sleep(POLL_INTERVAL_MS);
   }
-  throw new Error('시간이 초과되었습니다. dotbugi-mcp login --browser 를 다시 실행하세요.');
+  throw new Error('시간이 초과되었습니다. 다시 로그인하세요.');
 }
 
 function isLmsPageAfterLogin(t: CdpTarget): boolean {
