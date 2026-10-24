@@ -70,6 +70,15 @@ describe('2026-07-28 세대 확인 창 (input_required)', () => {
     await expect(settings()).rejects.toThrow();
   });
 
+  it('다른 창의 키로 실린 답은 쓰지 않고 다시 묻는다 (승인 재사용 방지)', async () => {
+    const second = await statusline(
+      { elicitation: { form: {} } },
+      { 'confirm-0000000000000000': { action: 'accept' } }
+    );
+    expect(second.resultType).toBe('input_required');
+    await expect(settings()).rejects.toThrow();
+  });
+
   it('elicitation 을 선언하지 않은 클라이언트에는 확인 토큰 방식으로 답한다', async () => {
     const first = await statusline({});
     expect(first.resultType).toBe('complete');
