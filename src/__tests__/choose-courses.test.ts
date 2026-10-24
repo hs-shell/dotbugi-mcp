@@ -29,6 +29,14 @@ describe('chooseCourses', () => {
     expect(await chooseCourses(odd, courses)).toEqual({ ok: true, changed: [] });
   });
 
+  it('숫자가 아닌 courseId 는 폼 필드 키로 쓰지 않는다', async () => {
+    const odd = { ...courses[0], courseId: '__proto__' };
+    const { asker, elicit } = withElicit({ action: 'accept', content: { __proto__: false } });
+    expect(await chooseCourses(asker, [odd, courses[1]])).toEqual({ ok: true, changed: [] });
+    const [params] = elicit.mock.calls[0] as unknown as [{ requestedSchema: { properties: object } }];
+    expect(Object.keys(params.requestedSchema.properties)).toEqual(['300']);
+  });
+
   it('취소·거절이면 바꾸지 않는다', async () => {
     for (const action of ['cancel', 'decline'] as const) {
       const { asker } = withElicit({ action });

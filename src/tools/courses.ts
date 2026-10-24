@@ -66,6 +66,8 @@ type Chosen = { ok: true; changed: CourseEntry[] } | { ok: false; text: string }
 // 강좌별 체크박스(기본값 = 지금 추적 상태) 창을 띄워 바뀐 것만 돌려준다. 창을 못 띄우면 null
 export async function chooseCourses(asker: Asker, courses: CourseEntry[]): Promise<Chosen | null> {
   if (!asker.caps?.elicitation?.form) return null;
+  // 폼 필드 키가 되는 courseId 는 LMS 링크에서 온 값 — Moodle id 형식(숫자)만 넣어 __proto__ 같은 키가 클라이언트로 가지 않게
+  const shown = courses.filter((c) => /^\d{1,20}$/.test(c.courseId));
   const result = await asker
     .elicit(
       {
@@ -74,7 +76,7 @@ export async function chooseCourses(asker: Asker, courses: CourseEntry[]): Promi
         requestedSchema: {
           type: 'object',
           properties: Object.fromEntries(
-            courses.map((c) => [
+            shown.map((c) => [
               c.courseId,
               { type: 'boolean', title: `${c.title.slice(0, FORM_TITLE_MAX)} · ${c.kind}`, default: c.tracked },
             ])
@@ -91,7 +93,7 @@ export async function chooseCourses(asker: Asker, courses: CourseEntry[]): Promi
   if (!result) return null;
   if (result.action !== 'accept') return { ok: false, text: '취소 — 아무것도 바꾸지 않았습니다.' };
   // 클라이언트 응답도 믿지 않는다: 아는 courseId 의 boolean 값만 본다
-  const changed = courses.filter((c) => {
+  const changed = shown.filter((c) => {
     const v = result.content?.[c.courseId];
     return typeof v === 'boolean' && v !== c.tracked;
   });
