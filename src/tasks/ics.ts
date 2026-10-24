@@ -8,6 +8,8 @@ const TYPE_LABELS: Record<TaskType, string> = { vod: 'VOD', assign: '과제', qu
 // 캘린더에는 마감 1시간 전부터 마감까지의 일정으로 넣는다 (마감 시각에 끝나는 블록이 앱마다 가장 눈에 띈다)
 const EVENT_MS = 60 * 60_000;
 const MAX_LINE_OCTETS = 75;
+// toIsoDeadline 결과(오프셋 포함 ISO)만 받는다. Date.parse 는 오프셋 없는 문자열을 실행 환경 시간대로 읽어 시각이 틀어진다
+const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?([+-]\d{2}:\d{2}|Z)$/;
 
 // RFC 5545 3.3.11 TEXT 이스케이프. LMS 텍스트는 신뢰하지 않으므로 먼저 제어·서식 문자를 걷어낸다 (줄바꿈 주입 방지)
 export const escapeText = (text: string) => clean(text).replace(/[\\;,]/g, (c) => `\\${c}`);
@@ -38,7 +40,7 @@ const utc = (ms: number) =>
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}/, '');
 
-// 다시 내보내도 같은 UID 여야 캘린더가 새 일정 대신 기존 일정을 갱신한다
+// 다시 내보내도 같은 UID 여야 다시 가져올 때 일정이 중복되지 않는다
 export function uidOf(t: Task): string {
   const id =
     t.cmid ??
@@ -63,7 +65,7 @@ export function buildIcs(tasks: Task[], now: number): { ics: string; count: numb
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//dotbugi-mcp//KO', 'CALSCALE:GREGORIAN'];
   let count = 0;
   for (const t of tasks) {
-    const end = deadlineMs(t.deadline);
+    const end = ISO_WITH_OFFSET.test(t.deadline ?? '') ? deadlineMs(t.deadline) : NaN;
     if (Number.isNaN(end)) continue;
     count++;
     const url = lmsUrl(t.url);
@@ -71,6 +73,9 @@ export function buildIcs(tasks: Task[], now: number): { ics: string; count: numb
       'BEGIN:VEVENT',
       `UID:${uidOf(t)}`,
       `DTSTAMP:${utc(now)}`,
+      // Apple·Outlook 은 SEQUENCE·LAST-MODIFIED 가 더 크면 같은 UID 일정을 새 내용으로 바꾼다
+      `LAST-MODIFIED:${utc(now)}`,
+      `SEQUENCE:${Math.floor(now / 1000)}`,
       `DTSTART:${utc(end - EVENT_MS)}`,
       `DTEND:${utc(end)}`,
       `SUMMARY:${escapeText(`[${t.course}] ${t.title} (${TYPE_LABELS[t.type]})`)}`,

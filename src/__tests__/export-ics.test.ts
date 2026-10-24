@@ -1,11 +1,11 @@
-import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from '../server.js';
 import { buildIcs, escapeText, foldLine, uidOf } from '../tasks/ics.js';
 import type { Task } from '../tasks/schema.js';
-import { ICS_FILE_NAME } from '../tools/export-ics.js';
+import { ICS_FILE_NAME, writeIcs } from '../tools/export-ics.js';
 import { fakeLmsFetch, NOW } from './fixtures/lms-pages.js';
 
 // 저장 위치(~/Downloads/dotbugi-mcp)·추적 설정을 실제 홈에서 읽지 않게 빈 테스트 홈을 쓴다
@@ -39,6 +39,9 @@ describe('buildIcs', () => {
     expect(ics.replaceAll('\r\n', '')).not.toContain('\n');
     expect(ics).toContain('UID:assign-5@dotbugi-mcp\r\n');
     expect(ics).toContain('DTSTAMP:20261024T030000Z\r\n');
+    // Apple·Outlook 갱신용
+    expect(ics).toContain('LAST-MODIFIED:20261024T030000Z\r\n');
+    expect(ics).toContain(`SEQUENCE:${Math.floor(NOW.getTime() / 1000)}\r\n`);
     expect(ics).toContain('DTSTART:20261025T080000Z\r\nDTEND:20261025T090000Z\r\n');
     expect(ics).toContain('SUMMARY:[자료구조] a\\,b\\;c\\\\d (과제)\r\n');
     expect(ics).toContain('DESCRIPTION:LMS: https://learn.hansung.ac.kr/mod/assign/view.php?id=5\r\n');
@@ -71,8 +74,13 @@ describe('buildIcs', () => {
     expect(uidOf(noCmid)).toBe(uidOf({ ...noCmid, title: '바뀐 제목' }));
     expect(uidOf(noCmid)).toMatch(/^assign-[0-9a-f]{16}@dotbugi-mcp$/);
     expect(uidOf(task({ type: 'quiz', cmid: 9 }))).toBe('quiz-9@dotbugi-mcp');
-    const r = buildIcs([task(), task({ deadline: null }), task({ deadline: '언젠가' })], NOW.getTime());
-    expect([r.count, r.skipped]).toEqual([1, 2]);
+    // 오프셋 없는 시각은 실행 환경 시간대로 읽혀 틀어지므로 건너뛴다
+    const r = buildIcs(
+      [task(), task({ deadline: null }), task({ deadline: '언젠가' }), task({ deadline: '2026-10-25T18:00' })],
+      NOW.getTime()
+    );
+    expect([r.count, r.skipped]).toEqual([1, 3]);
+    expect(buildIcs([task({ deadline: '2026-10-25T09:00:00Z' })], NOW.getTime()).count).toBe(1);
   });
 });
 
@@ -128,5 +136,15 @@ describe('export_ics', () => {
     await send('tools/call', { name: 'export_ics', arguments: {} });
     expect(readdirSync(dirname(path))).toEqual([ICS_FILE_NAME]);
     expect(readFileSync(path, 'utf8').replace(/DTSTAMP:\S+/g, '')).toBe(ics.replace(/DTSTAMP:\S+/g, ''));
+  });
+
+  it('쓰기에 실패하면 임시 파일을 남기지 않고 오류를 알린다', async () => {
+    const dir = join(home.dir, 'Downloads', 'dotbugi-mcp', '2026-2학기');
+    rmSync(dir, { recursive: true, force: true });
+    // 대상 경로가 폴더면 rename 이 실패한다
+    mkdirSync(join(dir, ICS_FILE_NAME), { recursive: true });
+    await expect(writeIcs('x', NOW)).rejects.toThrow();
+    expect(readdirSync(dir)).toEqual([ICS_FILE_NAME]);
+    rmSync(dir, { recursive: true, force: true });
   });
 });
