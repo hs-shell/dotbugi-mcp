@@ -36,12 +36,7 @@ describe('출력 문구 규칙', () => {
   });
 
   it('사용자 문구는 받아쓰기·녹취 대신 STT 를 쓴다', () => {
-    const scanned = files(join(ROOT, 'src'), /\.ts$/).filter(
-      (p) =>
-        !p.includes('__tests__') &&
-        // shortcut: 슬래시 명령은 #107 개편이 맡는다, #107 머지 후 이 제외를 지운다
-        !p.endsWith(join('prompts', 'shortcuts.ts'))
-    );
+    const scanned = files(join(ROOT, 'src'), /\.ts$/).filter((p) => !p.includes('__tests__'));
     const found = lines(scanned).filter(([, text]) => {
       const code = text
         // 주석은 사람(개발자)용이라 뺀다 — 주소의 :// 는 앞이 공백이 아니라 남는다

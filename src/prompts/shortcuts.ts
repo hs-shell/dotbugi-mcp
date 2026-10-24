@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
-import { clean } from '../tasks/text.js';
+import { cell, clean } from '../tasks/text.js';
 
 // 슬래시 명령 바로가기 (Claude Code: /dotbugi:status). 인자는 본문에 들어가므로 summarize_week 처럼 한 줄로 접고 길이를 묶는다.
 // 원칙: 선택 인자를 비우면 추적 과목 전체가 대상, 리소스가 큰 작업(STT)은 실행 전에 대상 목록을 확인받는다
@@ -186,7 +186,9 @@ const help: Shortcut = {
       '',
       '| 명령 | 설명 | 예시 |',
       '| --- | --- | --- |',
-      ...[...shortcuts, help].map((s) => `| \`/dotbugi:${s.usage}\` | ${s.description} | \`${s.example}\` |`),
+      ...[...shortcuts, help].map(
+        (s) => `| \`/dotbugi:${cell(s.usage)}\` | ${cell(s.description)} | \`${s.example}\` |`
+      ),
       '',
       '▸ [ ] 안 인자는 생략 가능 — 생략하면 추적 과목 전체가 대상',
       '▸ STT 변환은 all 이 아니면 대상 목록을 확인한 뒤 실행하고, 진행은 상태 표시줄에 표시',

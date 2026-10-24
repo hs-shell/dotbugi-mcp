@@ -94,6 +94,8 @@ describe('바로가기 프롬프트', () => {
     const t = text(await get('help'));
     for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'drive', 'login', 'help'])
       expect(t).toContain(`/dotbugi:${n}`);
+    // 인자 표기의 | 는 표 칸을 깨지 않게 이스케이프
+    expect(t).toContain('`/dotbugi:status [과목\\|courseId] [past]`');
   });
 
   it('이모지·VOD 표현을 쓰지 않는다', async () => {
