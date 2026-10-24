@@ -346,7 +346,11 @@ export function registerTranscribeVod(server: McpServer): void {
             queue.total > 1 && `- 대기열: ${queue.position}/${queue.total} (대기 ${pending.length}개)`,
             state.path && `- 결과 파일: ${state.path}`,
             state.message && `- ${state.message}`,
-            ...(queue.total > 1 ? finished.map((f) => `  - ${STATUS_MARKS[f.status]} ${f.title ?? f.cmid}`) : []),
+            ...(queue.total > 1
+              ? finished.map(
+                  (f) => `  - ${STATUS_MARKS[f.status]} ${f.title ?? f.cmid}${f.message ? ` — ${f.message}` : ''}`
+                )
+              : []),
           ]
             .filter(Boolean)
             .join('\n');

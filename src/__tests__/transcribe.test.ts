@@ -307,10 +307,16 @@ describe('transcribeVod', () => {
     expect(fetched).toEqual([]);
   });
 
-  it('공개 전 강의의 재생 화면에 영상이 없으면 사용 가능 날짜로 알린다', async () => {
-    const notYet = { kind: 'notYet' as const, reason: '아직 공개 전입니다 (2026년 10월 29일 부터 사용가능).' };
-    const { d } = deps({ findVod: async () => ({ ...META, unavailable: notYet }), viewerHtml: async () => '<html>' });
+  it('공개 전 강의는 재생 목록을 주더라도 받지 않고 사용 가능 날짜로 알린다', async () => {
+    const notYet = {
+      kind: 'notYet' as const,
+      reason: '아직 공개 전입니다 (2026년 10월 29일 부터 사용가능). 공개된 뒤 STT 변환하세요.',
+    };
+    const viewerHtml = vi.fn();
+    const { d, fetched } = deps({ findVod: async () => ({ ...META, unavailable: notYet }), viewerHtml });
     await expect(transcribeVod(42, d)).rejects.toThrow('2026년 10월 29일 부터 사용가능');
+    expect(viewerHtml).not.toHaveBeenCalled();
+    expect(fetched).toEqual([]);
   });
 
   it('dimmed 강의의 재생 화면에 영상이 없으면 열람 기간 만료로 알린다', async () => {
