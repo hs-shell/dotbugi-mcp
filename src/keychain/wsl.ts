@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { WSL_KEYCHAIN_TIMEOUT_MS } from '../constants.js';
 import { wslPowerShell } from '../wsl-paths.js';
 import type { Keychain } from './types.js';
 
@@ -85,8 +86,24 @@ function runPowerShell(script: string, input: string): Promise<{ code: number | 
     const child = spawn(wslPowerShell(), args, { stdio: ['pipe', 'pipe', 'ignore'] });
     let stdout = '';
     child.stdout.setEncoding('utf8').on('data', (d: string) => (stdout += d));
-    child.once('error', () => reject(new Error('powershell.exe 를 실행하지 못했습니다.')));
-    child.once('close', (code) => resolve({ code, stdout: stdout.trim() }));
+    // 시간 초과 시 고정 문구로 끝내고 죽인다. 먼저 reject 해야 kill 뒤의 close(resolve)가 무시된다
+    const timer = setTimeout(() => {
+      reject(new Error(`Windows 자격 증명 관리자가 ${WSL_KEYCHAIN_TIMEOUT_MS / 1000}초 안에 응답하지 않았습니다.`));
+      child.kill();
+      // 죽지 않고 남아도 짧은 CLI 가 이 자식을 기다리며 멈추지 않게 놓아 준다
+      child.stdout.destroy();
+      child.unref();
+    }, WSL_KEYCHAIN_TIMEOUT_MS);
+    child.once('error', () => {
+      clearTimeout(timer);
+      reject(new Error('powershell.exe 를 실행하지 못했습니다.'));
+    });
+    child.once('close', (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout: stdout.trim() });
+    });
+    // 자식이 먼저 죽으면 stdin 쓰기가 EPIPE 를 낸다 — 처리하지 않으면 프로세스가 죽는다 (결과는 close 로 받는다)
+    child.stdin.once('error', () => {});
     child.stdin.end(input);
   });
 }

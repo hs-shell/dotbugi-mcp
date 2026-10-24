@@ -1,5 +1,5 @@
 import { fetchVodProgress, getVodProgressPageLink, type VodAttendanceData } from '@dotbugi/lms-parser';
-import { LMS_LOGIN_FORM_SELECTOR, VOD_PROGRESS_TABLE_SELECTOR } from '../constants.js';
+import { VOD_PROGRESS_TABLE_SELECTOR } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
 import { SessionExpiredError } from '../lms.js';
 import { isAttended, toSeconds } from '../tasks/collect.js';
@@ -24,11 +24,9 @@ export function createProgressFetcher(session: string): (courseId: string) => Pr
       if (err instanceof Error && err.cause instanceof SessionExpiredError) throw err.cause;
       throw err;
     });
-    // 진도 표가 없으면 '진도 0건'이 아니라 다른 페이지(로그인·오류)를 받은 것이다
-    if (!page?.querySelector(VOD_PROGRESS_TABLE_SELECTOR)) {
-      if (page?.querySelector(LMS_LOGIN_FORM_SELECTOR)) throw new SessionExpiredError();
+    // 진도 표가 없으면 '진도 0건'이 아니라 다른 페이지(오류)를 받은 것이다. 200 로그인 화면은 createFetchHtml 이 세션 만료로 던진다
+    if (!page?.querySelector(VOD_PROGRESS_TABLE_SELECTOR))
       throw new Error('진도 페이지에서 진도 표를 찾지 못했습니다. LMS 화면 구조가 바뀌었을 수 있습니다.');
-    }
     return rows;
   };
 }
