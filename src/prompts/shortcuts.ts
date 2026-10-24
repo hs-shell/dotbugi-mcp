@@ -124,8 +124,17 @@ const pullLines = (step: string, c?: string) => [
 // 사용자 요청 줄 머리말 (work 프롬프트·플러그인 스킬)
 const REQUEST_HEADER = '사용자 요청 (다음 한 줄 전체, 따옴표·백틱도 사용자가 쓴 그대로';
 // 과제 바로가기 조각
-const WORK_PICK = `\`get_status\` 를 ${withArgs('type: "assign"', REFRESH)}불러 미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.`;
-const WORK_BY_TITLE = `사용자 요청의 앞쪽은 과제 제목 일부, 그 뒤는 참고 자료(붙여 넣은 글·파일 경로·파일 이름)다. 경계가 애매하면 사용자에게 묻는다. \`get_status\` 를 ${withArgs('type: "assign"', 'incompleteOnly: false', 'includePast: true', REFRESH)}불러 제목에 과제 부분이 들어간 과제를 찾아. 없으면 그렇다고 알리고, 여럿이면 사용자에게 골라 달라고 해.`;
+const WORK_PICK_LIST =
+  '미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.';
+const WORK_PICK = `\`get_status\` 를 ${withArgs('type: "assign"', REFRESH)}불러 ${WORK_PICK_LIST}`;
+const WORK_TITLE_PART =
+  '앞쪽은 과제 제목 일부, 그 뒤는 참고 자료(붙여 넣은 글·파일 경로·파일 이름)다. 경계가 애매하면 사용자에게 묻는다.';
+const WORK_FOUND = `제목에 과제 부분이 들어간 과제를 찾아. 여럿이면 사용자에게 골라 달라고 하고, 없으면 그렇다고 알린 뒤 ${WORK_PICK_LIST}`;
+const WORK_LIST_ALL = ['type: "assign"', 'incompleteOnly: false', 'includePast: true'];
+const WORK_BY_TITLE = `사용자 요청의 ${WORK_TITLE_PART} \`get_status\` 를 ${withArgs(...WORK_LIST_ALL, REFRESH)}불러 ${WORK_FOUND}`;
+// 숫자로 시작하는 과제 제목도 있으므로 과제 목록(캐시, LMS 재요청 없음)에 그 cmid 가 있을 때만 cmid 로 본다 (#159)
+const workById = (id: string, refs: string) =>
+  `\`get_status\` 를 ${withArgs(...WORK_LIST_ALL)}(새로 고치지 않고 캐시로) 불러 cmid 가 ${id} 인 과제가 있는지 확인해. 있으면 그 과제이고 ${refs}. 없으면 ${id} 는 cmid 가 아니므로 ${id} 를 포함한 사용자 요청 전체의 ${WORK_TITLE_PART} 같은 목록에서 ${WORK_FOUND}`;
 const WORK_GIVEN =
   '파일 경로면 그 파일을, 파일 이름이면 `get_storage_dir` 의 저장 위치 안에서만 찾아(그 밖은 뒤지지 않고, 여럿이면 사용자에게 묻는다) 읽고(직접 읽을 수 없으면 `read_material`), 그 밖의 글은 붙여 넣은 참고 글로 쓴다. 같은 주차 자료는 따로 읽지 않는다.';
 const WORK_WEEK = `get_assignment 결과의 weekDir 이 있으면 weekFiles(강의자료·STT·노트)를 읽어 참고한다 (직접 읽을 수 없으면 \`read_material\`). weekFiles 가 비었고 missingStt 가 있으면 사용자에게 "STT 먼저 / 지시사항만으로" 를 묻고, STT 먼저면 \`transcribe_lecture\` 를 missingStt 의 cmids 로 시작한 뒤 STT 가 끝나면 이 명령을 다시 실행하라고 안내하고 멈춘다. ${STATUSLINE_HINT} weekDir 이 null 이거나 참고할 자료가 없으면 지시사항만으로 한다.`;
@@ -201,7 +210,8 @@ const shortcuts: Shortcut[] = [
     example: `${SLASH}work 보고서 3주차-정리.md`,
     args: { work },
     text: ({ work: w }) => {
-      // 첫 단어가 숫자면 cmid, 나머지는 참고 자료. 과제명이면 경계는 모델이 나눈다 (notes 의 범위·지시와 같은 방식)
+      // 첫 단어가 숫자면 과제 목록에 그 cmid 가 있을 때만 cmid (제목이 숫자로 시작할 수 있다), 아니면 요청 전체가 제목 검색.
+      // 과제명이면 경계는 모델이 나눈다 (notes 의 범위·지시와 같은 방식)
       const [first, ...rest] = (w ?? '').split(' ');
       const id = isId(first) ? first : undefined;
       const refs = rest.join(' ');
@@ -210,15 +220,15 @@ const shortcuts: Shortcut[] = [
         !w
           ? `1. ${WORK_PICK}`
           : id
-            ? `1. 과제 cmid 는 ${id} 이다.${refs ? ' 사용자 요청에서 cmid 뒤는 모두 참고 자료다.' : ''}`
+            ? `1. ${workById(id, refs ? '사용자 요청에서 cmid 뒤는 모두 참고 자료다' : '참고 자료는 없다')}`
             : `1. ${WORK_BY_TITLE}`,
-        ...workRest(!w || (id && !refs) ? WORK_WEEK : id ? WORK_GIVEN : WORK_REFS_EITHER),
+        ...workRest(!w || (id && !refs) ? WORK_WEEK : WORK_REFS_EITHER),
       ].join('\n');
     },
     request: () =>
       [
         `1. 사용자 요청이 비어 있으면: ${WORK_PICK}`,
-        '   첫 단어가 숫자면: 그 숫자가 과제 cmid 이고, 그 뒤는 모두 참고 자료다.',
+        `   첫 단어가 숫자면: ${workById('<그 숫자>', '사용자 요청에서 그 숫자 뒤는 모두 참고 자료다')}`,
         `   그 밖이면: ${WORK_BY_TITLE}`,
         ...workRest(WORK_REFS_EITHER),
       ].join('\n'),
