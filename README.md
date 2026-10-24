@@ -267,16 +267,16 @@ macOS · Windows:
 ```
 
 - **macOS**: Claude Desktop은 셸 PATH를 읽지 않아 nvm·Homebrew 로 설치한 `npx` 를 못 찾을 수 있습니다. 그러면 `which npx` 로 확인한 절대 경로(예: `/opt/homebrew/bin/npx`)를 `command` 에 넣으세요.
-- **Windows**: `npx` 를 못 찾으면 `"command": "npx.cmd"` 로 바꾸세요.
+- **Windows**: `npx` 를 못 찾으면 `"command": "cmd"`, `"args": ["/c", "npx", "-y", "@dotbugi/mcp"]` 로 바꾸세요.
 
-**WSL**(Node를 WSL 안에 설치한 경우): Windows 쪽 Claude Desktop에서 WSL 셸로 실행합니다. 로그인 셸(`-lc`)로 띄워야 nvm 등의 PATH가 잡힙니다.
+**WSL**(Node를 WSL 안에 설치한 경우): Windows 쪽 Claude Desktop에서 WSL 셸로 실행합니다. 비대화형 셸은 `~/.bashrc` 의 nvm 설정을 읽지 않으므로 nvm 을 직접 불러옵니다 (`-i` 는 쓰지 마세요 — `.bashrc` 출력이 MCP 통신에 섞입니다). nvm 이 아니면 `npx -y @dotbugi/mcp` 만 남기세요.
 
 ```json
 {
   "mcpServers": {
     "dotbugi": {
       "command": "wsl.exe",
-      "args": ["-e", "bash", "-lc", "npx -y @dotbugi/mcp"]
+      "args": ["-e", "bash", "-c", "source ~/.nvm/nvm.sh && exec npx -y @dotbugi/mcp"]
     }
   }
 }
