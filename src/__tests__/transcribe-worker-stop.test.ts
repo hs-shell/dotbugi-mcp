@@ -17,6 +17,7 @@ vi.mock('../transcribe/pipeline.js', () => ({
 
 const { transcribe } = await import('../commands/transcribe.js');
 const { readTranscribeState, TRANSCRIBE_HEARTBEAT_MS, TRANSCRIBE_LOCK_FILE } = await import('../transcribe/state.js');
+const { readTranscribeQueue, writeTranscribeQueue } = await import('../transcribe/queue.js');
 
 afterEach(() => {
   vi.useRealTimers();
@@ -30,13 +31,16 @@ it('목록에 없는 언어는 잠금을 잡기 전에 거절한다', async () =
   await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
 });
 
-it('SIGTERM 을 받으면 파이프라인을 멈추고 stopped 를 쓴 뒤 잠금을 푼다', async () => {
+it('SIGTERM 을 받으면 파이프라인을 멈추고 stopped 를 쓴 뒤 남은 대기열을 비우고 잠금을 푼다', async () => {
   const done = transcribe('42', false, 'English');
   await vi.waitFor(() => expect(readTranscribeState()?.phase).toBe('download'));
+  // 실행 중에 도구가 대기열에 붙인 강의
+  await writeTranscribeQueue({ version: 1, pending: [{ cmid: 43, language: 'auto' }], finished: [] });
   process.emit('SIGTERM', 'SIGTERM');
   await done;
   expect(readTranscribeState()).toMatchObject({ status: 'stopped', pid: process.pid, language: 'English' });
   expect(process.exitCode).toBe(143);
+  expect(readTranscribeQueue()).toEqual({ version: 1, pending: [], finished: [] });
   await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
 });
 

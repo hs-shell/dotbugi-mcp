@@ -75,6 +75,45 @@ describe('transcribe 명령', () => {
     expect(readTranscribeState()?.status).toBe('done');
   });
 
+  it('대기열을 비울 때까지 이어서 받아쓰고, 하나가 실패해도 다음으로 넘어간 뒤 마지막 오류로 끝낸다', async () => {
+    const { acquireLock } = await import('../player/lock.js');
+    const { readTranscribeQueue, writeTranscribeQueue } = await import('../transcribe/queue.js');
+    await acquireLock(TRANSCRIBE_LOCK_FILE);
+    await writeTranscribeQueue({
+      version: 1,
+      pending: [
+        { cmid: 43, language: 'Korean' },
+        { cmid: 44, language: 'auto' },
+      ],
+      finished: [],
+    });
+    transcribeVod.mockImplementation(async (cmid: number) => {
+      if (cmid === 43) throw new Error('HTTP 500');
+      return { status: cmid === 42 ? 'done' : 'skipped', path: `/${cmid}.md` };
+    });
+    await expect(transcribe('42', true)).rejects.toThrow('HTTP 500');
+    expect(transcribeVod.mock.calls.map((c) => c[0])).toEqual([42, 43, 44]);
+    expect(readTranscribeQueue()).toEqual({
+      version: 1,
+      pending: [],
+      finished: [
+        { cmid: 42, status: 'done', title: null },
+        { cmid: 43, status: 'error', title: null },
+        { cmid: 44, status: 'skipped', title: null },
+      ],
+    });
+    expect(readTranscribeState()).toMatchObject({ cmid: 44, status: 'skipped' });
+  });
+
+  it('포그라운드 실행은 새 묶음으로 시작해 지난 대기열을 비운다', async () => {
+    const { readTranscribeQueue, writeTranscribeQueue } = await import('../transcribe/queue.js');
+    await writeTranscribeQueue({ version: 1, pending: [{ cmid: 7, language: 'auto' }], finished: [] });
+    transcribeVod.mockResolvedValue({ status: 'done', path: '/x.md' });
+    await transcribe('42');
+    expect(transcribeVod).toHaveBeenCalledTimes(1);
+    expect(readTranscribeQueue().pending).toEqual([]);
+  });
+
   it('재생 화면(viewer.php)이 200 로그인 화면이면 세션 만료로 멈춘다', async () => {
     const fetchMock = vi.fn(async () => new Response(LOGIN_PAGE));
     vi.stubGlobal('fetch', fetchMock);

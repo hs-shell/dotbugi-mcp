@@ -22,6 +22,8 @@ import {
   type TranscribeState,
 } from '../transcribe/state.js';
 import { startWorker, stopTranscribe, transcribeStatusState } from '../tools/transcribe-vod.js';
+import { queuePosition, readTranscribeQueue } from '../transcribe/queue.js';
+import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
 import { PAGES } from './fixtures/lms-pages.js';
 
 // 상태·잠금 경로는 import 시점에 homedir 로 정해진다 — 그 전에 테스트 전용 홈을 정한다
@@ -423,22 +425,20 @@ describe('상태 파일·작업 잠금', () => {
 
   it('세션·ASR 설치를 먼저 확인하고, 실패하면 띄우지 않는다', async () => {
     const noSession = workerDeps({ getSession: vi.fn(() => Promise.reject(new Error('저장된 LMS 세션이 없습니다'))) });
-    await expect(startWorker(42, 'auto', noSession)).rejects.toThrow('세션이 없습니다');
+    await expect(startWorker([42], 'auto', noSession)).rejects.toThrow('세션이 없습니다');
     const noAsr = workerDeps({ runtime: vi.fn(() => Promise.reject(new Error('ASR 런타임이 설치되지 않았습니다'))) });
-    await expect(startWorker(42, 'auto', noAsr)).rejects.toThrow('설치되지 않았습니다');
+    await expect(startWorker([42], 'auto', noAsr)).rejects.toThrow('설치되지 않았습니다');
     expect(noSession.spawn).not.toHaveBeenCalled();
     expect(noAsr.spawn).not.toHaveBeenCalled();
     await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
   });
 
-  it('동시에 불러도 하나만 띄우고, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
+  it('동시에 불러도 하나만 띄우고 나머지는 대기열에 붙이며, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
     expect(TRANSCRIBE_LOCK_FILE.startsWith(join(state.home))).toBe(true);
     const d = workerDeps();
-    const results = await Promise.allSettled([startWorker(42, 'Japanese', d), startWorker(43, 'Japanese', d)]);
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find((r) => r.status === 'rejected')).toMatchObject({
-      reason: expect.objectContaining({ message: expect.stringContaining('이미 받아쓰기가 실행 중') }),
-    });
+    const results = await Promise.all([startWorker([42], 'Japanese', d), startWorker([43], 'Japanese', d)]);
+    expect(results.filter((r) => r.started)).toHaveLength(1);
+    expect(results.find((r) => !r.started)).toEqual({ started: false, added: 1, skipped: 0 });
     expect(d.spawn).toHaveBeenCalledTimes(1);
     expect(d.spawn).toHaveBeenCalledWith(
       process.execPath,
@@ -452,10 +452,32 @@ describe('상태 파일·작업 잠금', () => {
       ],
       { detached: true, stdio: 'ignore' }
     );
+    expect(readTranscribeQueue().pending).toEqual([{ cmid: expect.any(Number), language: 'Japanese' }]);
     // 작업 프로세스가 잠금을 이어받고, 끝나면 푼다
     const release = await adoptLock(TRANSCRIBE_LOCK_FILE, 100);
     await release();
     await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
+  });
+
+  it('여러 개를 넘기면 첫 강의로 띄우고 나머지는 차례로 대기열에, 실행 중이면 겹치지 않게 뒤에 붙인다', async () => {
+    const d = workerDeps();
+    await expect(startWorker([1, 2, 2, 3], 'auto', d)).resolves.toEqual({ started: true, added: 3, skipped: 0 });
+    expect(d.spawn).toHaveBeenCalledWith(process.execPath, expect.arrayContaining(['1']), expect.anything());
+    expect(readTranscribeQueue()).toEqual({
+      version: 1,
+      pending: [
+        { cmid: 2, language: 'auto' },
+        { cmid: 3, language: 'auto' },
+      ],
+      finished: [],
+    });
+    // 지금 받아쓰는 1, 대기 중인 3 은 건너뛴다
+    await expect(startWorker([1, 3, 4], 'Korean', d)).resolves.toEqual({ started: false, added: 1, skipped: 2 });
+    expect(readTranscribeQueue().pending.map((p) => p.cmid)).toEqual([2, 3, 4]);
+    expect(d.spawn).toHaveBeenCalledTimes(1);
+    const many = Array.from({ length: TRANSCRIBE_QUEUE_MAX }, (_, i) => 100 + i);
+    await expect(startWorker(many, 'auto', d)).rejects.toThrow('최대');
+    await rm(TRANSCRIBE_LOCK_FILE, { force: true });
   });
 
   it('잠금을 작업 프로세스에 넘기기 전에 running 상태를 써 둔다 (작업 프로세스의 첫 기록을 덮지 않게)', async () => {
@@ -481,7 +503,7 @@ describe('상태 파일·작업 잠금', () => {
       else setImmediate(poll);
     };
     poll();
-    await startWorker(42, 'auto', d);
+    await startWorker([42], 'auto', d);
     // 끝난 직후엔 감시가 아직 한 번 덜 돌았을 수 있다
     await vi.waitFor(() => expect(atHandoff).not.toBe('not seen'));
     await rm(TRANSCRIBE_LOCK_FILE, { force: true });
@@ -592,4 +614,16 @@ describe('stopTranscribe', () => {
     await lockWith(OTHER);
     await expect(stopTranscribe(d)).resolves.toContain('아직 끝나지 않았습니다');
   });
+});
+
+it('queuePosition: 실행 중이면 끝난 것 + 지금 것 + 대기, 끝났으면 끝난 것만 센다', () => {
+  const s = (status: TranscribeState['status']) => ({ status }) as TranscribeState;
+  const q = {
+    version: 1 as const,
+    pending: [{ cmid: 3, language: 'auto' as const }],
+    finished: [{ cmid: 1, status: 'done' as const, title: null }],
+  };
+  expect(queuePosition(s('running'), q)).toEqual({ position: 2, total: 3 });
+  expect(queuePosition(s('done'), { ...q, pending: [] })).toEqual({ position: 1, total: 1 });
+  expect(queuePosition(null, { version: 1, pending: [], finished: [] })).toEqual({ position: 0, total: 0 });
 });

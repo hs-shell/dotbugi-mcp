@@ -76,17 +76,17 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 
 자주 쓰는 작업은 Claude Code 에서 슬래시 명령으로 바로 부를 수 있습니다 (서버 이름이 `dotbugi` 일 때). `/tasks` 처럼 뒷부분만 쳐도 자동 완성됩니다:
 
-| 명령                                       | 하는 일                                     |
-| ------------------------------------------ | ------------------------------------------- |
-| `/dotbugi:tasks [과목] [N일]`              | 미완료 할 일 (`list_tasks`)                 |
-| `/dotbugi:overdue [과목]`                  | 마감 지난 것까지 (`includePast`)            |
-| `/dotbugi:sync [과목]`                     | 강의자료 받기 (`sync_materials`)            |
-| `/dotbugi:assignment <cmid>`               | 과제 본문·첨부 (`get_assignment`)           |
-| `/dotbugi:status`                          | 받아쓰기 진행 상태 (`transcribe_status`)    |
-| `/dotbugi:transcribe <cmid>`               | 강의 받아쓰기 (`transcribe_vod`)            |
-| `/dotbugi:courses`                         | 내 강좌·추적 여부 (`list_courses`)          |
-| `/dotbugi:track <과목>` / `untrack <과목>` | 강좌 추적 켜기·끄기 (`set_course_tracking`) |
-| `/dotbugi:login`                           | LMS 로그인                                  |
+| 명령                                       | 하는 일                                            |
+| ------------------------------------------ | -------------------------------------------------- |
+| `/dotbugi:tasks [과목] [N일]`              | 미완료 할 일 (`list_tasks`)                        |
+| `/dotbugi:overdue [과목]`                  | 마감 지난 것까지 (`includePast`)                   |
+| `/dotbugi:sync [과목]`                     | 강의자료 받기 (`sync_materials`)                   |
+| `/dotbugi:assignment <cmid>`               | 과제 본문·첨부 (`get_assignment`)                  |
+| `/dotbugi:status`                          | 받아쓰기 진행 상태 (`transcribe_status`)           |
+| `/dotbugi:transcribe <cmid…>`              | 강의 받아쓰기, 여러 개면 차례로 (`transcribe_vod`) |
+| `/dotbugi:courses`                         | 내 강좌·추적 여부 (`list_courses`)                 |
+| `/dotbugi:track <과목>` / `untrack <과목>` | 강좌 추적 켜기·끄기 (`set_course_tracking`)        |
+| `/dotbugi:login`                           | LMS 로그인                                         |
 
 **삭제·저장 위치 변경은 승인을 거칩니다.** `delete_materials`·`asr_remove`·`set_storage_dir`(위치만 바꿔도 — 공유 폴더로 바뀌면 앞으로 받는 자료가 새기 때문)는 확인 창(MCP form elicitation)을 지원하는 앱이면 대상 목록을 확인 창에 띄우고, 사용자가 체크하고 승인해야만 실행합니다 (Claude 가 대신 승인할 수 없습니다). 확인 창을 지원하지 않는 앱에서는 목록과 일회용 확인 토큰을 Claude 에게 돌려주고, Claude 가 사용자에게 묻고 토큰을 넣어 다시 불러야 실행합니다. 이 방식에서는 토큰이 모델을 거치므로 서버가 사용자 동의를 직접 확인하지 못합니다 — 남는 관문은 앱 자체의 도구 실행 허용 확인이니, 이런 앱에서는 이 도구들을 자동 허용하지 마세요.
 
@@ -106,7 +106,7 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 |          | [`read_material`](docs/tools.md#read_material)                                                                                                                                 | 받은 자료·첨부·녹취 읽기, 폴더 살펴보기                             |
 |          | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                        |
 |          | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                                   |
-| 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | VOD 하나를 로컬 음성 인식으로 받아쓰기 / 진행 상황                  |
+| 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | VOD 를 로컬 음성 인식으로 받아쓰기(여러 개는 대기열) / 진행 상황    |
 |          | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                          | 받아쓰기 중지                                                       |
 |          | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                      | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제                    |
 
