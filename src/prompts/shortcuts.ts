@@ -20,6 +20,7 @@ const freeText = (describe: string) =>
     .describe(describe);
 const CMID_LIST = new RegExp(`^\\d{1,10}([\\s,]+\\d{1,10}){0,${TRANSCRIBE_QUEUE_MAX - 1}}$`);
 const course = freeText('과목명 일부 또는 courseId (생략하면 추적 과목 전체)');
+const statusArg = freeText('과목명 일부 또는 courseId, past 를 붙이면 마감 지난 항목 포함 (생략하면 추적 과목 전체)');
 const work = freeText('과제 cmid 또는 과제명 일부 (생략하면 미완료 과제 목록에서 선택)');
 // STT 대상: 숫자만이면 강의 번호 목록(대기열 상한까지)으로 본다 — 숫자 courseId 는 강의 번호와 구분되지 않아 과목은 이름으로
 const target = z
@@ -79,14 +80,24 @@ const shortcuts: Shortcut[] = [
   {
     name: 'status',
     title: '할 일 현황',
-    description: '할 일 현황 (과목을 주면 그 과목 상세)',
-    usage: 'status [과목|courseId]',
-    example: '/dotbugi:status 자료구조',
-    args: { course },
-    text: ({ course: c }) =>
-      c
-        ? `${courseStep(c)}\`list_tasks\` 를 ${withArgs(courseArg(c), 'incompleteOnly: false', 'includePast: true')}불러 그 과목의 동영상 강의·과제·퀴즈를 종류별 표(상태 ✓ 완료 / ○ 미완료 / ✗ 마감 지남, 제목, 남은 시간, cmid)로 자세히 보여 줘. 그 밖의 도구는 부르지 않는다.`
-        : '`list_tasks` 를 includePast: true 로 불러 과목별로 묶어 보여 줘. 과목마다 제목 줄에 남은 동영상 강의·과제·퀴즈 개수를 쓰고, 마감 지난 미완료(✗)와 7일 안 마감(▸)을 앞에 둔 표(종류, 제목, 상태, 남은 시간, cmid)로. 그 밖의 도구는 부르지 않는다.',
+    description: '할 일 현황 (과목을 주면 그 과목 상세, past 면 마감 지난 항목 포함)',
+    usage: 'status [과목|courseId] [past]',
+    example: '/dotbugi:status 자료구조 past',
+    args: { course: statusArg },
+    text: ({ course: arg }) => {
+      // 토큰 past 만 옵션으로 보고(순서 무관) 나머지는 과목으로
+      const words = (arg ?? '').split(' ').filter(Boolean);
+      const past = words.some((w) => w.toLowerCase() === 'past');
+      const c = words.filter((w) => w.toLowerCase() !== 'past').join(' ') || undefined;
+      const call = `${courseStep(c)}\`list_tasks\` 를 ${withArgs(courseArg(c), c && 'incompleteOnly: false', 'includePast: true')}불러`;
+      const show = c
+        ? '그 과목의 동영상 강의·과제·퀴즈를 종류별 표(상태 ✓ 완료 / ○ 미완료 / ✗ 마감 지남, 제목, 남은 시간, cmid)로 자세히 보여 줘.'
+        : '과목별로 묶어 보여 줘. 과목마다 제목 줄에 남은 동영상 강의·과제·퀴즈 개수를 쓰고, 7일 안 마감(▸)을 앞에 둔 표(종류, 제목, 상태, 남은 시간, cmid)로.';
+      const overdue = past
+        ? '마감 지난 미완료(overdue: true, ✗)는 맨 앞에 따로 표로 보여 줘.'
+        : 'overdue: true 항목은 목록에서 빼고, 1개 이상이면 맨 끝에 "마감 지난 항목 N개 — /dotbugi:status past" 한 줄만 안내해.';
+      return `${call} ${show} ${overdue} 그 밖의 도구는 부르지 않는다.`;
+    },
   },
   {
     name: 'pull',

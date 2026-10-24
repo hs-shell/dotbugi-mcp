@@ -50,7 +50,7 @@ describe('바로가기 프롬프트', () => {
 
   // 선택 인자를 비우면 전체 대상이고 문장이 깨지지 않는다 (hs-shell/dotbugi-mcp#100)
   it.each([
-    ['status', '`list_tasks` 를 includePast: true 로 불러'],
+    ['status', '마감 지난 항목 N개 — /dotbugi:status past'],
     ['pull', '`sync_materials` 를 부르고'],
     ['work', '골라 달라고'],
     ['transcribe', '`transcribe_vod` 를 불러'],
@@ -63,6 +63,16 @@ describe('바로가기 프롬프트', () => {
   it('transcribe 대상은 transcribe_vod 인자로 넘긴다 (확인은 서버가)', async () => {
     expect(text(await get('transcribe', { target: 'ALL' }))).toContain('all: true');
     expect(text(await get('transcribe', { target: '자료구조' }))).toContain('course: "자료구조"');
+  });
+
+  it('status past 는 순서와 상관없이 옵션으로 보고 나머지는 과목으로', async () => {
+    const t = text(await get('status', { course: 'PAST 크롬' }));
+    expect(t).toContain('course: "크롬", incompleteOnly: false, includePast: true');
+    expect(t).toContain('맨 앞에 따로');
+    expect(text(await get('status', { course: 'past' }))).toContain(
+      '`list_tasks` 를 includePast: true 로 불러 과목별로'
+    );
+    expect(text(await get('status', { course: '크롬' }))).not.toContain('맨 앞에 따로');
   });
 
   it('work 는 지시사항을 읽고 바로 함께 작업하며 제출은 하지 않는다', async () => {
