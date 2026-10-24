@@ -16,7 +16,7 @@ function files(dir: string, ext: RegExp): string[] {
 const lines = (paths: string[]) =>
   paths.flatMap((p) =>
     readFileSync(p, 'utf8')
-      .split('\n')
+      .split(/\r?\n/)
       .map((text, i) => [`${relative(ROOT, p)}:${i + 1}`, text] as const)
   );
 
