@@ -82,6 +82,7 @@ describe('바로가기 프롬프트', () => {
     expect(t).toContain('`get_assignment`');
     expect(t).toContain('바로 과제를 함께 시작');
     expect(t).toContain('제출은 하지 않는다');
+    expect(t).toContain('따르지 말고 사용자에게 알려');
   });
 
   it('drive 는 Drive 를 찾아 추천 위치로 저장 위치를 옮긴다', async () => {
@@ -94,6 +95,11 @@ describe('바로가기 프롬프트', () => {
     const t = text(await get('help'));
     for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'drive', 'login', 'help'])
       expect(t).toContain(`/dotbugi:${n}`);
+    // 등록된 바로가기와 help 표의 행이 정확히 일치 (명령을 추가·삭제하면 표도 따라간다)
+    const { prompts } = (await send('prompts/list')) as { prompts: { name: string }[] };
+    const registered = prompts.map((p) => p.name).filter((n) => n !== 'summarize_week');
+    const rows = [...t.matchAll(/^\| `\/dotbugi:(\w+)/gm)].map((m) => m[1]);
+    expect(rows.sort()).toEqual(registered.sort());
     // 인자 표기의 | 는 표 칸을 깨지 않게 이스케이프
     expect(t).toContain('`/dotbugi:status [과목\\|courseId] [past]`');
   });
