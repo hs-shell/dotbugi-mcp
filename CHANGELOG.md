@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/hs-shell/dotbugi-mcp/compare/v0.2.0...v0.3.0) (2026-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* play_vods·stop_vods·vod_status·setup_statusline 도구와 dotbugi-mcp play·statusline 명령이 사라진다. Claude Code 상태 표시줄에 dotbugi-mcp statusline 을 설정했다면 직접 지워야 한다.
+
+### Features
+
+* VOD 자동 재생 기능 삭제 ([#95](https://github.com/hs-shell/dotbugi-mcp/issues/95)) ([26a71d4](https://github.com/hs-shell/dotbugi-mcp/commit/26a71d459a8908018e3a3ee5a2930080d7b473f5)), closes [#94](https://github.com/hs-shell/dotbugi-mcp/issues/94)
+* 슬래시 명령 바로가기 + VOD 재생 창을 viewer.php 로 ([#92](https://github.com/hs-shell/dotbugi-mcp/issues/92)) ([6d9c6f9](https://github.com/hs-shell/dotbugi-mcp/commit/6d9c6f9e450eb268e3790109d8e48306a1327ca6))
+
 ## [0.2.0](https://github.com/hs-shell/dotbugi-mcp/compare/v0.1.0...v0.2.0) (2026-10-24)
 
 
