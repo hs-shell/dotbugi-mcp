@@ -507,6 +507,19 @@ describe('get_assignment — 과제 지시사항 md', () => {
     expect(await readFile(join(dir(), LOG), 'utf8')).toBe('내 메모');
   });
 
+  it.skipIf(process.platform === 'win32')('변경기록 자리가 링크면 따라가지 않고 경고만 한다', async () => {
+    serve(PAGE());
+    await call({ cmid: 5 });
+    const target = join(dir(), '밖.txt');
+    await writeFile(target, '원본');
+    await symlink(target, join(dir(), LOG));
+    serve(PAGE(' 바뀜'));
+    const out = (await call({ cmid: 5 })).structuredContent as Out;
+    expect(out.changes).toContain('+보고서는 PDF로. 바뀜');
+    expect(out.warnings).toEqual([expect.stringContaining('변경기록을 쓰지 않았습니다')]);
+    expect(await readFile(target, 'utf8')).toBe('원본');
+  });
+
   it('실제 과제 화면: 화면의 지시사항만 담고, 숨은 hwp 편집기 JSON·제출자 본인 첨부는 빼며 받지 않는다', async () => {
     serve(REPORT_PAGE);
     const out = (await call({ cmid: 5 })).structuredContent as {

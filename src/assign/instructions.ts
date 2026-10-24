@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { appendFile, lstat, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import {
   ASSIGN_DIFF_LOG_MAX_CHARS as LOG_MAX_CHARS,
@@ -105,16 +106,34 @@ async function archive(dir: string, title: string, previous: string, diff: strin
   for (const name of old.slice(0, Math.max(0, old.length - HISTORY_MAX))) await unlink(join(historyDir, name));
 
   const log = join(dir, `${base}.변경기록.md`);
-  const st = await lstat(log).catch((err: NodeJS.ErrnoException) => {
-    if (err.code === 'ENOENT') return null;
+  // 확인과 쓰기 사이에 링크로 바뀌어도 따라가지 않게 O_NOFOLLOW 로 연 fd 하나로 확인·덧붙이기를 한다
+  const other = [`같은 이름의 다른 파일이 있어 변경기록을 쓰지 않았습니다: ${log}`];
+  const file = await open(
+    log,
+    constants.O_RDWR |
+      constants.O_APPEND |
+      constants.O_CREAT |
+      (constants.O_NOFOLLOW ?? 0) |
+      (constants.O_NONBLOCK ?? 0),
+    0o600
+  ).catch((err: NodeJS.ErrnoException) => {
+    // 링크(ELOOP)·폴더(EISDIR)면 덮지 않고 경고만
+    if (err.code === 'ELOOP' || err.code === 'EISDIR') return null;
     throw err;
   });
-  if (st && !(st.isFile() && (await readFile(log, 'utf8')).startsWith(LOG_MARK)))
-    return [`같은 이름의 다른 파일이 있어 변경기록을 쓰지 않았습니다: ${log}`];
-  const entry = `\n## ${when(now)}\n\n${fenced(cap(diff, LOG_MAX_CHARS, `.history/ 의 이전 버전`), 'diff')}\n`;
-  await appendFile(log, st ? entry : `${LOG_MARK}\n${LMS_DATA_NOTICE}\n\n# ${title} 지시사항 변경기록\n${entry}`, {
-    mode: 0o600,
-  });
+  if (!file) return other;
+  try {
+    const st = await file.stat();
+    const head = Buffer.alloc(Buffer.byteLength(LOG_MARK));
+    if (st.isFile() && st.size) await file.read(head, 0, head.length, 0);
+    if (!st.isFile() || (st.size && head.toString('utf8') !== LOG_MARK)) return other;
+    const entry = `\n## ${when(now)}\n\n${fenced(cap(diff, LOG_MAX_CHARS, `.history/ 의 이전 버전`), 'diff')}\n`;
+    await file.appendFile(
+      st.size ? entry : `${LOG_MARK}\n${LMS_DATA_NOTICE}\n\n# ${title} 지시사항 변경기록\n${entry}`
+    );
+  } finally {
+    await file.close();
+  }
   return [];
 }
 
