@@ -48,8 +48,11 @@ describe('추적 설정', () => {
   it('0700 디렉터리·0600 파일로 쓰고 다시 읽는다', async () => {
     await writeCoursesConfig({ version: 1, courses: { '100': false } });
     expect(readCoursesConfig()).toEqual({ version: 1, courses: { '100': false } });
-    expect((await stat(COURSES_FILE)).mode & 0o777).toBe(0o600);
-    expect((await stat(dirname(COURSES_FILE))).mode & 0o777).toBe(0o700);
+    // Windows 는 POSIX 권한 비트가 없다
+    if (process.platform !== 'win32') {
+      expect((await stat(COURSES_FILE)).mode & 0o777).toBe(0o600);
+      expect((await stat(dirname(COURSES_FILE))).mode & 0o777).toBe(0o700);
+    }
   });
 
   it('형식이 틀린 파일(숫자가 아닌 courseId·버전·값)은 기본값으로 본다', async () => {

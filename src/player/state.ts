@@ -81,6 +81,20 @@ export async function ensurePrivateDir(dir: string): Promise<void> {
   await chmod(dir, 0o700);
 }
 
+// Windows 는 다른 프로세스가 대상 파일을 읽는 순간 rename 덮어쓰기가 EPERM/EACCES/EBUSY 로 실패한다 — 잠시 뒤 다시 시도한다
+const RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+export async function replaceFile(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rename(from, to);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (process.platform !== 'win32' || !RETRY_CODES.has(code) || attempt >= 20) throw err;
+      await new Promise((r) => setTimeout(r, 10 + attempt * 10));
+    }
+  }
+}
+
 // 읽는 쪽이 쓰다 만 파일을 보지 않게 임시 파일에 쓰고 rename 한다. 디렉터리 0700, 파일 0600
 export function writePlayerState(file: string, state: PlayerState): Promise<void> {
   return writeStateFile(file, playerStateSchema, state);
@@ -91,5 +105,5 @@ export async function writeStateFile<T>(file: string, schema: z.ZodType<T>, stat
   // 같은 프로세스가 동시에 써도 서로의 임시 파일을 옮기지 않게 이름을 매번 다르게
   const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tmp, `${JSON.stringify(schema.parse(state), null, 2)}\n`, { mode: 0o600 });
-  await rename(tmp, file);
+  await replaceFile(tmp, file);
 }

@@ -75,7 +75,7 @@ describe('setup_statusline', () => {
     const after = await read();
     expect(Object.keys(after)).toEqual(['model', 'statusLine', 'z']);
     expect(after).toMatchObject({ model: 'opus', z: [1], statusLine: { command: CMD } });
-    expect((await stat(file())).mode & 0o777).toBe(0o640);
+    if (process.platform !== 'win32') expect((await stat(file())).mode & 0o777).toBe(0o640);
   });
 
   it('JSON 이 아니면(주석 포함) 묻지도 바꾸지도 않는다', async () => {

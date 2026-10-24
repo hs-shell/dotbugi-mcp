@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { link, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { link, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { ensurePrivateDir } from './state.js';
+import { ensurePrivateDir, replaceFile } from './state.js';
 
 export const isAlive = (pid: number) => {
   try {
@@ -41,7 +41,7 @@ async function takeOver(file: string, tmp: string): Promise<boolean> {
     const content = await readFile(file, 'utf8').catch(() => null);
     // 그 사이 다른 프로세스가 넘겨받았거나 해제했으면 처음부터 다시
     if (content === null || isHeld(Number(content.trim()))) return false;
-    await rename(tmp, file);
+    await replaceFile(tmp, file);
     return true;
   } finally {
     await unlink(guard).catch(() => {});

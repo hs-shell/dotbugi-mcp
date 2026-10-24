@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { rename, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
@@ -15,6 +15,7 @@ import {
 } from '../asr/state.js';
 import { statusText } from '../commands/asr.js';
 import { acquireLock, isAlive } from '../player/lock.js';
+import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
 
 // dist/tools/ → dist/index.js
@@ -67,7 +68,7 @@ export async function startInstall(opts: { gpu: boolean; model?: string }, deps 
     // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_vod 와 같은 이유)
     const tmp = `${ASR_INSTALL_LOCK_FILE}.${process.pid}.tmp`;
     await writeFile(tmp, String(child.pid), { mode: 0o600 });
-    await rename(tmp, ASR_INSTALL_LOCK_FILE);
+    await replaceFile(tmp, ASR_INSTALL_LOCK_FILE);
     child.unref();
   } catch (err) {
     await release();

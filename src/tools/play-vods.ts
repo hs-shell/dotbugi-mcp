@@ -1,12 +1,19 @@
 import { spawn } from 'node:child_process';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { acquireLock, isAlive } from '../player/lock.js';
 import { isStale } from '../player/status-line.js';
-import { idleState, PLAYER_LOCK_FILE, PLAYER_STATE_FILE, readPlayerState, writePlayerState } from '../player/state.js';
+import {
+  idleState,
+  PLAYER_LOCK_FILE,
+  PLAYER_STATE_FILE,
+  readPlayerState,
+  replaceFile,
+  writePlayerState,
+} from '../player/state.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 
@@ -36,7 +43,7 @@ export async function startPlayer(deps = WORKER_DEPS): Promise<boolean> {
     // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_vod 와 같은 이유)
     const tmp = `${PLAYER_LOCK_FILE}.${process.pid}.tmp`;
     await writeFile(tmp, String(child.pid), { mode: 0o600 });
-    await rename(tmp, PLAYER_LOCK_FILE);
+    await replaceFile(tmp, PLAYER_LOCK_FILE);
     child.unref();
     // 시작 직후 vod_status 가 이전 재생 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신)
     await writePlayerState(PLAYER_STATE_FILE, idleState('playing', child.pid!)).catch(() => {});

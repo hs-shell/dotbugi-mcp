@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { rm, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { spawn } from 'node:child_process';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { adoptLock } from '../player/lock.js';
@@ -40,7 +41,7 @@ describe('startPlayer', () => {
   });
 
   it('한 번만 인자 배열로 띄우고 잠금을 넘기며, 재생 중이면 다시 띄우지 않는다', async () => {
-    expect(PLAYER_LOCK_FILE.startsWith(state.home)).toBe(true);
+    expect(PLAYER_LOCK_FILE.startsWith(join(state.home))).toBe(true);
     const d = deps();
     await expect(startPlayer(d)).resolves.toBe(true);
     await expect(startPlayer(d)).resolves.toBe(false);
