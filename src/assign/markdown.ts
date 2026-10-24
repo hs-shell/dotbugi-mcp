@@ -35,10 +35,10 @@ function link(href: string | null, text: string): string {
 // <pre> 의 줄바꿈·들여쓰기는 살리되 제어(\n·\t 제외)·서식 문자는 지운다
 const preText = (text: string) => text.replace(/\r\n?|[\u2028\u2029]/g, '\n').replace(/(?![\n\t])[\p{Cc}\p{Cf}]/gu, '');
 
-function fenced(code: string): string {
+export function fenced(code: string, lang = ''): string {
   const longest = Math.max(0, ...Array.from(code.matchAll(/`+/g), (m) => m[0].length));
   const fence = '`'.repeat(Math.max(3, longest + 1));
-  return `${fence}\n${code.replace(/^\n+|\n+$/g, '')}\n${fence}`;
+  return `${fence}${lang}\n${code.replace(/^\n+|\n+$/g, '')}\n${fence}`;
 }
 
 // pre 블록은 줄 다듬기를 피하도록 자리표시(\0 — 본문 텍스트에는 남지 않는 문자)로 빼 두었다가 마지막에 넣는다

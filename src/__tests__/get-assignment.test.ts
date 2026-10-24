@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENT_REQUEST_TIMEOUT_MS, LMS_REQUEST_TIMEOUT_MS } from '../constants.js';
+import {
+  ASSIGN_HISTORY_MAX,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_REQUEST_TIMEOUT_MS,
+  LMS_REQUEST_TIMEOUT_MS,
+} from '../constants.js';
 import { withSyncLock } from '../materials/sync.js';
 import { createServer } from '../server.js';
 import { semesterOf } from '../storage.js';
@@ -354,13 +359,13 @@ describe('get_assignment — 과제 지시사항 md', () => {
   const PAGE = (extra = '') =>
     `<html><body><div role="main"><h2>과제1</h2><div id="intro"><p>보고서는 PDF로.${extra}</p>
     <a href="${DOCX}">안내.docx</a></div></div></body></html>`;
-  const serve = (page: string) =>
+  const serve = (page: string, docText = '표지에 학번을 쓰시오') =>
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
       if (url === `${L}/mod/assign/view.php?id=5`) return new Response(page);
       if (url === DOCX)
         return new Response(
-          new Uint8Array(zip({ 'word/document.xml': '<w:p><w:r><w:t>표지에 학번을 쓰시오</w:t></w:r></w:p>' }))
+          new Uint8Array(zip({ 'word/document.xml': `<w:p><w:r><w:t>${docText}</w:t></w:r></w:p>` }))
         );
       return new Response('not found', { status: 404 });
     });
@@ -412,6 +417,107 @@ describe('get_assignment — 과제 지시사항 md', () => {
     expect(md).not.toContain('남음');
     expect((await stat(first.instructionsPath)).mtimeMs).toBe(before.mtimeMs);
     expect((await stat(first.instructionsPath)).ino).toBe(before.ino);
+  });
+
+  type Out = { changes: string | null; warnings: string[]; instructionsPath: string };
+  const history = () => readdir(join(dir(), '.history')).catch(() => [] as string[]);
+  const LOG = '과제-과제1.변경기록.md';
+
+  it('지시사항이 그대로면 diff·이전 버전·변경기록을 만들지 않는다', async () => {
+    serve(PAGE());
+    expect(((await call({ cmid: 5 })).structuredContent as Out).changes).toBeNull();
+    expect(((await call({ cmid: 5 })).structuredContent as Out).changes).toBeNull();
+    expect(await history()).toEqual([]);
+    await expect(stat(join(dir(), LOG))).rejects.toThrow();
+  });
+
+  it('본문이 바뀌면 diff 를 돌려주고, 이전 버전을 .history/ 에 남기고, 변경기록에 diff 블록을 쌓는다', async () => {
+    serve(PAGE());
+    const first = (await call({ cmid: 5 })).structuredContent as Out;
+    const previous = await readFile(first.instructionsPath, 'utf8');
+    serve(PAGE(' 분량은 3쪽.'));
+    const res = await call({ cmid: 5 });
+    const out = res.structuredContent as Out;
+    expect(out.changes).toContain('-보고서는 PDF로.');
+    expect(out.changes).toContain('+보고서는 PDF로. 분량은 3쪽.');
+    // 구조화 결과를 못 읽는 클라이언트용 글에도 diff 블록으로, 신뢰할 수 없는 데이터 구분선 아래에
+    const text = (res.content as { text: string }[])[0].text;
+    expect(text.indexOf('```diff\n')).toBeGreaterThan(text.indexOf('--- 아래는 LMS'));
+    const saved = await history();
+    expect(saved).toEqual([expect.stringMatching(/^과제-과제1\.\d{8}-\d{6}-\d{3}\.md$/)]);
+    expect(await readFile(join(dir(), '.history', saved[0]), 'utf8')).toBe(previous);
+    const log = await readFile(join(dir(), LOG), 'utf8');
+    expect(log.split('\n')[0]).toBe('<!-- dotbugi-mcp: 과제 지시사항 변경기록 -->');
+    expect(log).toContain('```diff\n');
+    expect(log).toContain('+보고서는 PDF로. 분량은 3쪽.');
+
+    serve(PAGE(' 분량은 5쪽.'));
+    await call({ cmid: 5 });
+    expect((await readFile(join(dir(), LOG), 'utf8')).match(/^## /gm)).toHaveLength(2);
+    expect(await history()).toHaveLength(2);
+  });
+
+  it('첨부 문서 내용이 바뀐 것도 diff 로 잡는다', async () => {
+    serve(PAGE());
+    await call({ cmid: 5 });
+    serve(PAGE(), '표지에 학번과 이름을 쓰시오');
+    const out = (await call({ cmid: 5 })).structuredContent as Out;
+    expect(out.changes).toContain('-표지에 학번을 쓰시오');
+    expect(out.changes).toContain('+표지에 학번과 이름을 쓰시오');
+  });
+
+  it('제출 여부만 바뀌면 md 는 갱신하되 지시사항 변경으로 보지 않는다', async () => {
+    const page = (submitted: string) =>
+      PAGE().replace(
+        '</div></body>',
+        `<div class="submissionstatustable"><table><tbody>
+        <tr><td class="cell c0">제출 여부</td><td class="cell c1">${submitted}</td></tr>
+        </tbody></table></div></div></body>`
+      );
+    serve(page('제출 안 함'));
+    await call({ cmid: 5 });
+    serve(page('제출 완료'));
+    const out = (await call({ cmid: 5 })).structuredContent as Out;
+    expect(out.changes).toBeNull();
+    expect(await readFile(out.instructionsPath, 'utf8')).toContain('- 제출 여부: 제출 완료');
+    expect(await history()).toEqual([]);
+  });
+
+  it('이전 버전은 상한 개수만 남기고, 변경기록 자리에 다른 파일이 있으면 덮지 않는다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (let i = 0; i <= ASSIGN_HISTORY_MAX + 1; i++) {
+        vi.setSystemTime(new Date(2026, 9, 1, 0, 0, i));
+        serve(PAGE(` 버전 ${i}`));
+        await call({ cmid: 5 });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    const saved = (await history()).sort();
+    expect(saved).toHaveLength(ASSIGN_HISTORY_MAX);
+    // 가장 오래된 것(버전 0)이 지워졌다
+    expect(await readFile(join(dir(), '.history', saved[0]), 'utf8')).toContain('버전 1');
+
+    await writeFile(join(dir(), LOG), '내 메모');
+    serve(PAGE(' 마지막'));
+    const out = (await call({ cmid: 5 })).structuredContent as Out;
+    expect(out.changes).toContain('+보고서는 PDF로. 마지막');
+    expect(out.warnings).toEqual([expect.stringContaining('변경기록을 쓰지 않았습니다')]);
+    expect(await readFile(join(dir(), LOG), 'utf8')).toBe('내 메모');
+  });
+
+  it.skipIf(process.platform === 'win32')('변경기록 자리가 링크면 따라가지 않고 경고만 한다', async () => {
+    serve(PAGE());
+    await call({ cmid: 5 });
+    const target = join(dir(), '밖.txt');
+    await writeFile(target, '원본');
+    await symlink(target, join(dir(), LOG));
+    serve(PAGE(' 바뀜'));
+    const out = (await call({ cmid: 5 })).structuredContent as Out;
+    expect(out.changes).toContain('+보고서는 PDF로. 바뀜');
+    expect(out.warnings).toEqual([expect.stringContaining('변경기록을 쓰지 않았습니다')]);
+    expect(await readFile(target, 'utf8')).toBe('원본');
   });
 
   it('실제 과제 화면: 화면의 지시사항만 담고, 숨은 hwp 편집기 JSON·제출자 본인 첨부는 빼며 받지 않는다', async () => {

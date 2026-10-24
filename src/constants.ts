@@ -68,6 +68,12 @@ export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
 export const ATTACHMENT_MAX_COUNT = 20;
 // 상한 크기 첨부를 느린 회선에서도 받을 수 있게 첨부 요청만 길게 (본문 수신 포함)
 export const ATTACHMENT_REQUEST_TIMEOUT_MS = 120_000;
+// 과제 지시사항 변경 diff: 줄 비교 표 칸 수 상한(약 16MB), 앞뒤 문맥 줄, 도구 결과에 싣는 길이, 변경기록 항목 길이, 이전 버전 보관 개수
+export const ASSIGN_DIFF_MAX_CELLS = 4_000_000;
+export const ASSIGN_DIFF_CONTEXT_LINES = 3;
+export const ASSIGN_DIFF_RESULT_MAX_CHARS = 8000;
+export const ASSIGN_DIFF_LOG_MAX_CHARS = 100_000;
+export const ASSIGN_HISTORY_MAX = 20;
 // 같은 이름 파일이 있을 때 붙여 보는 " (n)" 의 상한
 export const FILE_NAME_SUFFIX_MAX = 100;
 // 확장자를 뺀 파일명 길이(코드 포인트). 한글 4바이트 문자여도 파일 시스템 이름 한도(255바이트) 안에 든다
