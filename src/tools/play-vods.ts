@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { acquireLock, isAlive } from '../player/lock.js';
+import { isStale } from '../player/status-line.js';
 import { idleState, PLAYER_LOCK_FILE, PLAYER_STATE_FILE, readPlayerState, writePlayerState } from '../player/state.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
@@ -60,12 +61,15 @@ export async function stopPlayer(deps = STOP_DEPS): Promise<string> {
   const pid = await readLockPid();
   if (!Number.isInteger(pid) || pid <= 0 || !deps.isAlive(pid)) return '재생 중인 VOD 가 없습니다.';
   const state = readPlayerState(PLAYER_STATE_FILE);
-  if (pid === process.pid || state?.status !== 'playing' || state.pid !== pid)
+  // 갱신이 끊긴 상태는 강제 종료된 작업의 흔적일 수 있다 — 그 pid 를 다른 프로세스가 물려받았을 수 있어 보내지 않는다
+  if (pid === process.pid || state?.status !== 'playing' || state.pid !== pid || isStale(state, Date.now()))
     return '재생 작업을 확인하지 못해 중지하지 않았습니다. 터미널에서 실행한 play 라면 그 터미널에서 Ctrl+C 로 멈추세요.';
   deps.kill(pid, 'SIGTERM');
   // 작업 프로세스가 상태를 stopped 로 쓰고 잠금을 풀 때까지 잠시 기다린다
   for (const end = Date.now() + deps.timeoutMs; Date.now() < end; await sleep(100))
-    if ((await readLockPid()) !== pid) return '재생을 중지했습니다. 열린 강의 창은 직접 닫아 주세요.';
+    // 신호 처리기를 달기 전(시작 직후)에 받으면 잠금을 못 풀고 바로 끝난다 — 프로세스가 사라진 것도 중지로 본다
+    if ((await readLockPid()) !== pid || !deps.isAlive(pid))
+      return '재생을 중지했습니다. 열린 강의 창은 직접 닫아 주세요.';
   return '중지 신호를 보냈지만 아직 끝나지 않았습니다. 잠시 뒤 vod_status 로 확인하세요.';
 }
 

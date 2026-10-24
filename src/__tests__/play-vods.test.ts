@@ -4,6 +4,7 @@ import type { spawn } from 'node:child_process';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { adoptLock } from '../player/lock.js';
 import { idleState, PLAYER_LOCK_FILE, PLAYER_STATE_FILE, readPlayerState, writePlayerState } from '../player/state.js';
+import { PLAYER_STATE_STALE_MS } from '../constants.js';
 import { startPlayer, stopPlayer } from '../tools/play-vods.js';
 
 // 상태·잠금 경로는 import 시점에 homedir 로 정해진다 — 그 전에 테스트 전용 홈을 정한다
@@ -94,6 +95,22 @@ describe('stopPlayer', () => {
     await lockWith(lockPid, statePid);
     await stopPlayer(d);
     expect(d.kill).not.toHaveBeenCalled();
+  });
+
+  it('갱신이 끊긴(강제 종료 흔적) 상태면 pid 가 맞아도 신호를 보내지 않는다', async () => {
+    const d = deps();
+    await lockWith(OTHER, OTHER);
+    const stale = new Date(Date.now() - PLAYER_STATE_STALE_MS - 1000).toISOString();
+    await writePlayerState(PLAYER_STATE_FILE, { ...idleState('playing', 1), pid: OTHER, updatedAt: stale });
+    await expect(stopPlayer(d)).resolves.toContain('확인하지 못해');
+    expect(d.kill).not.toHaveBeenCalled();
+  });
+
+  it('신호를 받고 잠금을 못 푼 채 끝나도(시작 직후) 중지로 본다', async () => {
+    let alive = true;
+    const d = { kill: vi.fn(() => void (alive = false)), isAlive: vi.fn(() => alive), timeoutMs: 1000 };
+    await lockWith(OTHER, OTHER);
+    await expect(stopPlayer(d)).resolves.toContain('중지했습니다');
   });
 
   it('상태가 playing 이 아니면 신호를 보내지 않는다', async () => {
