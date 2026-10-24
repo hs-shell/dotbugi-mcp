@@ -12,7 +12,14 @@ import {
   VOD_MEDIA_MAX_BYTES,
   VOD_SEGMENT_MAX_BYTES,
 } from '../constants.js';
-import { childDir, ensureRealDir, migrateCourseDir, openCourseDir, withSyncLock } from '../materials/sync.js';
+import {
+  childDir,
+  ensureRealDir,
+  migrateCourseDir,
+  migrateWeekDirs,
+  openCourseDir,
+  withSyncLock,
+} from '../materials/sync.js';
 import { ensurePrivateDir } from '../player/state.js';
 import { stripUrls } from '../redact.js';
 import type { VodMeta } from './find-vod.js';
@@ -147,7 +154,10 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     const { dir: courseDir } = await withSyncLock(
       async () => {
         await migrateCourseDir(deps.root, meta.course, meta.courseId, deps.now());
-        return openCourseDir(deps.root, meta.course, meta.courseId, deps.now());
+        const opened = await openCourseDir(deps.root, meta.course, meta.courseId, deps.now());
+        // 녹취가 먼저 "N주차" 를 만들면 예전 "N" 자료 폴더를 옮길 수 없게 된다
+        await migrateWeekDirs(opened.dir, opened.manifest);
+        return opened;
       },
       { ms: SYNC_LOCK_WAIT_MS, busy: '강의자료 동기화가 실행 중입니다. 강의자료 동기화가 끝난 뒤 다시 시도하세요.' }
     );

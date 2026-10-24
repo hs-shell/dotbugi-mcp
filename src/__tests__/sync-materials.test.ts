@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { confirmRemovals } from '../commands/sync.js';
@@ -579,6 +579,28 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     const s = await sync();
     expect(fileFetches().filter((u) => !u.includes('/60/'))).toEqual([]);
     expect(s.warnings.filter((w) => w.includes('예전 폴더'))).toEqual([]);
+  });
+
+  it('예전 규칙의 번호뿐인 주차 폴더("3")는 N주차로 옮기고 다시 받지도, 사라진 자료로 보지도 않는다 (#99)', async () => {
+    await sync();
+    // #99 전 sync 가 남긴 모습: "3" 폴더 + manifest 경로 "3/..."
+    await rename(course('3주차'), course('3'));
+    // JSON 문자열 속 경로 앞부분 (Windows 구분자는 JSON 에서 \\ 로 적힌다)
+    const quoted = (p: string) => JSON.stringify(p + sep).slice(0, -1);
+    const oldLayout = (await readFile(manifestFile(), 'utf8')).replaceAll(quoted('3주차'), quoted('3'));
+    await writeFile(manifestFile(), oldLayout);
+    fetchMock.mockClear();
+    const r = await sync();
+    expect(fileFetches().filter((u) => !u.includes('/60/'))).toEqual([]);
+    expect(r.removed).toEqual([]);
+    expect(await readdir(course('3주차'))).toEqual(['a.txt', 'b.txt']);
+    await expect(readdir(course('3'))).rejects.toThrow();
+    // 이미 N주차 폴더가 있으면 옮기지도 합치지도 않는다
+    await rename(course('3주차'), course('3'));
+    await mkdir(course('3주차'));
+    await writeFile(manifestFile(), oldLayout);
+    await sync();
+    expect(await readdir(course('3'))).toEqual(['a.txt', 'b.txt']);
   });
 
   it('새 학기 폴더에 같은 과목 폴더가 이미 있으면 옮기지도 합치지도 않고 경고한다', async () => {

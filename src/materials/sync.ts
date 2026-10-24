@@ -1,4 +1,4 @@
-import { lstat, mkdir, stat, unlink } from 'node:fs/promises';
+import { lstat, mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { getIndexPageLink, type CourseBase, type FetchHtml } from '@dotbugi/lms-parser';
@@ -253,6 +253,33 @@ export async function migrateCourseDir(root: string, title: string, courseId: st
   return warnings;
 }
 
+// #99 전에는 이름이 번호뿐인 주차("4")를 "4" 폴더에 받았다 — 지금 규칙(4주차)과 폴더가 갈리지 않게 옮기고 manifest 경로도 고친다 (sync 잠금 안에서만 부른다).
+// manifest 가 가리키는 폴더(우리가 만든 것)만, "N주차" 가 아직 없을 때만 옮긴다 (덮어쓰거나 합치지 않음)
+export async function migrateWeekDirs(courseDir: string, manifest: Manifest): Promise<string[]> {
+  const warnings: string[] = [];
+  const top = (e: ManifestEntry) => e.path.split(sep)[0];
+  const names = new Set([...manifest.files.values()].map(top).filter((n) => /^\d{1,3}$/.test(n)));
+  for (const name of names) {
+    const week = `${Number(name)}주차`;
+    const from = join(courseDir, name);
+    const to = join(courseDir, week);
+    if (!(await lstat(from).catch(() => null))?.isDirectory() || (await lstat(to).catch(() => null))) continue;
+    try {
+      await rename(from, to);
+    } catch (err) {
+      warnings.push(
+        `예전 주차 폴더 ${from} 를 ${to} 로 옮기지 못했습니다: ${err instanceof Error ? err.message : String(err)}`
+      );
+      continue;
+    }
+    for (const e of manifest.files.values())
+      if (top(e) === name) e.path = [week, ...e.path.split(sep).slice(1)].join(sep);
+    // 옮긴 즉시 기록한다 — 기록이 옛 경로를 가리키면 파일이 없는 것으로 보고 다시 받는다
+    await writeManifest(courseDir, manifest);
+  }
+  return warnings;
+}
+
 // 과목 폴더는 "<학기>/<과목>". 같은 이름의 다른 과목이 이미 쓰고 있으면 "<학기>/<과목> (<과목 번호>)"
 export async function openCourseDir(root: string, title: string, courseId: string, now = new Date()) {
   const current = semesterOf(now);
@@ -299,6 +326,7 @@ async function syncCourse(
   const now = new Date();
   for (const w of await migrateCourseDir(root, title, course.courseId, now)) warn(w);
   const { dir: courseDir, manifest } = await openCourseDir(root, title, course.courseId, now);
+  for (const w of await migrateWeekDirs(courseDir, manifest)) warn(w);
   const save = async (m: Manifest) => {
     await ensureRealDir(root, courseDir);
     await writeManifest(courseDir, m);
