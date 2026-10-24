@@ -48,7 +48,9 @@ export function detectPlatform(): AsrPlatform {
     return 'linux-x64';
   }
   if (process.platform === 'darwin' && process.arch === 'arm64') return 'macos-arm64';
-  throw new Error('로컬 ASR 은 Linux(x64)·WSL·macOS(Apple Silicon) 만 지원합니다. Windows 는 WSL 에서 실행하세요.');
+  throw new Error(
+    '로컬 ASR 은 Linux(x64)·WSL·macOS(Apple Silicon) 만 지원합니다 (Intel Mac 미지원). Windows 는 WSL 에서 실행하세요.'
+  );
 }
 
 function run(command: string, args: string[], env: Record<string, string>): Promise<void> {

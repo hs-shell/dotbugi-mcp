@@ -13,16 +13,20 @@ export interface FilePin {
 export const UNPINNED = 'UNPINNED';
 
 // 공개 저장소 hs-shell/dotbugi-asr-binaries 가 antirez/qwen-asr@924694251d9e0f18e5d86bbd06aa3ab5f870002d 를 빌드해 올린 Release.
-// asr-v1 = 그 저장소 커밋 38484f5 의 Build qwen_asr 워크플로 실행(run 40025726963)이 올린 것. sha256 은 SHA256SUMS 와 직접 받은 파일로 확인 (#22)
-const QWEN_ASR_RELEASE = 'https://github.com/hs-shell/dotbugi-asr-binaries/releases/download/asr-v1';
+// asr-v2 = 그 저장소 커밋 e56bf13 의 Build qwen_asr 워크플로 실행(run 40068294964)이 올린 것 (linux-x64 는 asr-v1 과 같은 바이트,
+// macos-arm64 는 Accelerate·macOS 13.3+, 러너에서 한국어 받아쓰기 스모크 테스트 통과). sha256 은 SHA256SUMS 와 직접 받은 파일로 확인 (#54)
+const QWEN_ASR_RELEASE = 'https://github.com/hs-shell/dotbugi-asr-binaries/releases/download/asr-v2';
 export const QWEN_ASR_BINARY: Record<AsrPlatform, FilePin & { url: string }> = {
   'linux-x64': {
     url: `${QWEN_ASR_RELEASE}/qwen_asr-linux-x64`,
     sha256: '218c2a61aa913d0c55cded8b51394d8e8972dd3691f45b757396c4b1a53f1676',
     maxBytes: 22_384_224,
   },
-  // macOS 빌드는 검증 전이라 아직 올리지 않는다 — 고정 전까지 macOS CPU 설치는 거부된다
-  'macos-arm64': { url: `${QWEN_ASR_RELEASE}/qwen_asr-macos-arm64`, sha256: UNPINNED, maxBytes: 64_000_000 },
+  'macos-arm64': {
+    url: `${QWEN_ASR_RELEASE}/qwen_asr-macos-arm64`,
+    sha256: 'f2831f26f5cfc498b385e00658596a5a9cc4f936d0b806fafdd6b76b477b728a',
+    maxBytes: 142_152,
+  },
 };
 
 // 정적 ffmpeg: PyPI imageio-ffmpeg 0.6.0 휠(sha256 = PyPI 공시값) 안의 바이너리. 휠과 꺼낸 바이너리를 각각 검증한다

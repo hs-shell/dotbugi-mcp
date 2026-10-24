@@ -225,9 +225,9 @@ VOD 하나의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강�
 - `asr_install`: 설치를 백그라운드 작업 프로세스(셸 없이 인자 배열)로 넘기고 **바로** 돌아옵니다. CPU 는 ffmpeg + qwen_asr + Qwen3-ASR-0.6B (약 2GB). 미지원 플랫폼·uv 없음 등은 띄우기 전에 오류로 알립니다. 이미 설치 중이면 새로 띄우지 않고 "이미 실행 중"이라고 답합니다 (`~/.cache/dotbugi-mcp/asr-install.lock`, 터미널 `asr install` 과 공용). 이미 설치돼 있어도 다시 부르면 해시가 맞는 파일은 건너뛰고 손상·누락된 것만 받습니다.
 - `asr_status`: 설치된 구성요소(ffmpeg·qwen_asr·모델·GPU venv)의 존재·용량과, 진행 중이거나 마지막 설치 작업의 상태(`running`/`done`/`error`, 단계 `ffmpeg`·`qwen_asr`·`venv`·`model`, 받는 파일 진행량, 오류 메시지)를 돌려줍니다. `running` 인데 프로세스가 없으면 `stale` 로 표시하며, `asr_install` 을 다시 부르면 이어 받습니다.
 - 실행 방식은 자동으로 고르지 않습니다. CPU 는 0.6B 고정, `model` 은 `gpu` 와 함께일 때만 고를 수 있고 `config.json` 에 저장됩니다. 다시 설치하면 바뀝니다.
-- 지원: Linux x64·WSL — x86-64-v3 CPU(AVX2·FMA 등, Intel Haswell·AMD Excavator 이후) + **glibc 2.35 이상**(Ubuntu 22.04·Debian 12 이후). macOS Apple Silicon 은 바이너리 검증 전이라 아직 CPU 설치가 거부됩니다. `gpu` 는 Linux x64 + NVIDIA GPU + [uv](https://docs.astral.sh/uv/) 필요. Windows 는 WSL 에서 실행하세요.
+- 지원: Linux x64·WSL — x86-64-v3 CPU(AVX2·FMA 등, Intel Haswell·AMD Excavator 이후) + **glibc 2.35 이상**(Ubuntu 22.04·Debian 12 이후). macOS 는 Apple Silicon + **macOS 13.3 이상** (CPU 만, Intel Mac 미지원). `gpu` 는 Linux x64 + NVIDIA GPU + [uv](https://docs.astral.sh/uv/) 필요. Windows 는 WSL 에서 실행하세요.
 - 받는 파일은 모두 코드에 고정된 sha256·크기와 일치해야 쓰입니다 (`src/asr/pins.ts`). 60초 동안 데이터가 오지 않으면 끊습니다. `.part` 로 받아 검증한 뒤에만 이름을 바꾸므로 중단돼도 다시 실행하면 이어 받습니다.
-  - `qwen_asr`: 공개 저장소 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release(`asr-v*`)의 미리 빌드한 바이너리 — antirez/qwen-asr 커밋 고정, OpenBLAS 정적 링크
+  - `qwen_asr`: 공개 저장소 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release(`asr-v*`)의 미리 빌드한 바이너리 — antirez/qwen-asr 커밋 고정, Linux 는 OpenBLAS 정적 링크·macOS 는 Accelerate
   - ffmpeg: PyPI `imageio-ffmpeg` 0.6.0 휠 안의 정적 바이너리
   - 모델: Hugging Face `Qwen/Qwen3-ASR-0.6B`·`1.7B` 고정 리비전
   - GPU venv: `src/asr/gpu-requirements.txt` (해시 고정, 휠만) — `uv pip install --require-hashes --only-binary :all:`
