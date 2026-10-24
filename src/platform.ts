@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, isAbsolute, join } from 'node:path';
-import { WSL_INTEROP_FILE, WSL_RUNDLL32 } from './constants.js';
+import { WSL_INTEROP_FILE } from './constants.js';
+import { wslRundll32 } from './wsl-paths.js';
 
 // PATH 중 절대경로 항목만 쓴다 (빈 항목·'.' 같은 상대경로는 현재 폴더의 같은 이름 파일을 실행하게 만든다)
 export function absolutePathDirs(): string[] {
@@ -26,7 +27,7 @@ export function openUrl(url: string): Promise<void> {
 }
 
 function opener(url: string): [string, string[]] {
-  if (isWsl()) return [WSL_RUNDLL32, ['url.dll,FileProtocolHandler', url]];
+  if (isWsl()) return [wslRundll32(), ['url.dll,FileProtocolHandler', url]];
   if (process.platform === 'win32') {
     const rundll32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'rundll32.exe');
     return [rundll32, ['url.dll,FileProtocolHandler', url]];

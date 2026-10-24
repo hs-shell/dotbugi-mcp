@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { WSL_POWERSHELL } from '../constants.js';
+import { wslPowerShell } from '../wsl-paths.js';
 import type { Keychain } from './types.js';
 
 // WSL 에는 쓸 만한 키체인이 없어 Windows 자격 증명 관리자를 PowerShell 로 쓴다.
@@ -82,7 +82,7 @@ function runPowerShell(script: string, input: string): Promise<{ code: number | 
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded];
   return new Promise((resolve, reject) => {
-    const child = spawn(WSL_POWERSHELL, args, { stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = spawn(wslPowerShell(), args, { stdio: ['pipe', 'pipe', 'ignore'] });
     let stdout = '';
     child.stdout.setEncoding('utf8').on('data', (d: string) => (stdout += d));
     child.once('error', () => reject(new Error('powershell.exe 를 실행하지 못했습니다.')));
