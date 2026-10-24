@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { extractDocText } from '../doctext/extract.js';
-import { hwp, paraText, record, zip } from './fixtures/docs.js';
+import { extractDoc, extractDocText } from '../doctext/extract.js';
+import { imageMime } from '../doctext/images.js';
+import { hwp, jpg, paraText, png, pptx, record, zip } from './fixtures/docs.js';
 
 vi.mock('../constants.js', async (orig) => ({
   ...(await orig<object>()),
@@ -151,5 +152,63 @@ describe('extractDocText — 구형 hwp', () => {
 
   it('본문을 풀면 상한을 넘는 문서는 멈춘다', () => {
     expect(() => extractDocText('a.hwp', hwp([[Buffer.alloc(2 * 1024 * 1024)]]))).toThrow('너무 커서');
+  });
+});
+
+describe('extractDoc — 문서 안 그림 목록', () => {
+  const list = (name: string, buf: Buffer) => extractDoc(name, buf).images.map((x) => `${x.label}:${x.entry}`);
+
+  it('pptx: 슬라이드 순서·슬라이드 안 r:embed 순서, 같은 그림은 처음 한 번만, 숨긴 슬라이드·외부 링크·밖 경로는 뺀다', () => {
+    const buf = pptx(
+      [
+        ['일', ['b.png', 'a.png']],
+        ['이', ['a.png', 'c.jpg']],
+      ],
+      { 'a.png': png('a'), 'b.png': png('b'), 'c.jpg': jpg('c') }
+    );
+    expect(list('a.pptx', buf)).toEqual([
+      '슬라이드 1:ppt/media/b.png',
+      '슬라이드 1:ppt/media/a.png',
+      '슬라이드 2:ppt/media/c.jpg',
+    ]);
+    const tricky = zip({
+      'ppt/slides/slide1.xml': '<p:sld show="0"><a:blip r:embed="rId1"/></p:sld>',
+      'ppt/slides/_rels/slide1.xml.rels': '<Relationship Id="rId1" Target="../media/a.png"/>',
+      'ppt/slides/slide2.xml':
+        '<p:sld><a:blip r:embed="rId1"/><a:blip r:embed="rId2"/><a:blip r:embed="rId3"/></p:sld>',
+      'ppt/slides/_rels/slide2.xml.rels':
+        '<Relationship Id="rId1" Target="http://evil/x.png" TargetMode="External"/>' +
+        '<Relationship Id="rId2" Target="../../../secret.png"/><Relationship Id="rId3" Target="../slides/slide1.xml"/>',
+      'ppt/media/a.png': png('a'),
+    });
+    expect(list('a.pptx', tricky)).toEqual([]);
+  });
+
+  it('docx: 본문 순서, hwpx: 구역 순서와 content.hpf 의 href', () => {
+    const docx = zip({
+      'word/document.xml': '<w:p><w:t>글</w:t><a:blip r:embed="rId9"/><a:blip r:embed="rId2"/></w:p>',
+      'word/_rels/document.xml.rels':
+        '<Relationship Id="rId2" Target="media/image1.png"/><Relationship Id="rId9" Target="media/image2.jpeg"/>',
+    });
+    expect(list('a.docx', docx)).toEqual(['본문:word/media/image2.jpeg', '본문:word/media/image1.png']);
+    const hwpx = zip({
+      'Contents/content.hpf':
+        '<opf:item id="image1" href="BinData/image1.png"/><opf:item id="image2" href="BinData/../x.png"/><opf:item id="image3" href="BinData/image3.bmp"/>',
+      'Contents/section0.xml': '<hp:p><hp:t>글</hp:t><hc:img binaryItemIDRef="image3"/></hp:p>',
+      'Contents/section1.xml': '<hc:img binaryItemIDRef="image1"/><hc:img binaryItemIDRef="image2"/>',
+    });
+    expect(list('a.hwpx', hwpx)).toEqual(['구역 1:BinData/image3.bmp', '구역 2:BinData/image1.png']);
+  });
+
+  it('구형 hwp 는 그림 개수만 센다', () => {
+    expect(extractDoc('a.hwp', hwp([[paraText('x')]], 1, 2)).hwpImages).toBe(2);
+  });
+
+  it('형식은 앞 바이트로만 정한다 (png·jpg·gif)', () => {
+    expect(imageMime(png('x'))).toBe('image/png');
+    expect(imageMime(jpg('x'))).toBe('image/jpeg');
+    expect(imageMime(Buffer.from('GIF89a...'))).toBe('image/gif');
+    expect(imageMime(Buffer.from('<svg>'))).toBeNull();
+    expect(imageMime(Buffer.from([0x01, 0, 0, 0]))).toBeNull(); // emf
   });
 });

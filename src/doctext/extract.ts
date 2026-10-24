@@ -1,6 +1,7 @@
 import { extname } from 'node:path';
 import { Budget } from './budget.js';
 import { hwpText } from './hwp.js';
+import { type DocImageRef, docxImages, hwpxImages, pptxImages } from './images.js';
 import { openZip } from './zip.js';
 
 export const DOC_EXT = new Set(['.hwp', '.hwpx', '.docx', '.pptx', '.xlsx']);
@@ -110,15 +111,34 @@ function xlsxText(zip: ReturnType<typeof openZip>): string {
   return sheets.join('\n\n');
 }
 
-// 믿을 수 없는 문서 → 평문. 메모리 안에서만 풀고(경로 이탈 없음), 외부 프로세스·네트워크를 쓰지 않는다
-export function extractDocText(name: string, buf: Buffer): string {
+export interface DocContent {
+  text: string;
+  // 본문 순서의 그림 (pptx·docx·hwpx). hwp 는 개수만 hwpImages 로
+  images: DocImageRef[];
+  hwpImages?: number;
+  // 그림 항목을 같은 압축 해제 예산으로 꺼낸다
+  readEntry: (entry: string) => Buffer | null;
+}
+
+// 믿을 수 없는 문서 → 평문 + 그림 목록. 메모리 안에서만 풀고(경로 이탈 없음), 외부 프로세스·네트워크를 쓰지 않는다
+export function extractDoc(name: string, buf: Buffer): DocContent {
   const ext = extname(name).toLowerCase();
   const budget = new Budget();
-  if (ext === '.hwp') return hwpText(buf, budget).trim();
+  if (ext === '.hwp') {
+    const { text, images } = hwpText(buf, budget);
+    return { text: text.trim(), images: [], hwpImages: images, readEntry: () => null };
+  }
   const zip = openZip(buf, budget);
-  const str = (n: string) => zip.read(n)?.toString('utf8') ?? '';
+  // 글과 그림 목록이 같은 XML 을 보므로 한 번만 푼다 (예산을 두 번 쓰지 않게)
+  const cache = new Map<string, string>();
+  const str = (n: string) => {
+    let v = cache.get(n);
+    if (v === undefined) cache.set(n, (v = zip.read(n)?.toString('utf8') ?? ''));
+    return v;
+  };
   let text: string;
-  if (ext === '.docx')
+  let images: DocImageRef[] = [];
+  if (ext === '.docx') {
     text = xmlText(str('word/document.xml'), {
       text: ['w:t'],
       para: ['w:p'],
@@ -127,8 +147,10 @@ export function extractDocText(name: string, buf: Buffer): string {
       // 숨김 글자(w:vanish) 런은 버린다. w:val="0|false" 는 숨김 해제
       hide: { scope: 'w:r', mark: (n, a) => n === 'w:vanish' && !/w:val="(0|false|off)"/.test(a) },
     });
-  else if (ext === '.pptx')
-    text = numbered(zip.names, /^ppt\/slides\/slide(\d+)\.xml$/)
+    images = docxImages(str);
+  } else if (ext === '.pptx') {
+    const slides = numbered(zip.names, /^ppt\/slides\/slide(\d+)\.xml$/);
+    text = slides
       .map((n, i) => {
         const xml = str(n);
         // 숨긴 슬라이드(show="0")는 번호만 남기고 글은 버린다. 숨긴 도형(cNvPr hidden)도 버린다
@@ -137,8 +159,10 @@ export function extractDocText(name: string, buf: Buffer): string {
         return `## 슬라이드 ${i + 1}\n${xmlText(xml, { text: ['a:t'], para: ['a:p'], br: ['a:br'], hide }).trim()}`;
       })
       .join('\n\n');
-  else if (ext === '.hwpx')
-    text = numbered(zip.names, /^Contents\/section(\d+)\.xml$/)
+    images = pptxImages(slides, str);
+  } else if (ext === '.hwpx') {
+    const sections = numbered(zip.names, /^Contents\/section(\d+)\.xml$/);
+    text = sections
       .map((n) =>
         xmlText(str(n), {
           text: ['hp:t'],
@@ -150,7 +174,10 @@ export function extractDocText(name: string, buf: Buffer): string {
         })
       )
       .join('\n');
-  else if (ext === '.xlsx') text = xlsxText(zip);
+    images = hwpxImages(sections, str);
+  } else if (ext === '.xlsx') text = xlsxText(zip);
   else throw new Error(`${ext} 는 문서 형식이 아닙니다.`);
-  return text.replace(/\n{3,}/g, '\n\n').trim();
+  return { text: text.replace(/\n{3,}/g, '\n\n').trim(), images, readEntry: zip.read };
 }
+
+export const extractDocText = (name: string, buf: Buffer): string => extractDoc(name, buf).text;

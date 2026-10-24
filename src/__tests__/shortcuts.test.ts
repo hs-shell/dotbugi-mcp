@@ -51,6 +51,13 @@ describe('바로가기 프롬프트', () => {
     expect(text(await get('courses'))).toContain('`set_course_tracking` 을 인자 없이');
   });
 
+  // 그림 위주 문서면 그림도 읽을지 묻는다 (hs-shell/dotbugi-mcp#155)
+  it.each(['notes', 'summary', 'work'])('%s 는 그림 위주 파일이면 그림도 읽을지 묻는다', async (name) => {
+    const t = text(await get(name, {}));
+    expect(t).toContain('"그림도 읽기 / 글자만"');
+    expect(t).toContain('images: true');
+  });
+
   // 선택 인자를 비우면 전체 대상이고 문장이 깨지지 않는다 (hs-shell/dotbugi-mcp#100)
   it.each([
     ['status', '마감 지난 항목 N개 — /dotbugi:status past'],

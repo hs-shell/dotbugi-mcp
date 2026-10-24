@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readMaterial } from '../tools/read-material.js';
-import { zip } from './fixtures/docs.js';
+import { jpg, png, pptx, zip } from './fixtures/docs.js';
 
 let base = '';
 let root = '';
@@ -145,5 +145,77 @@ describe('readMaterial — 읽기', () => {
 
   it('저장 위치가 없으면 먼저 받으라고 알린다', async () => {
     await expect(readMaterial({ path: '' }, join(base, 'none'))).rejects.toThrow('아직 없습니다');
+  });
+});
+
+describe('readMaterial — 문서 안 그림', () => {
+  const imagesOf = (r: Awaited<ReturnType<typeof readMaterial>>) =>
+    r.content.flatMap((c) => (c.type === 'image' ? [Buffer.from(c.data, 'base64').subarray(-2).toString()] : []));
+  // 그림만 붙인 슬라이드 n 장 (슬라이드마다 그림 하나)
+  const slides = (n: number) =>
+    pptx(
+      Array.from({ length: n }, (_, i) => ['', [`i${i}.png`]] as [string, string[]]),
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [`i${i}.png`, png(String(i).padStart(2, '0'))]))
+    );
+
+  it('기본(글자만)은 그림 개수·글자 수를 알리고, 글자가 적으면 그림 위주로 표시한다', async () => {
+    await writeFile(join(root, week, '그림.pptx'), slides(3));
+    const text = textOf(await read(`${week}/그림.pptx`));
+    expect(text).toMatch(/그림 3개, 글자 \d+자 — 그림 위주/);
+    expect(text).toContain('images: true');
+    await writeFile(join(root, week, '글.pptx'), pptx([['가'.repeat(500), ['a.png']]], { 'a.png': png('aa') }));
+    const plain = textOf(await read(`${week}/글.pptx`));
+    expect(plain).toContain('그림 1개');
+    expect(plain).not.toContain('그림 위주');
+  });
+
+  it('images: true 면 글과 함께 그림을 슬라이드 순서·꼬리표와 함께, 개수 상한을 넘으면 imageOffset 으로 이어 읽는다', async () => {
+    await writeFile(join(root, week, '그림.pptx'), slides(12));
+    const r = await read(`${week}/그림.pptx`, { images: true });
+    expect(imagesOf(r)).toEqual(['00', '01', '02', '03', '04', '05', '06', '07', '08', '09']);
+    expect(textOf(r)).toContain('[슬라이드 1 · 그림 1/12]');
+    expect(textOf(r)).toContain('## 슬라이드 1');
+    expect(textOf(r)).toContain('imageOffset: 10');
+    const next = await read(`${week}/그림.pptx`, { images: true, imageOffset: 10 });
+    expect(imagesOf(next)).toEqual(['10', '11']);
+    expect(textOf(next)).not.toContain('## 슬라이드');
+    expect(textOf(next)).not.toContain('imageOffset:');
+  });
+
+  it('매직 바이트가 맞지 않는 그림(이름만 png, emf 등)·너무 큰 그림은 건너뛰고 알린다', async () => {
+    await writeFile(
+      join(root, week, '섞임.pptx'),
+      pptx([['', ['fake.png', 'a.emf', 'big.jpg', 'ok.jpg']]], {
+        'fake.png': Buffer.from('<script>'),
+        'a.emf': Buffer.from([1, 0, 0, 0]),
+        'big.jpg': Buffer.concat([jpg(''), Buffer.alloc(3.75 * 1024 * 1024)]),
+        'ok.jpg': jpg('ok'),
+      })
+    );
+    const r = await read(`${week}/섞임.pptx`, { images: true });
+    expect(imagesOf(r)).toEqual(['ok']);
+    expect(r.content.filter((c) => c.type === 'image').map((c) => c.type === 'image' && c.mimeType)).toEqual([
+      'image/jpeg',
+    ]);
+    const text = textOf(r);
+    expect(text).toContain('png·jpg·gif 가 아닌 그림(.png)');
+    expect(text).toContain('(.emf)');
+    expect(text).toContain('너무 커서');
+  });
+
+  it('총량 상한을 넘기 전에 멈추고 이어 읽게 한다', async () => {
+    const big = (t: string) => Buffer.concat([png(''), Buffer.alloc(3 * 1024 * 1024), Buffer.from(t)]);
+    await writeFile(
+      join(root, week, '큰.pptx'),
+      pptx([['', ['a.png', 'b.png', 'c.png', 'd.png']]], {
+        'a.png': big('aa'),
+        'b.png': big('bb'),
+        'c.png': big('cc'),
+        'd.png': big('dd'),
+      })
+    );
+    const r = await read(`${week}/큰.pptx`, { images: true });
+    expect(imagesOf(r)).toEqual(['aa', 'bb', 'cc']);
+    expect(textOf(r)).toContain('imageOffset: 3');
   });
 });
