@@ -8,6 +8,7 @@ import { FFMPEG, MODELS, QWEN_ASR_BINARY, type AsrModel, type AsrPlatform } from
 import { ASR_ROOT, asrPaths, INSTALL_HINT, modelFilePath, readAsrConfig, type AsrConfig } from '../asr/runtime.js';
 import { ASR_INSTALL_BUSY, ASR_INSTALL_LOCK_FILE, writeAsrInstallState, type AsrInstallState } from '../asr/state.js';
 import { log } from '../log.js';
+import { paint } from './paint.js';
 import { acquireLock, adoptLock } from '../player/lock.js';
 import { redact } from '../redact.js';
 import { TRANSCRIBE_LOCK_FILE } from '../transcribe/state.js';
@@ -142,10 +143,10 @@ async function remove(root: string, yes: boolean): Promise<void> {
     if (!process.stdin.isTTY) throw new Error('터미널이 아니면 확인할 수 없습니다. 지우려면 --yes 를 붙이세요.');
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     const answer = await rl.question(`${root} 를 삭제할까요? [y/N] `).finally(() => rl.close());
-    if (!['y', 'yes'].includes(answer.trim().toLowerCase())) return log('취소했습니다.');
+    if (!['y', 'yes'].includes(answer.trim().toLowerCase())) return log(paint('dim', '취소했습니다.'));
   }
   await deleteAsrRoot(root);
-  log(`삭제했습니다: ${root}`);
+  log(`${paint('green', '✓ 삭제했습니다:')} ${root}`);
 }
 
 const TRANSCRIBE_RUNNING = 'STT 변환이 실행 중이라 지우지 않았습니다. 끝난 뒤 다시 실행하세요.';

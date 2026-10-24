@@ -1,4 +1,5 @@
 import { emitKeypressEvents, type Key } from 'node:readline';
+import { styleText } from 'node:util';
 import type { CourseBase } from '@dotbugi/lms-parser';
 import { SIGNAL_EXIT_CODES } from '../constants.js';
 import { log } from '../log.js';
@@ -20,11 +21,14 @@ export interface CoursesOptions {
   off?: string;
 }
 
+// 파이프·NO_COLOR 면 styleText 가 색을 빼므로 --list 출력을 스크립트로 읽어도 평문
+const onOff = (on: boolean) => (on ? styleText('green', '켜짐') : styleText('dim', '꺼짐'));
+
 // LMS 텍스트를 터미널에 그대로 쓰면 제어문자로 화면을 조작할 수 있다 — clean 으로 한 줄 평문만
 const label = (c: CourseBase) => `${clean(c.courseTitle)}${c.isCommunity ? ' (비교과)' : ''}`;
 
 export const formatList = (all: CourseBase[], config: CoursesConfig) =>
-  all.map((c) => `${isTracked(c, config) ? '켜짐' : '꺼짐'}\t${c.courseId}\t${label(c)}`).join('\n');
+  all.map((c) => `${onOff(isTracked(c, config))}\t${c.courseId}\t${label(c)}`).join('\n');
 
 // matchCourses 결과가 0개·여러 개면 오류
 export function findCourse(all: CourseBase[], query: string): CourseBase {
@@ -100,7 +104,16 @@ export async function pick(
   let state: PickerState = { cursor: 0, on: initial };
   let drawn = 0;
   const draw = () => {
-    const lines = renderPicker(all, state).map((l) => fitWidth(l, (output as NodeJS.WriteStream).columns));
+    // 너비를 자른 뒤에 칠해야 이스케이프 문자가 너비 계산에 섞이지 않는다
+    const lines = renderPicker(all, state)
+      .map((l) => fitWidth(l, (output as NodeJS.WriteStream).columns))
+      .map((l, i) =>
+        i === 0
+          ? styleText('dim', l, { stream: output })
+          : i === state.cursor + 1
+            ? styleText('cyan', l, { stream: output })
+            : l
+      );
     // 이전 화면 줄 수만큼 올라가 지우고 다시 그린다
     output.write(`${drawn ? `\x1b[${drawn}A` : ''}\x1b[J${lines.join('\n')}\n`);
     drawn = lines.length;

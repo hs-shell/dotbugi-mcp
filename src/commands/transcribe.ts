@@ -4,6 +4,7 @@ import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES, VOD_VIEWER_PATH } from '../constants
 import { createFetchHtml, limit } from '../lms-html.js';
 import { isLoginPage, lmsFetch, SessionExpiredError } from '../lms.js';
 import { log } from '../log.js';
+import { paint } from './paint.js';
 import { acquireLock, adoptLock } from '../player/lock.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
@@ -136,7 +137,7 @@ async function transcribeOne({ cmid, language }: Item, worker: boolean, signal: 
     const key = `${phase}:${progress === null ? '' : Math.floor(progress / 10)}`;
     if (worker || key === logged) return;
     logged = key;
-    log(`[${PHASE_LABELS[phase]}]${progress === null ? '' : ` ${progress}%`}`);
+    log(`${paint('cyan', `[${PHASE_LABELS[phase]}]`)}${progress === null ? '' : ` ${progress}%`}`);
   };
 
   // 잠금을 잡자마자 running 을 남긴다 — 이후 어디서 실패해도 error 로 바뀐다
@@ -166,7 +167,7 @@ async function transcribeOne({ cmid, language }: Item, worker: boolean, signal: 
       path: result.path,
       message,
     });
-    if (!worker) log(`${message} ${result.path}`);
+    if (!worker) log(`${paint(result.status === 'done' ? 'green' : 'dim', message)} ${result.path}`);
     return { status: result.status, title: title() };
   } catch (err) {
     // Ctrl+C·종료 신호면 시그널 종료 코드를 그대로 둔다

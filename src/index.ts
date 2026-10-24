@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { log } from './log.js';
+import { paint } from './commands/paint.js';
 
 const USAGE = `사용법:
   dotbugi-mcp                  MCP 서버 실행 (stdio)
@@ -72,6 +73,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  log(err instanceof Error ? err.message : String(err));
+  log(paint('red', err instanceof Error ? err.message : String(err)));
   process.exitCode = 1;
 });
