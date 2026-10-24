@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 import * as z from 'zod/v4';
+import { asrLanguageSchema } from '../asr/runtime.js';
 import { PLAYER_STATE_FILE, readStateFile, stateText, writeStateFile } from '../player/state.js';
 import { stripUrls } from '../redact.js';
 
@@ -28,6 +29,8 @@ export const transcribeStateSchema = z.object({
   // 받아쓰는 프로세스 — 죽었는데 running 으로 남았는지 판단용
   pid: z.number().int().positive(),
   updatedAt: z.iso.datetime(),
+  // 받아쓰기 언어 설정 (표시용). 이 필드가 생기기 전 상태 파일엔 없다
+  language: asrLanguageSchema.optional(),
   message: stateText.overwrite(stripUrls).nullable(),
 });
 export type TranscribeState = z.infer<typeof transcribeStateSchema>;
