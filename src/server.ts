@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
-import { registerNotesPrompt } from './prompts/notes.js';
 import { registerShortcuts } from './prompts/shortcuts.js';
 import { registerAsrRemove } from './tools/asr-remove.js';
 import { registerAsrTools } from './tools/asr.js';
@@ -41,7 +40,6 @@ export function createServer(): McpServer {
   registerSetupStatusline(server);
   registerAsrTools(server);
   registerAsrRemove(server);
-  registerNotesPrompt(server);
   registerShortcuts(server);
   return server;
 }
