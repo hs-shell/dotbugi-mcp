@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.3](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.2...v0.4.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* pptx·docx·hwpx 안의 그림을 읽을지 사용자가 선택 ([#157](https://github.com/hs-shell/dotbugi-mcp/issues/157)) ([1b58a1e](https://github.com/hs-shell/dotbugi-mcp/commit/1b58a1efeaad6c4398916905044802ca49660a4d))
+* work 명령에 참고 자료 지정, 없으면 같은 주차 자료 사용 ([#156](https://github.com/hs-shell/dotbugi-mcp/issues/156)) ([5790719](https://github.com/hs-shell/dotbugi-mcp/commit/5790719321d5a7356c364fcadfddd52ecf2c78ee))
+* 과제를 과목·주차 폴더에 과제 이름으로 저장 ([#152](https://github.com/hs-shell/dotbugi-mcp/issues/152)) ([e28dbaa](https://github.com/hs-shell/dotbugi-mcp/commit/e28dbaaa5b432ee9303fcdb544a2ecfcd3631cbb))
+* 상태 표시줄에 STT 진행률 표시, 기존 표시줄 유지 ([#150](https://github.com/hs-shell/dotbugi-mcp/issues/150)) ([dea35c4](https://github.com/hs-shell/dotbugi-mcp/commit/dea35c4365a159551e4102e39e85d6b64cf586f4))
+* 입력창 위에 STT 진행률 표시하는 Claude Code 플러그인 추가 ([#154](https://github.com/hs-shell/dotbugi-mcp/issues/154)) ([7638eda](https://github.com/hs-shell/dotbugi-mcp/commit/7638edaaafd849de1b40123ce0a2b5e0b825c03e))
+
 ## [0.4.2](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.1...v0.4.2) (2026-10-24)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@dotbugi/mcp",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "한성대학교 LMS(learn.hansung.ac.kr) VOD·과제·퀴즈를 Claude Code / Claude Desktop에서 다루는 MCP 서버",
   "license": "Apache-2.0",
   "author": "6-keem",
