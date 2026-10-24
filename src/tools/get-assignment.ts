@@ -21,6 +21,7 @@ import {
 } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
 import { moduleWeek } from '../materials/course-page.js';
+import { readManifest, writeManifest } from '../materials/manifest.js';
 import { ensureRealDir, migrateCourseDir, openCourseDir, withSyncLock } from '../materials/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { redact } from '../redact.js';
@@ -61,8 +62,10 @@ async function placeDir(place: Place, title: string, cmid: number): Promise<{ di
     try {
       const now = new Date();
       const warnings = await migrateCourseDir(storageRoot(), place.course, place.courseId, now);
-      const { dir: courseDir } = await openCourseDir(storageRoot(), place.course, place.courseId, now);
+      const { dir: courseDir, manifest } = await openCourseDir(storageRoot(), place.course, place.courseId, now);
       const opened = await openAssignDir(courseDir, place.week, title, cmid);
+      // 강의자료를 아직 안 받은 과목이면 기록이 없다 — 같은 이름의 다른 과목이 이 폴더를 빈 폴더로 보고 차지하지 않게 남긴다
+      if (!(await readManifest(courseDir))) await writeManifest(courseDir, manifest);
       return { dir: opened.dir, warnings: [...warnings, ...opened.warnings] };
     } catch (err) {
       place = { warning: `[${place.course}] ${err instanceof Error ? err.message : String(err)} ${NO_COURSE}` };

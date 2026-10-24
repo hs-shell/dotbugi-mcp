@@ -117,9 +117,11 @@ const dir = () => join(courseDir(), '8주차', '과제-과제1');
 const MARKER = '.dotbugi-assign.json';
 // 과목·주차를 찾느라 과제 화면 다음에 보내는 요청 (내 강좌 목록, 강좌 화면)
 const PLACE_URLS = [`${L}/`, `${L}/course/view.php?id=100`];
-// 다운로드 폴더 위(홈)에 아무것도 새지 않았는지 보려고 홈 아래 파일을 모두 모은다 (표식 제외)
+// 다운로드 폴더 위(홈)에 아무것도 새지 않았는지 보려고 홈 아래 파일을 모두 모은다 (과제 표식·과목 기록 제외)
 const allFiles = async () =>
-  (await readdir(state.home, { recursive: true, withFileTypes: true })).filter((e) => e.isFile() && e.name !== MARKER);
+  (await readdir(state.home, { recursive: true, withFileTypes: true })).filter(
+    (e) => e.isFile() && e.name !== MARKER && e.name !== '.dotbugi-manifest.json'
+  );
 const listDir = async (d = dir()) => (await readdir(d)).filter((n) => n !== MARKER).sort();
 // 이미 받아 둔 과제 폴더 (표식 포함)
 async function seedDir(d = dir(), cmid = 5) {
@@ -609,6 +611,13 @@ describe('get_assignment — 과제 지시사항 md', () => {
     const out = (await call({ cmid: 5 })).structuredContent as Placed;
     expect(out.downloadDir).toBe(`${dir()} (5)`);
     expect(await readdir(dir())).toEqual([MARKER]);
+  });
+
+  it('강의자료를 받기 전이면 과목 폴더에 이 과목 기록을 남긴다 (같은 이름의 다른 과목이 차지하지 않게)', async () => {
+    serve(PAGE());
+    await call({ cmid: 5 });
+    const manifest = JSON.parse(await readFile(join(courseDir(), '.dotbugi-manifest.json'), 'utf8'));
+    expect(manifest).toMatchObject({ courseId: '100', files: [] });
   });
 
   it('과제 이름이 바뀌어도 처음 만든 폴더를 이어 쓴다', async () => {
