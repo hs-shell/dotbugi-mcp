@@ -28,7 +28,10 @@ describe('출력 문구 규칙', () => {
       join(ROOT, 'README.md'),
     ];
     // U+26A0 경고 기호처럼 글자 기호지만 이모지로 그려질 수 있는 것도 Extended_Pictographic 에 들어간다
-    const found = lines(scanned).filter(([, text]) => /\p{Extended_Pictographic}|\u{FE0F}/u.test(text));
+    // 국기(지역 표시 문자 쌍)·키캡 결합 문자는 Extended_Pictographic 밖이라 따로 잡는다
+    const found = lines(scanned).filter(([, text]) =>
+      /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u{FE0F}|\u{20E3}/u.test(text)
+    );
     expect(found).toEqual([]);
   });
 

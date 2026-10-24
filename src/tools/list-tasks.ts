@@ -12,11 +12,9 @@ import {
   type TaskType,
 } from '../tasks/schema.js';
 import { selectTasks } from '../tasks/select.js';
+import { cell } from '../tasks/text.js';
 
 const TYPE_LABELS: Record<TaskType, string> = { vod: '동영상 강의', assign: '과제', quiz: '퀴즈' };
-
-// 표 구분자와 헷갈리지 않게 LMS 텍스트 안의 | 는 이스케이프한다
-const cell = (value: string) => value.replaceAll('|', '\\|');
 
 // ✗ 마감 지남 · ✓ 완료 · ● 남음
 const mark = (t: Task) => (t.overdue ? '✗' : t.done ? '✓' : '●');
