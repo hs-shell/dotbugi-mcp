@@ -3,7 +3,7 @@ import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COURSE_FILTER_MAX_LENGTH } from '../constants.js';
 import { createServer } from '../server.js';
-import { COURSES_FILE } from '../tasks/courses.js';
+import { COURSES_FILE, saveCourseTracking } from '../tasks/courses.js';
 import { fakeLmsFetch, NOW } from './fixtures/lms-pages.js';
 
 // 추적 설정(~/.config)을 실제 홈에 쓰지 않게 테스트 홈을 쓴다
@@ -123,6 +123,15 @@ describe('set_course_tracking', () => {
     expect(result.isError).toBe(true);
     expect(text(result)).toContain('일치하는 강좌가 없습니다');
     await expect(readFile(COURSES_FILE)).rejects.toThrow();
+  });
+
+  it('동시에 여러 강좌를 바꿔도 변경을 잃지 않는다', async () => {
+    await Promise.all([
+      saveCourseTracking('100', false),
+      saveCourseTracking('200', false),
+      saveCourseTracking('300', true),
+    ]);
+    expect(await readConfig()).toMatchObject({ courses: { '100': false, '200': false, '300': true } });
   });
 
   it('빈 값·공백·너무 긴 query 는 LMS 요청 전에 거부한다', async () => {

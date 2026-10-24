@@ -49,8 +49,15 @@ export function matchCourses(all: CourseBase[], query: string): CourseBase[] {
   return all.filter((c) => clean(c.courseTitle).toLowerCase().includes(q));
 }
 
-// 한 강좌만 바꿔 저장. 깨진 설정 파일은 덮어쓰지 않게 strict 로 읽는다 (쓰기 직전에 읽어 다른 변경을 덜 덮는다)
-export async function saveCourseTracking(courseId: string, tracked: boolean, file = COURSES_FILE): Promise<void> {
-  const config = readCoursesConfig(file, true);
-  await writeCoursesConfig({ ...config, courses: { ...config.courses, [courseId]: tracked } }, file);
+// 같은 프로세스 안의 저장을 차례로 — MCP 클라이언트가 두 강좌 변경을 동시에 보내도 하나를 잃지 않게 (읽기도 차례 안에서)
+let saving: Promise<void> = Promise.resolve();
+
+// 한 강좌만 바꿔 저장. 깨진 설정 파일은 덮어쓰지 않게 strict 로 읽는다
+export function saveCourseTracking(courseId: string, tracked: boolean, file = COURSES_FILE): Promise<void> {
+  const run = saving.then(() => {
+    const config = readCoursesConfig(file, true);
+    return writeCoursesConfig({ ...config, courses: { ...config.courses, [courseId]: tracked } }, file);
+  });
+  saving = run.catch(() => {});
+  return run;
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs';
 import { chmod, mkdir, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -87,7 +88,8 @@ export function writePlayerState(file: string, state: PlayerState): Promise<void
 
 export async function writeStateFile<T>(file: string, schema: z.ZodType<T>, state: T): Promise<void> {
   await ensurePrivateDir(dirname(file));
-  const tmp = `${file}.${process.pid}.tmp`;
+  // 같은 프로세스가 동시에 써도 서로의 임시 파일을 옮기지 않게 이름을 매번 다르게
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tmp, `${JSON.stringify(schema.parse(state), null, 2)}\n`, { mode: 0o600 });
   await rename(tmp, file);
 }
