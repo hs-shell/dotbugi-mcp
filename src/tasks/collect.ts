@@ -1,5 +1,11 @@
 import { parseCoursesFromDOM, scrapeCourseData, type CourseBase, type FetchHtml } from '@dotbugi/lms-parser';
-import { LMS_COURSE_LIST_PATH, LMS_COURSE_LIST_SELECTOR, LMS_NUMERIC_ID, LMS_ORIGIN } from '../constants.js';
+import {
+  GRADING_VIEW_STATUS,
+  LMS_COURSE_LIST_PATH,
+  LMS_COURSE_LIST_SELECTOR,
+  LMS_NUMERIC_ID,
+  LMS_ORIGIN,
+} from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
 import { SessionExpiredError } from '../lms.js';
 import { log } from '../log.js';
@@ -46,7 +52,15 @@ function lmsUrl(url: string): string {
 
 // dotbugi src/lib/transformCourseData.ts mergeVodWithAttendance(제목+주차로 출석 조인, 출석 정보 없는 VOD 제외)
 // 기간·마감 필터는 조회 시점에 selectTasks 가 한다 (캐시가 1시간 내내 맞도록, 지난 퀴즈는 cachedQuizzes 로 재사용)
-export function toTaskItems(course: CourseBase, data: CourseData): TaskItem[] {
+// 과제 목록의 제출 칸이 전부 숫자(제출 인원)면 교수자 화면이다 — 파서는 '미제출' 이 없으면 제출로 보므로 그대로 믿을 수 없다
+export function isGradingIndex(doc: Document): boolean {
+  const cells = Array.from(doc.querySelectorAll('table.generaltable tbody td.cell.c3'), (c) =>
+    clean(c.textContent ?? '')
+  );
+  return cells.length > 0 && cells.every((t) => /^\d+$/.test(t));
+}
+
+export function toTaskItems(course: CourseBase, data: CourseData, gradingView = false): TaskItem[] {
   const courseTitle = clean(course.courseTitle);
   const attendance = new Map(data.vodAttendanceArray.map((a) => [`${a.title}-${a.week}`, a]));
   const vods = uniqueBy(data.vodDataArray, (v) => vodKey(course.courseId, v)).flatMap((vod): TaskItem[] => {
@@ -74,8 +88,9 @@ export function toTaskItems(course: CourseBase, data: CourseData): TaskItem[] {
       type,
       course: courseTitle,
       title: clean(item.title),
-      done: item.isSubmit,
-      status: item.isSubmit ? labels[0] : labels[1],
+      // 교수자 화면의 과제는 제출 여부를 모른다 — 빠뜨리지 않게 미완료로 두고 상태로 알린다
+      done: type === 'assign' && gradingView ? false : item.isSubmit,
+      status: type === 'assign' && gradingView ? GRADING_VIEW_STATUS : item.isSubmit ? labels[0] : labels[1],
       start: null,
       deadline: toIsoDeadline(item.dueDate),
       url: lmsUrl(item.url),
@@ -117,19 +132,28 @@ export async function collectTasks(
   let expired = false;
   let failures = 0;
   const baseFetch = createFetchHtml(session);
+  // 과제 목록을 교수자 화면으로 받은 과목 (courseId)
+  const grading = new Set<string>();
   const fetchHtml: FetchHtml = (url) =>
-    baseFetch(url).catch((err: unknown) => {
-      if (err instanceof SessionExpiredError) expired = true;
-      failures++;
-      throw err;
-    });
+    baseFetch(url).then(
+      (doc) => {
+        const assignIndex = /\/mod\/assign\/index\.php\?id=(\d+)/.exec(url);
+        if (assignIndex && isGradingIndex(doc)) grading.add(assignIndex[1]);
+        return doc;
+      },
+      (err: unknown) => {
+        if (err instanceof SessionExpiredError) expired = true;
+        failures++;
+        throw err;
+      }
+    );
 
   const courses = await listCourses(fetchHtml, config);
   let failedCourses = 0;
   const perCourse = await Promise.all(
     courses.map((course) =>
       scrapeCourseData(fetchHtml, course.courseId, { cachedQuizzes }).then(
-        (data) => toTaskItems(course, data),
+        (data) => toTaskItems(course, data, grading.has(course.courseId)),
         () => {
           failedCourses++;
           return [];

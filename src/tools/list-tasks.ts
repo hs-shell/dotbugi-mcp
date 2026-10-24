@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import { LMS_DATA_NOTICE, SOON_MS } from '../constants.js';
+import { GRADING_VIEW_NOTICE, GRADING_VIEW_STATUS, LMS_DATA_NOTICE, SOON_MS } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { getTaskItems } from '../tasks/cache.js';
@@ -56,7 +56,9 @@ export async function loadTasks(
   const { session } = await getSession();
   const { fetchedAt, items, failures } = await getTaskItems(session, refresh);
   const warnings = failures > 0 ? [`일부 과목/항목을 가져오지 못했습니다 (${failures}건).`] : [];
-  return { fetchedAt: new Date(fetchedAt).toISOString(), tasks: selectTasks(items, filters, now), warnings };
+  const tasks = selectTasks(items, filters, now);
+  if (tasks.some((t) => t.status === GRADING_VIEW_STATUS)) warnings.push(GRADING_VIEW_NOTICE);
+  return { fetchedAt: new Date(fetchedAt).toISOString(), tasks, warnings };
 }
 
 export function registerListTasks(server: McpServer): void {

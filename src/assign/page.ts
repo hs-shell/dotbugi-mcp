@@ -13,6 +13,8 @@ export interface AssignPage {
   deadline: string | null;
   body: string;
   attachmentUrls: URL[];
+  // 교수자(채점) 화면 — 이 과목에서 교수자 권한이라 내 제출 상황 대신 채점 요약이 나온다
+  gradingView: boolean;
 }
 
 // 세션 쿠키를 붙여 받을 수 있는 건 LMS 출처의 pluginfile 뿐이다 (다른 주소는 본문 링크로만 남는다)
@@ -41,7 +43,12 @@ export function parseAssignPage(doc: Document): AssignPage {
     if (cells.length < 2) return [];
     return [{ label: clean(cells[0].textContent ?? ''), value: clean(cells[cells.length - 1].textContent ?? '') }];
   });
-  const due = status.find((s) => DUE_DATE_LABELS.includes(s.label))?.value ?? null;
+  // 채점 요약 표에도 같은 머리글의 마감 행이 있다 (내 제출 상황이 아니라 status 에는 넣지 않는다)
+  const grading = Array.from(main.querySelectorAll('.gradingsummarytable tr')).map((row) => {
+    const cells = row.querySelectorAll('th, td');
+    return { label: clean(cells[0]?.textContent ?? ''), value: clean(cells[cells.length - 1]?.textContent ?? '') };
+  });
+  const due = [...status, ...grading].find((s) => DUE_DATE_LABELS.includes(s.label))?.value ?? null;
   const intro = main.querySelector('#intro');
   return {
     title,
@@ -49,5 +56,6 @@ export function parseAssignPage(doc: Document): AssignPage {
     deadline: toIsoDeadline(normalizeLmsDate(due)),
     body: intro ? htmlToMarkdown(intro) : '',
     attachmentUrls: intro ? attachmentUrls(intro) : [],
+    gradingView: !status.length && grading.length > 0,
   };
 }

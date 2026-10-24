@@ -11,6 +11,7 @@ import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_COUNT,
   ATTACHMENT_REQUEST_TIMEOUT_MS,
+  GRADING_VIEW_NOTICE,
   LMS_DATA_NOTICE,
   LMS_ORIGIN,
   MCP_CALL_TIME_BUDGET_MS,
@@ -150,6 +151,7 @@ export function registerGetAssignment(server: McpServer): void {
               ctx.mcpReq.signal
             );
             if (moved) warnings.unshift(moved);
+            if (page.gradingView) warnings.unshift(GRADING_VIEW_NOTICE);
             const base = {
               title,
               deadline: page.deadline,
