@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime } from '../asr/runtime.js';
+import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime, type AsrLanguage } from '../asr/runtime.js';
 import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES, VOD_VIEWER_PATH } from '../constants.js';
 import { createFetchHtml, limit } from '../lms-html.js';
 import { isLoginPage, lmsFetch, SessionExpiredError } from '../lms.js';
@@ -10,6 +10,7 @@ import { getSession } from '../session.js';
 import { storageRoot } from '../storage.js';
 import { findVod, type VodMeta } from '../transcribe/find-vod.js';
 import { transcribeVod, type Phase } from '../transcribe/pipeline.js';
+import { EMPTY_QUEUE, readTranscribeQueue, withQueueLock, writeTranscribeQueue } from '../transcribe/queue.js';
 import {
   TRANSCRIBE_BUSY,
   TRANSCRIBE_HEARTBEAT_MS,
@@ -41,7 +42,11 @@ const viewerHtml = (session: string, cmid: number) =>
     return html;
   });
 
-// 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음, 잠금은 도구가 넘겨준다)이 같이 쓴다. 진행은 상태 파일에 남긴다
+type Item = { cmid: number; language: AsrLanguage };
+type Outcome = { status: 'done' | 'skipped' | 'error' | 'stopped'; title: string | null; error?: Error };
+
+// 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음, 잠금은 도구가 넘겨준다)이 같이 쓴다. 진행은 상태 파일에 남긴다.
+// 하나를 끝내면 대기열(transcribe_vod 가 붙인 강의)을 비울 때까지 이어서 받아쓴다
 export async function transcribe(arg: string, worker = false, languageArg?: string): Promise<void> {
   if (!LMS_NUMERIC_ID.test(arg)) throw new Error('강의 번호(cmid)는 숫자여야 합니다.');
   const cmid = Number(arg);
@@ -52,9 +57,14 @@ export async function transcribe(arg: string, worker = false, languageArg?: stri
       `--language 는 auto 또는 다음 중 하나여야 합니다: ${asrLanguageSchema.options.slice(1).join(', ')}`
     );
   const language = parsed.data;
+  // 포그라운드는 새 묶음이다 — 대기열 잠금 안에서 잠그고 비워야, 그사이 도구가 붙인 항목을 지우지 않는다
   const release = worker
     ? await adoptLock(TRANSCRIBE_LOCK_FILE)
-    : await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
+    : await withQueueLock(async () => {
+        const release = await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
+        await writeTranscribeQueue(EMPTY_QUEUE).catch(() => {});
+        return release;
+      });
   const controller = new AbortController();
   const stop = (signal: StopSignal) => {
     process.exitCode = SIGNAL_EXIT_CODES[signal];
@@ -62,6 +72,35 @@ export async function transcribe(arg: string, worker = false, languageArg?: stri
   };
   for (const s of STOP_SIGNALS) process.once(s, stop);
 
+  let failure: Error | undefined;
+  try {
+    for (let next: Item | undefined = { cmid, language }; next;) {
+      const item: Item = next;
+      const outcome = await transcribeOne(item, worker, controller.signal);
+      if (outcome.error) failure = outcome.error;
+      next = await withQueueLock(async () => {
+        const queue = readTranscribeQueue();
+        // 중지하면 남은 대기열도 함께 취소한다
+        const [head, ...rest] = controller.signal.aborted ? [] : queue.pending;
+        const finished =
+          outcome.status === 'stopped'
+            ? queue.finished
+            : [...queue.finished, { cmid: item.cmid, status: outcome.status, title: outcome.title }];
+        await writeTranscribeQueue({ version: 1, pending: rest, finished }).catch(() => {});
+        // 비었으면 대기열 잠금 안에서 작업 잠금을 푼다 — 이후 도구는 실행 중이 아님을 보고 새로 띄운다
+        if (!head) await release();
+        return head;
+      });
+    }
+  } finally {
+    for (const s of STOP_SIGNALS) process.off(s, stop);
+    await release();
+  }
+  // 하나라도 실패하면 마지막 오류로 끝낸다 (나머지는 이어서 받아썼다)
+  if (failure) throw failure;
+}
+
+async function transcribeOne({ cmid, language }: Item, worker: boolean, signal: AbortSignal): Promise<Outcome> {
   let meta: VodMeta | null = null;
   let current: Pick<TranscribeState, 'status' | 'phase' | 'progress' | 'path' | 'message'> = {
     status: 'running',
@@ -86,6 +125,8 @@ export async function transcribe(arg: string, worker = false, languageArg?: stri
     };
     writes = writes.then(() => writeTranscribeState(state)).catch(() => {});
   };
+  // 클로저에서 채워지므로 함수로 읽는다 (그냥 읽으면 타입이 null 로 좁혀진다)
+  const title = () => meta?.title ?? null;
   let logged = '';
   const report = (phase: Phase, progress: number | null) => {
     save({ phase, progress });
@@ -112,7 +153,7 @@ export async function transcribe(arg: string, worker = false, languageArg?: stri
       tmpDir: TRANSCRIBE_TMP_DIR,
       now: () => new Date(),
       report,
-      signal: controller.signal,
+      signal,
     });
     const message = result.status === 'done' ? '녹취를 저장했습니다.' : '이미 녹취가 있어 건너뛰었습니다.';
     save({
@@ -123,16 +164,18 @@ export async function transcribe(arg: string, worker = false, languageArg?: stri
       message,
     });
     if (!worker) log(`${message} ${result.path}`);
+    return { status: result.status, title: title() };
   } catch (err) {
     // Ctrl+C·종료 신호면 시그널 종료 코드를 그대로 둔다
-    if (controller.signal.aborted) return save({ status: 'stopped', message: '중지했습니다.' });
+    if (signal.aborted) {
+      save({ status: 'stopped', message: '중지했습니다.' });
+      return { status: 'stopped', title: title() };
+    }
     const message = redact(err instanceof Error ? err.message : String(err), [session]);
     save({ status: 'error', message });
-    throw new Error(message);
+    return { status: 'error', title: title(), error: new Error(message) };
   } finally {
     clearInterval(heartbeat);
-    for (const s of STOP_SIGNALS) process.off(s, stop);
     await writes;
-    await release();
   }
 }
