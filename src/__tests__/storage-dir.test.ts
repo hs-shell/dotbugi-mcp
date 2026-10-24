@@ -256,6 +256,50 @@ describe('setStorageDir', () => {
     expect(await readdir(join(oldRoot(), 'assign-5'))).toEqual(['link']);
   });
 
+  it('지금 위치와 이름만 다른 같은 폴더(상위 링크·대소문자)면 "같은 내용" 으로 보고 지우지 않는다', async () => {
+    // 설정의 옛 위치가 링크를 거쳐 새 위치와 같은 폴더를 가리키는 경우 — 대소문자 무시 파일 시스템의 ~/downloads 와 같은 상황
+    const real = home('Documents', '돋부기');
+    await mkdir(join(real, 'assign-5'), { recursive: true });
+    await writeFile(join(real, 'assign-5', 'a.txt'), 'A');
+    await symlink(home('Documents'), home('alias'));
+    await writeStorageConfig(home('alias', '돋부기'));
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(text).toContain('같은 이름이 있어 그대로 둠');
+    expect(await readFile(join(real, 'assign-5', 'a.txt'), 'utf8')).toBe('A');
+  });
+
+  it('새 위치 저장 뒤·원본 삭제 전에 끊겼으면 같은 경로로 다시 부를 때 승인받고 남은 원본을 지운다', async () => {
+    await seed();
+    const to = home('Documents', '돋부기');
+    await mkdir(join(to, '2026-2학기', '자료구조'), { recursive: true });
+    await writeFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'A');
+    await mkdir(join(to, 'assign-5'));
+    // 끊긴 상태: 새 위치는 저장됐고 옛 위치가 movedFrom 으로 남음. 옛 위치의 개인 파일은 지우지 않아야 한다
+    await writeFile(join(oldRoot(), 'mine.txt'), 'X');
+    await writeStorageConfig(to, undefined, oldRoot());
+    const no = asker(false);
+    await setStorageDir({ path: '~/Documents/돋부기' }, no);
+    expect(no.asked).toHaveLength(1);
+    expect((await readdir(oldRoot())).sort()).toEqual(['2026-2학기', 'assign-5', 'mine.txt']);
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(text).toContain('남은 원본 2개를 지웠습니다');
+    expect(await readdir(oldRoot())).toEqual(['mine.txt']);
+    expect(await readFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'utf8')).toBe('A');
+    expect(readStorageConfig()).toEqual({ version: 1, root: to });
+  });
+
+  it('남은 원본이 새 위치와 내용이 다르면 지우지 않고 묻지도 않는다', async () => {
+    await seed();
+    const to = home('Documents', '돋부기');
+    await mkdir(join(to, '2026-2학기', '자료구조'), { recursive: true });
+    await writeFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'changed');
+    await writeStorageConfig(to, undefined, oldRoot());
+    const a = asker(true);
+    expect(await setStorageDir({ path: '~/Documents/돋부기' }, a)).toContain('이미 저장 위치가');
+    expect(a.asked).toHaveLength(0);
+    expect(await readFile(join(oldRoot(), '2026-2학기', '자료구조', 'a.txt'), 'utf8')).toBe('A');
+  });
+
   it('지금 위치의 안쪽·상위 폴더는 거부한다', async () => {
     await writeStorageConfig(home('Documents', '돋부기'));
     await expect(setStorageDir({ path: '~/Documents/돋부기/sub' }, asker(true))).rejects.toThrow('안쪽이나 상위');
@@ -270,6 +314,8 @@ describe('WSL 기본 저장 위치', () => {
     state.wsl = true;
     state.localAppData = join(mnt, 'c', 'Users', 'u', 'AppData', 'Local');
     expect(defaultStorageRoot()).toBe(join(mnt, 'c', 'Users', 'u', 'Downloads', 'dotbugi-mcp'));
+    // 다음 실행에서 Windows 조회가 실패해도 갈라지지 않게 설정에 고정된다
+    expect(storageRoot()).toBe(join(mnt, 'c', 'Users', 'u', 'Downloads', 'dotbugi-mcp'));
     await mkdir(home('Downloads', 'dotbugi-mcp'), { recursive: true });
     expect(defaultStorageRoot()).toBe(home('Downloads', 'dotbugi-mcp'));
     await rm(mnt, { recursive: true, force: true });

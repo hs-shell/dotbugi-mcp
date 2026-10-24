@@ -1,4 +1,4 @@
-import { existsSync, lstatSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, writeFileSync } from 'node:fs';
 import { lstat, mkdir, rename } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
@@ -18,9 +18,21 @@ export function defaultStorageRoot(): string {
   const linux = join(homedir(), 'Downloads', 'dotbugi-mcp');
   if (!isWsl() || existsSync(linux) || homedir() !== userInfo().homedir) return linux;
   const local = wslLocalAppData();
-  return local && basename(dirname(local)) === 'AppData'
-    ? join(dirname(dirname(local)), 'Downloads', 'dotbugi-mcp')
-    : linux;
+  if (!local || basename(dirname(local)) !== 'AppData') return linux;
+  const windows = join(dirname(dirname(local)), 'Downloads', 'dotbugi-mcp');
+  // 한 번 고른 Windows 쪽 기본 위치는 설정에 고정한다 — 다음 실행에서 PowerShell 조회가 실패(시간 초과 등)해
+  // 리눅스 쪽으로 받아 자료가 두 곳으로 갈라지지 않게. wx 라 이미 있는 설정(깨진 것·사용자가 고른 것)은 덮어쓰지 않는다
+  try {
+    mkdirSync(dirname(storageConfigFile()), { recursive: true, mode: 0o700 });
+    writeFileSync(storageConfigFile(), `${JSON.stringify({ version: 1, root: windows }, null, 2)}\n`, {
+      mode: 0o600,
+      flag: 'wx',
+    });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST')
+      log(`기본 저장 위치를 설정에 남기지 못했습니다: ${String(err)}`);
+  }
+  return windows;
 }
 
 const storageConfigSchema = z.object({
@@ -30,6 +42,12 @@ const storageConfigSchema = z.object({
     .string()
     .max(4096)
     .refine((p) => isAbsolute(p) && !/[\p{Cc}\p{Cf}]/u.test(p)),
+  // 다른 드라이브로 복사해 옮긴 뒤 원본 삭제가 끝나지 않은 옛 위치 (set_storage_dir 재실행 때 정리)
+  movedFrom: z
+    .string()
+    .max(4096)
+    .refine((p) => isAbsolute(p) && !/[\p{Cc}\p{Cf}]/u.test(p))
+    .optional(),
 });
 export type StorageConfig = z.infer<typeof storageConfigSchema>;
 
@@ -43,8 +61,8 @@ export function readStorageConfig(file = storageConfigFile(), strict = false): S
   return null;
 }
 
-export const writeStorageConfig = (root: string, file = storageConfigFile()) =>
-  writeStateFile(file, storageConfigSchema, { version: 1, root });
+export const writeStorageConfig = (root: string, file = storageConfigFile(), movedFrom?: string) =>
+  writeStateFile(file, storageConfigSchema, { version: 1, root, ...(movedFrom ? { movedFrom } : {}) });
 
 export const storageRoot = () => readStorageConfig()?.root ?? defaultStorageRoot();
 

@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs';
-import { lstat, readdir, rename, rm, rmdir } from 'node:fs/promises';
+import { lstat, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
@@ -86,6 +86,45 @@ async function isDotbugiItem(root: string, name: string): Promise<boolean> {
   return (await readManifest(join(root, name)).catch(() => null)) !== null;
 }
 
+// 두 경로가 같은 폴더인지 (대소문자 무시 파일 시스템·상위 폴더 링크로 이름만 다른 경우). 같으면 "복사본" 이 아니라 원본 자신이다
+async function sameDir(a: string, b: string): Promise<boolean> {
+  const [x, y] = await Promise.all([stat(a), stat(b)]);
+  return x.dev === y.dev && x.ino === y.ino;
+}
+
+// 원본 src 와 새 위치 target 의 내용이 같은 별개 폴더일 때만 true — 이때만 원본을 지워도 자료가 남는다
+const verifiedDuplicate = async (src: string, target: string) =>
+  !(await sameDir(src, target).catch(() => true)) && (await sameTree(src, target).catch(() => false));
+
+// 지난번 다른 드라이브 옮기기가 새 위치 저장 뒤·원본 삭제 전에 끊겨 옛 위치에 남은 원본을 정리한다.
+// 새 위치에 같은 내용이 검증된 dotbugi 항목만, 사용자 승인 뒤에 지운다
+async function cleanupMovedFrom(old: string, root: string, asker: Asker, token?: string): Promise<string> {
+  const dupes: string[] = [];
+  if (old !== root && !inside(old, root) && !inside(root, old))
+    for (const name of await readdir(old).catch(() => [])) {
+      if ((await isDotbugiItem(old, name)) && (await verifiedDuplicate(join(old, name), join(root, name))))
+        dupes.push(join(old, name));
+    }
+  if (dupes.length) {
+    const confirmed = await confirmDestructive(asker, {
+      action: 'set_storage_dir',
+      message: `지난번 저장 위치 옮기기가 끝나지 않아 ${old} 에 원본이 남아 있습니다. 새 위치(${root})에 같은 내용이 있는 것을 확인했습니다. 남은 원본을 지웁니다.`,
+      targets: dupes,
+      token,
+    });
+    if (!confirmed.ok) return confirmed.text;
+  }
+  const failed: string[] = [];
+  for (const src of dupes)
+    await rm(src, { recursive: true }).catch((err: unknown) => failed.push(`- ${src} — ${String(err)}`));
+  if (failed.length) return [`남은 원본 중 ${failed.length}개를 지우지 못했습니다:`, ...failed].join('\n');
+  await writeStorageConfig(root);
+  await rmdir(old).catch(() => {});
+  return dupes.length
+    ? `저장 위치는 ${root} 입니다. 옛 위치(${old})에 남은 원본 ${dupes.length}개를 지웠습니다.`
+    : `이미 저장 위치가 ${root} 입니다.`;
+}
+
 export interface SetStorageDirArgs {
   path: string;
   moveExisting?: boolean;
@@ -99,9 +138,13 @@ export async function setStorageDir(args: SetStorageDirArgs, asker: Asker): Prom
   return withSyncLock(async () => {
     const releaseTranscribe = await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
     try {
-      const from = readStorageConfig(undefined, true)?.root ?? defaultStorageRoot();
+      const config = readStorageConfig(undefined, true);
+      const from = config?.root ?? defaultStorageRoot();
       const { path: to, base } = await resolveStorageDir(args.path);
-      if (to === from) return `이미 저장 위치가 ${to} 입니다.`;
+      if (to === from)
+        return config?.movedFrom
+          ? cleanupMovedFrom(config.movedFrom, to, asker, args.confirmToken)
+          : `이미 저장 위치가 ${to} 입니다.`;
       if (inside(from, to) || inside(to, from))
         throw new Error(`지금 저장 위치(${from})의 안쪽이나 상위 폴더로는 바꿀 수 없습니다.`);
       const all = await readdir(from).catch((err: NodeJS.ErrnoException) => {
@@ -142,8 +185,8 @@ export async function setStorageDir(args: SetStorageDirArgs, asker: Asker): Prom
         const src = join(from, name);
         const target = join(to, name);
         if (await lstat(target).catch(() => null)) {
-          // 지난번 다른 드라이브 옮기기가 원본을 지우기 전에 끊긴 경우 — 내용이 똑같으면 옮긴 것으로 본다
-          if (await sameTree(src, target).catch(() => false)) {
+          // 지난번 다른 드라이브 옮기기가 원본을 지우기 전에 끊긴 경우 — 별개 폴더이고 내용이 똑같으면 옮긴 것으로 본다
+          if (await verifiedDuplicate(src, target)) {
             copied.push(src);
             moved++;
           } else skipped.push(`${src} — 새 위치에 같은 이름이 있어 그대로 둠`);
@@ -166,12 +209,16 @@ export async function setStorageDir(args: SetStorageDirArgs, asker: Asker): Prom
           }
         }
       }
-      await writeStorageConfig(to);
+      // 원본 삭제가 남았으면 옛 위치도 함께 적어 둔다 — 지우기 전에 끊겨도 같은 경로로 다시 부르면 정리된다
+      await writeStorageConfig(to, undefined, copied.length ? from : undefined);
       // 새 위치를 저장한 뒤에만 원본을 지운다 — 그 전에 끊기면 원본이 그대로 남는다
+      let removeFailed = false;
       for (const src of copied)
-        await rm(src, { recursive: true }).catch((err: unknown) =>
-          skipped.push(`${src} — 새 위치로 복사했지만 원본을 지우지 못함: ${reason(err)}`)
-        );
+        await rm(src, { recursive: true }).catch((err: unknown) => {
+          removeFailed = true;
+          skipped.push(`${src} — 새 위치로 복사했지만 원본을 지우지 못함: ${reason(err)}`);
+        });
+      if (copied.length && !removeFailed) await writeStorageConfig(to);
       if (move && skipped.length === 0) await rmdir(from).catch(() => {});
       return [
         `저장 위치를 ${to} 로 바꿨습니다. 이번 학기 폴더: ${semesterDir(new Date(), to)}`,
