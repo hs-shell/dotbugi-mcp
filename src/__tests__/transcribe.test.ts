@@ -20,7 +20,7 @@ import {
   writeTranscribeState,
   type TranscribeState,
 } from '../transcribe/state.js';
-import { startWorker, stopTranscribe } from '../tools/transcribe-vod.js';
+import { startWorker, stopTranscribe, transcribeStatusState } from '../tools/transcribe-vod.js';
 import { PAGES } from './fixtures/lms-pages.js';
 
 // 상태·잠금 경로는 import 시점에 homedir 로 정해진다 — 그 전에 테스트 전용 홈을 정한다
@@ -482,6 +482,19 @@ describe('stopTranscribe', () => {
     const d = { kill: vi.fn(() => void (alive = false)), isAlive: vi.fn(() => alive), timeoutMs: 1000 };
     await lockWith(OTHER);
     await expect(stopTranscribe(d)).resolves.toContain('중지했습니다');
+  });
+
+  it('transcribe_status 의 stale 은 중지와 같은 기준이다 (프로세스 없음 또는 갱신 끊김)', () => {
+    const now = Date.now();
+    const old = new Date(now - TRANSCRIBE_STATE_STALE_MS - 1000).toISOString();
+    expect(transcribeStatusState(running({ pid: process.pid }), now)?.stale).toBe(false);
+    expect(transcribeStatusState(running({ pid: process.pid, updatedAt: old }), now)?.stale).toBe(true);
+    // Linux pid 상한(2^22)보다 큰 pid — 살아 있을 수 없다
+    expect(transcribeStatusState(running({ pid: 2 ** 22 + 1 }), now)?.stale).toBe(true);
+    expect(transcribeStatusState(running({ pid: process.pid, status: 'done', updatedAt: old }), now)?.stale).toBe(
+      false
+    );
+    expect(transcribeStatusState(null, now)).toBeNull();
   });
 
   it('제때 끝나지 않으면 확인 안내', async () => {

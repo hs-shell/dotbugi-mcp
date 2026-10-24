@@ -15,6 +15,7 @@ import {
   TRANSCRIBE_BUSY,
   TRANSCRIBE_LOCK_FILE,
   transcribeStateSchema,
+  type TranscribeState,
 } from '../transcribe/state.js';
 
 // dist/tools/ → dist/index.js
@@ -79,13 +80,17 @@ export async function stopTranscribe(deps = STOP_DEPS): Promise<string> {
   if (!Number.isInteger(pid) || pid <= 0 || !deps.isAlive(pid)) return '실행 중인 받아쓰기가 없습니다.';
   const state = readTranscribeState();
   if (pid === process.pid || state?.status !== 'running' || state.pid !== pid || isTranscribeStale(state, Date.now()))
-    return '받아쓰기 작업을 확인하지 못해 중지하지 않았습니다. 터미널에서 실행한 transcribe 라면 그 터미널에서 Ctrl+C 로 멈추세요.';
+    return '받아쓰기 작업을 확인하지 못해 중지하지 않았습니다. transcribe_status 로 상태를 확인하세요 (터미널에서 직접 실행한 transcribe 는 그 터미널에서 Ctrl+C).';
   deps.kill(pid, 'SIGTERM');
   for (const end = Date.now() + deps.timeoutMs; Date.now() < end; await sleep(100))
     // 신호 처리기를 달기 전(시작 직후)에 받으면 잠금을 못 풀고 바로 끝난다 — 프로세스가 사라진 것도 중지로 본다
     if ((await readLockPid()) !== pid || !deps.isAlive(pid)) return '받아쓰기를 중지했습니다.';
   return '중지 신호를 보냈지만 아직 끝나지 않았습니다. 잠시 뒤 transcribe_status 로 확인하세요.';
 }
+
+// stop_transcribe 와 같은 기준으로 stale 을 판단한다 — 상태에선 실행 중인데 중지는 거절되는 엇갈림이 없게
+export const transcribeStatusState = (s: TranscribeState | null, now: number) =>
+  s && { ...s, stale: s.status === 'running' && (!isAlive(s.pid) || isTranscribeStale(s, now)) };
 
 export function registerTranscribeVod(server: McpServer): void {
   server.registerTool(
@@ -126,14 +131,13 @@ export function registerTranscribeVod(server: McpServer): void {
       inputSchema: z.object({}),
       outputSchema: z.object({
         state: transcribeStateSchema
-          .extend({ stale: z.boolean().describe('실행 중으로 남았지만 프로세스가 없음 (강제 종료 등)') })
+          .extend({ stale: z.boolean().describe('실행 중으로 남았지만 프로세스가 없거나 갱신이 끊김 (강제 종료 등)') })
           .nullable(),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () => {
-      const s = readTranscribeState();
-      const state = s && { ...s, stale: s.status === 'running' && !isAlive(s.pid) };
+      const state = transcribeStatusState(readTranscribeState(), Date.now());
       const text = !state
         ? '받아쓰기 기록이 없습니다.'
         : [
