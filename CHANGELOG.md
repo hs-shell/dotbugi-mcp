@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.0...v0.4.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* MCP 도구 이름을 슬래시 명령과 맞춤 ([#135](https://github.com/hs-shell/dotbugi-mcp/issues/135)) ([28591c6](https://github.com/hs-shell/dotbugi-mcp/commit/28591c6b5497bff0302c72652bfdd14a9d9ffaf4)), closes [#134](https://github.com/hs-shell/dotbugi-mcp/issues/134)
+
 ## [0.4.0](https://github.com/hs-shell/dotbugi-mcp/compare/v0.3.0...v0.4.0) (2026-10-24)
 
 
