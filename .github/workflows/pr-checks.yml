@@ -40,7 +40,8 @@ jobs:
               );
             }
 
-  verify:
+  # 포맷·린트·취약점 검사는 OS 무관이라 ubuntu 에서 한 번만
+  static:
     needs: issue-link # 이슈-먼저 정책: 이슈 참조 실패 시 빌드/테스트 낭비 방지
     runs-on: ubuntu-latest
     steps:
@@ -64,11 +65,53 @@ jobs:
       - name: 린트 (ESLint)
         run: npm run lint
 
+      - name: 의존성 취약점 검사 (high 이상 차단)
+        run: npm audit --audit-level=high
+
+  # 빌드·테스트는 OS별 분기(경로·권한·프로세스)가 실제로 돌도록 매트릭스
+  build-test:
+    needs: issue-link
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22.22.1', '24']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: 리포지토리 체크아웃
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+
+      - name: Node.js 설정
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      # build 스크립트가 rm/cp 를 쓰므로 Windows 에서도 npm 스크립트를 Git Bash 로 실행
+      - name: npm 스크립트 셸 설정 (Windows)
+        if: runner.os == 'Windows'
+        run: npm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+
       - name: 타입 체크 + 빌드
         run: npm run build
 
       - name: 테스트
         run: npm run test
 
-      - name: 의존성 취약점 검사 (high 이상 차단)
-        run: npm audit --audit-level=high
+  # 필수 체크 이름(verify)을 유지하기 위한 집계 잡
+  verify:
+    if: always()
+    needs: [static, build-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 결과 확인
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
