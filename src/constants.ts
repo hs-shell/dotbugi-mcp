@@ -86,8 +86,10 @@ export const PLAYER_STATE_MAX_BYTES = 16 * 1024;
 export const PLAYER_STATE_TEXT_MAX = 200;
 // 진도를 이만큼 연속으로 모르면(약 15분) 상태·로그로 알린다
 export const VOD_UNKNOWN_WARN_POLLS = 10;
-// 로그인 페이지가 200 으로 오면(리다이렉트 없이) 비밀번호 입력란으로 알아본다
-export const LMS_LOGIN_FORM_SELECTOR = 'input[type="password"]';
+// 로그인 페이지가 200 으로 오면(리다이렉트 없이) 로그인 폼의 비밀번호 입력란으로 알아본다.
+// 폼으로 한정한다 — 교수가 쓴 과제 본문·자료 HTML 에 비밀번호 입력란이 있어도 만료로 오판하지 않게
+export const LMS_LOGIN_FORM_SELECTOR =
+  'form#login input[type="password"], form[action*="/login/index.php"] input[type="password"]';
 // 진도 페이지(user_progress.php)의 진도 표
 export const VOD_PROGRESS_TABLE_SELECTOR = '.user_progress';
 

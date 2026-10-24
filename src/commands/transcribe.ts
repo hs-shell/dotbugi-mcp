@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime } from '../asr/runtime.js';
 import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES, VOD_VIEWER_PATH } from '../constants.js';
 import { createFetchHtml, limit } from '../lms-html.js';
-import { lmsFetch } from '../lms.js';
+import { isLoginPage, lmsFetch, SessionExpiredError } from '../lms.js';
 import { log } from '../log.js';
 import { acquireLock, adoptLock } from '../player/lock.js';
 import { redact } from '../redact.js';
@@ -36,7 +36,9 @@ const viewerHtml = (session: string, cmid: number) =>
       await res.body?.cancel();
       throw new Error(`LMS 응답 오류 HTTP ${res.status}`);
     }
-    return res.text();
+    const html = await res.text();
+    if (isLoginPage(html)) throw new SessionExpiredError();
+    return html;
   });
 
 // 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음, 잠금은 도구가 넘겨준다)이 같이 쓴다. 진행은 상태 파일에 남긴다

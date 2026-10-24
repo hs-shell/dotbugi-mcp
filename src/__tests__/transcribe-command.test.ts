@@ -11,6 +11,7 @@ const SESSION = 'abcdefghij0123456789';
 vi.mock('../session.js', () => ({ getSession: async () => ({ session: SESSION, savedAt: '', method: 'extension' }) }));
 const transcribeVod = vi.fn();
 vi.mock('../transcribe/pipeline.js', () => ({ transcribeVod: (...a: unknown[]) => transcribeVod(...a) }));
+import { LOGIN_PAGE } from './fixtures/lms-pages.js';
 const logs: string[] = [];
 vi.mock('../log.js', () => ({ log: (m: string) => logs.push(m) }));
 
@@ -72,6 +73,20 @@ describe('transcribe 명령', () => {
     await transcribe('42', true);
     expect(logs).toEqual([]);
     expect(readTranscribeState()?.status).toBe('done');
+  });
+
+  it('재생 화면(viewer.php)이 200 로그인 화면이면 세션 만료로 멈춘다', async () => {
+    const fetchMock = vi.fn(async () => new Response(LOGIN_PAGE));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      transcribeVod.mockImplementation(async (_: number, deps: { viewerHtml(id: number): Promise<string> }) =>
+        deps.viewerHtml(42)
+      );
+      await expect(transcribe('42')).rejects.toThrow('세션이 만료');
+      expect(readTranscribeState()).toMatchObject({ status: 'error' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('실패하면 error 를 남기고, 오류·상태에 세션 값이 없다', async () => {
