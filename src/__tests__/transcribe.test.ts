@@ -12,8 +12,15 @@ import { acquireLock, adoptLock } from '../player/lock.js';
 import { findVod } from '../transcribe/find-vod.js';
 import { extractPlaylistUrl, mediaGet, parsePlaylist } from '../transcribe/hls.js';
 import { transcribeVod, type TranscribeDeps } from '../transcribe/pipeline.js';
-import { readTranscribeState, TRANSCRIBE_LOCK_FILE, writeTranscribeState } from '../transcribe/state.js';
-import { startWorker } from '../tools/transcribe-vod.js';
+import {
+  readTranscribeState,
+  TRANSCRIBE_LOCK_FILE,
+  TRANSCRIBE_STATE_FILE,
+  TRANSCRIBE_STATE_STALE_MS,
+  writeTranscribeState,
+  type TranscribeState,
+} from '../transcribe/state.js';
+import { startWorker, stopTranscribe } from '../tools/transcribe-vod.js';
 import { PAGES } from './fixtures/lms-pages.js';
 
 // 상태·잠금 경로는 import 시점에 homedir 로 정해진다 — 그 전에 테스트 전용 홈을 정한다
@@ -264,6 +271,21 @@ describe('transcribeVod', () => {
     await expect(transcribeVod(42, d)).rejects.toThrow('(SIGKILL)');
   });
 
+  it('중지 신호를 받으면 받던 중이라도 멈추고 임시 폴더를 지우며 녹취를 남기지 않는다', async () => {
+    const ac = new AbortController();
+    const base = deps({ signal: ac.signal });
+    const fetchImpl = base.d.fetch;
+    // 두 번째 세그먼트를 받으려는 순간 중지 신호가 온다
+    base.d.fetch = (async (url: URL, init?: RequestInit) => {
+      if (url.href.includes('segment-2')) ac.abort();
+      init?.signal?.throwIfAborted();
+      return fetchImpl(url, init);
+    }) as typeof fetch;
+    await expect(transcribeVod(42, base.d)).rejects.toThrow();
+    await tmpGone(base.d);
+    await expect(stat(OUT())).rejects.toThrow();
+  });
+
   it('ASR 런타임이 없으면 아무것도 받지 않는다', async () => {
     const { d, fetched } = deps({ runtime: () => Promise.reject(new Error('ASR 런타임이 설치되지 않았습니다')) });
     await expect(transcribeVod(42, d)).rejects.toThrow('설치되지 않았습니다');
@@ -385,5 +407,86 @@ describe('상태 파일·작업 잠금', () => {
     await writeFile(TRANSCRIBE_LOCK_FILE, '1');
     await expect(adoptLock(TRANSCRIBE_LOCK_FILE, 100)).rejects.toThrow('넘겨받을');
     await release();
+  });
+});
+
+describe('stopTranscribe', () => {
+  const OTHER = 424242;
+  afterEach(async () => {
+    await rm(TRANSCRIBE_LOCK_FILE, { force: true });
+    await rm(TRANSCRIBE_STATE_FILE, { force: true });
+  });
+  const deps = (alive = true) => ({
+    // 신호를 받은 작업 프로세스가 잠금을 푸는 것을 흉내 낸다
+    kill: vi.fn(() => void rm(TRANSCRIBE_LOCK_FILE, { force: true })),
+    isAlive: vi.fn(() => alive),
+    timeoutMs: 1000,
+  });
+  const running = (over: Partial<TranscribeState> = {}): TranscribeState => ({
+    version: 1,
+    status: 'running',
+    cmid: 42,
+    phase: 'download',
+    progress: 10,
+    course: null,
+    title: null,
+    path: null,
+    pid: OTHER,
+    updatedAt: new Date().toISOString(),
+    message: null,
+    ...over,
+  });
+  const lockWith = async (pid: number | string, state: TranscribeState | null = running()) => {
+    if (state) await writeTranscribeState(state);
+    await writeFile(TRANSCRIBE_LOCK_FILE, String(pid));
+  };
+
+  it('잠금이 없거나 죽은 pid 면 실행 중이 아니라고 답한다', async () => {
+    const d = deps(false);
+    await expect(stopTranscribe(d)).resolves.toContain('실행 중인 받아쓰기가 없습니다');
+    await lockWith(OTHER);
+    await expect(stopTranscribe(d)).resolves.toContain('없습니다');
+    expect(d.kill).not.toHaveBeenCalled();
+  });
+
+  it('살아 있고 상태 파일 pid 와 맞으면 SIGTERM 을 보내고 잠금 해제를 기다린다', async () => {
+    const d = deps();
+    await lockWith(OTHER);
+    await expect(stopTranscribe(d)).resolves.toContain('중지했습니다');
+    expect(d.kill).toHaveBeenCalledExactlyOnceWith(OTHER, 'SIGTERM');
+  });
+
+  it.each([
+    ['내 pid', process.pid, running({ pid: process.pid })],
+    ['상태 pid 불일치(재사용 의심)', OTHER, running({ pid: OTHER + 1 })],
+    ['상태 파일 없음', OTHER, null],
+    ['0', '0', running()],
+    ['음수', '-1', running()],
+    ['숫자 아님', 'abc', running()],
+    ['실행 중이 아님', OTHER, running({ status: 'stopped' })],
+    [
+      '갱신이 끊김',
+      OTHER,
+      running({ updatedAt: new Date(Date.now() - TRANSCRIBE_STATE_STALE_MS - 1000).toISOString() }),
+    ],
+    ['미래 시각', OTHER, running({ updatedAt: new Date(Date.now() + 60_000).toISOString() })],
+  ])('%s 면 신호를 보내지 않는다', async (_, lockPid, s) => {
+    const d = deps();
+    await lockWith(lockPid, s);
+    await stopTranscribe(d);
+    expect(d.kill).not.toHaveBeenCalled();
+  });
+
+  it('신호를 받고 잠금을 못 푼 채 끝나도(시작 직후) 중지로 본다', async () => {
+    let alive = true;
+    const d = { kill: vi.fn(() => void (alive = false)), isAlive: vi.fn(() => alive), timeoutMs: 1000 };
+    await lockWith(OTHER);
+    await expect(stopTranscribe(d)).resolves.toContain('중지했습니다');
+  });
+
+  it('제때 끝나지 않으면 확인 안내', async () => {
+    const d = { kill: vi.fn(), isAlive: vi.fn(() => true), timeoutMs: 200 };
+    await lockWith(OTHER);
+    await expect(stopTranscribe(d)).resolves.toContain('아직 끝나지 않았습니다');
   });
 });

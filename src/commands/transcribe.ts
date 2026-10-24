@@ -12,6 +12,7 @@ import { findVod, type VodMeta } from '../transcribe/find-vod.js';
 import { transcribeVod, type Phase } from '../transcribe/pipeline.js';
 import {
   TRANSCRIBE_BUSY,
+  TRANSCRIBE_HEARTBEAT_MS,
   TRANSCRIBE_LOCK_FILE,
   TRANSCRIBE_TMP_DIR,
   writeTranscribeState,
@@ -86,6 +87,8 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
 
   // 잠금을 잡자마자 running 을 남긴다 — 이후 어디서 실패해도 error 로 바뀐다
   save({});
+  // stop_transcribe 가 갱신이 끊긴 상태(죽은 작업·pid 재사용)와 구별할 수 있게 진행이 없어도 주기적으로 다시 쓴다
+  const heartbeat = setInterval(() => save({}), TRANSCRIBE_HEARTBEAT_MS);
   let session = '';
   try {
     ({ session } = await getSession());
@@ -117,6 +120,7 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
     save({ status: 'error', message });
     throw new Error(message);
   } finally {
+    clearInterval(heartbeat);
     for (const s of STOP_SIGNALS) process.off(s, stop);
     await writes;
     await release();
