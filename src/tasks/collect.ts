@@ -50,8 +50,6 @@ function lmsUrl(url: string): string {
   }
 }
 
-// dotbugi src/lib/transformCourseData.ts mergeVodWithAttendance(제목+주차로 출석 조인, 출석 정보 없는 VOD 제외)
-// 기간·마감 필터는 조회 시점에 selectTasks 가 한다 (캐시가 1시간 내내 맞도록, 지난 퀴즈는 cachedQuizzes 로 재사용)
 // 과제 목록의 제출 칸이 전부 숫자(제출 인원)면 교수자 화면이다 — 파서는 '미제출' 이 없으면 제출로 보므로 그대로 믿을 수 없다
 export function isGradingIndex(doc: Document): boolean {
   const cells = Array.from(doc.querySelectorAll('table.generaltable tbody td.cell.c3'), (c) =>
@@ -60,6 +58,8 @@ export function isGradingIndex(doc: Document): boolean {
   return cells.length > 0 && cells.every((t) => /^\d+$/.test(t));
 }
 
+// dotbugi src/lib/transformCourseData.ts mergeVodWithAttendance(제목+주차로 출석 조인, 출석 정보 없는 VOD 제외)
+// 기간·마감 필터는 조회 시점에 selectTasks 가 한다 (캐시가 1시간 내내 맞도록, 지난 퀴즈는 cachedQuizzes 로 재사용)
 export function toTaskItems(course: CourseBase, data: CourseData, gradingView = false): TaskItem[] {
   const courseTitle = clean(course.courseTitle);
   const attendance = new Map(data.vodAttendanceArray.map((a) => [`${a.title}-${a.week}`, a]));

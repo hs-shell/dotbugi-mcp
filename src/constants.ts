@@ -153,6 +153,6 @@ export const NOTES_CONTENT_MAX_CHARS = 200_000;
 
 // 이 과목에서 교수자(채점) 화면을 받으면 내 제출 여부를 알 수 없다 — 브라우저의 '역할 전환'은 dotbugi-mcp 세션과 별개
 export const GRADING_VIEW_NOTICE =
-  '이 과목은 교수자(채점) 화면으로 보여 내 제출 여부를 알 수 없습니다. 브라우저에서 역할 전환으로 학생 화면을 보고 있어도 dotbugi-mcp 세션에는 적용되지 않습니다.';
+  '교수자(채점) 화면으로 보이는 과목은 내 제출 여부를 알 수 없습니다. 브라우저에서 역할 전환으로 학생 화면을 보고 있어도 dotbugi-mcp 세션에는 적용되지 않습니다.';
 // 교수자 화면이라 제출 여부를 모르는 과제의 상태 표시
 export const GRADING_VIEW_STATUS = '제출 여부 알 수 없음 (교수자 화면)';
