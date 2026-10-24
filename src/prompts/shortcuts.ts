@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
@@ -120,7 +122,6 @@ const pullLines = (step: string, c?: string) => [
   '   - 바뀐 게 없으면 "변경 없음" 한 줄.',
 ];
 // 사용자 요청 줄 머리말 (work 프롬프트·플러그인 스킬)
-// 사용자 요청 줄 머리말 (work 프롬프트·플러그인 스킬)
 const REQUEST_HEADER = '사용자 요청 (다음 한 줄 전체, 따옴표·백틱도 사용자가 쓴 그대로';
 // 과제 바로가기 조각
 const WORK_PICK = `\`get_status\` 를 ${withArgs('type: "assign"', REFRESH)}불러 미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.`;
@@ -179,7 +180,8 @@ const shortcuts: Shortcut[] = [
     request: () =>
       [
         '사용자 요청은 과목(과목명 일부 또는 courseId)이고, 비어 있으면 추적 과목 전체가 대상이다.',
-        ...pullLines(ID_REQ, COURSE_ARG_REQ),
+        ID_REQ.trim(),
+        ...pullLines('', COURSE_ARG_REQ),
       ].join('\n'),
   },
   {
@@ -308,8 +310,10 @@ export const pluginSkills = () =>
   }));
 
 export function registerShortcuts(server: McpServer): void {
-  // 플러그인이 띄운 서버(CLAUDE_PLUGIN_ROOT)는 같은 명령을 플러그인 스킬 /dotbugi:<name> 로 주므로, 메뉴에 두 벌 보이지 않게 프롬프트를 등록하지 않는다
-  if (process.env.CLAUDE_PLUGIN_ROOT) return;
+  // 플러그인이 띄운 서버는 같은 명령을 플러그인 스킬 /dotbugi:<name> 로 주므로, 메뉴에 두 벌 보이지 않게 프롬프트를 등록하지 않는다.
+  // skills 폴더가 있을 때만 — 플러그인 버전이 고정돼 스킬 없는 옛 플러그인에 새 서버(@latest)가 붙어도 명령이 사라지지 않게
+  const root = process.env.CLAUDE_PLUGIN_ROOT;
+  if (root && existsSync(join(root, 'skills'))) return;
   for (const s of [...shortcuts, help]) {
     const respond = (a: Record<string, string | undefined>) => ({
       messages: [

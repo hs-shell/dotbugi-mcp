@@ -8,7 +8,8 @@ disable-model-invocation: true
 $ARGUMENTS
 
 사용자 요청은 과목(과목명 일부 또는 courseId)이고, 비어 있으면 추적 과목 전체가 대상이다.
-과목이 숫자(courseId)면 먼저 `list_courses` 로 courseId <그 숫자> 의 과목명을 찾아(없으면 그렇다고 알리고 멈춤) 그 과목명을 course 로 넘겨. 1. `pull_materials` 를 course: "<과목명>"(과목이 있을 때만) 로 부르고, more 가 true 면 false 가 될 때까지 다시 불러.
+과목이 숫자(courseId)면 먼저 `list_courses` 로 courseId <그 숫자> 의 과목명을 찾아(없으면 그렇다고 알리고 멈춤) 그 과목명을 course 로 넘겨.
+1. `pull_materials` 를 course: "<과목명>"(과목이 있을 때만) 로 부르고, more 가 true 면 false 가 될 때까지 다시 불러.
 2. `get_status` 를 course: "<과목명>"(과목이 있을 때만), type: "assign", refresh: true 로 불러 미완료 과제마다 `get_assignment` 를 하나씩 불러 지시사항을 가져와.
 3. 바뀐 것만 요약해 줘:
    - **강의자료**: added(새로 받음)·updated(새 버전으로 덮어씀) 파일 목록. 경고에 "덮어쓰지 않고 새 버전을 ... 에 저장" 이 있으면 내가 고친 파일이라 새 버전을 따로 저장했다고 표시. removed 는 LMS 에서 사라진 파일(지우려면 delete_materials)로 따로.
