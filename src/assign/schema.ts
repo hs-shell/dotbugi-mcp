@@ -24,6 +24,12 @@ export const getAssignmentOutput = z.object({
     .string()
     .nullable()
     .describe('본문(LMS 화면) 지시사항과 첨부별 글자를 합친 과제-<제목>.md 경로. 못 썼으면 null (warnings 에 이유)'),
+  instructionsStatus: z
+    .enum(['added', 'updated', 'unchanged'])
+    .nullable()
+    .describe(
+      '지시사항 md: added 새 과제 / updated 지시사항이 바뀜(changes 에 diff) / unchanged 그대로. 못 썼으면 null'
+    ),
   changes: z
     .string()
     .nullable()
