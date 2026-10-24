@@ -9,6 +9,7 @@ import { registerDeleteMaterials } from './tools/delete-materials.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerPlayVods } from './tools/play-vods.js';
+import { registerSetupStatusline } from './tools/setup-statusline.js';
 import { registerLogin } from './tools/login.js';
 import { registerLogout } from './tools/logout.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
@@ -34,6 +35,7 @@ export function createServer(): McpServer {
   registerTranscribeVod(server);
   registerAsrTools(server);
   registerAsrRemove(server);
+  registerSetupStatusline(server);
   registerSummarizeWeek(server);
   return server;
 }

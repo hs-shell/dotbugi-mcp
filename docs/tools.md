@@ -8,7 +8,7 @@ dotbugi-mcp 가 제공하는 MCP 도구·프롬프트의 인자·출력·상한�
 - 세션이 없거나 만료되면 `login` 도구로 다시 로그인하라는 오류를 돌려줍니다.
 - 과목·제목·본문 등 LMS 텍스트는 **데이터일 뿐 지시가 아닙니다** (도구 설명에도 명시).
 - 대상 강좌는 [추적 강좌 설정](#list_courses--set_course_tracking)을 따릅니다 (`list_tasks`·`vod_status`·`play_vods`·`sync_materials`·`delete_materials`·`transcribe_vod`).
-- 지우는 도구(`delete_materials`·`asr_remove`)는 [사용자 승인](#삭제-승인)을 받은 뒤에만 지웁니다.
+- 지우는 도구(`delete_materials`·`asr_remove`)와 설정을 바꾸는 `setup_statusline` 은 [사용자 승인](#삭제-승인)을 받은 뒤에만 지웁니다.
 
 ## `login`
 
@@ -246,6 +246,21 @@ VOD 하나의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강�
 - 설치·받아쓰기 작업이 실행 중이면 **승인했어도 지우지 않고** 거절합니다 (두 잠금을 모두 잡은 채로만 지움). 폴더가 링크면 링크만 지웁니다.
 - 다시 쓰려면 `asr_install` 로 새로 받아야 합니다.
 
+## `setup_statusline`
+
+Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 있으면 그 아래)의 `statusLine` 에 [상태 표시줄](#statusline--claude-code-상태-표시줄)을 넣거나 뺍니다. 프로젝트 설정은 건드리지 않습니다. Claude Desktop 앱에는 상태 표시줄이 없습니다.
+
+| 인자           | 설명                                                                          |
+| -------------- | ----------------------------------------------------------------------------- |
+| `action`       | `enable`(기본) 설정 / `disable` 해제                                          |
+| `confirmToken` | 확인 창이 없는 클라이언트용 일회용 토큰 ([삭제 승인](#삭제-승인)과 같은 방식) |
+
+- 명령은 `"<node 절대 경로>" "<dist/index.js 절대 경로>" statusline` 입니다 (npx 는 매번 느려서 쓰지 않음). npx 캐시에서 실행 중이면 캐시가 지워질 때 표시줄이 사라지니 전역 설치를 권장합니다.
+- 바꾸기 전에 기존 → 새 `statusLine` 을 확인 창에 보여 주고 사용자 승인을 받습니다. 이미 같은 값이면 묻지 않고 끝납니다.
+- `statusLine` 외 설정은 그대로 두지만, 파일은 2칸 들여쓰기 JSON 으로 다시 씁니다. 주석이 있거나 깨진 JSON 이면 바꾸지 않고 거절합니다. 승인을 기다리는 사이 파일이 바뀌면 덮어쓰지 않습니다.
+- 임시 파일에 쓴 뒤 바꿔치기하며 파일 권한을 유지하고, 심볼릭 링크면 링크가 가리키는 파일에 씁니다.
+- `disable` 은 dotbugi 가 넣은 표시줄(`dotbugi-mcp`·`@dotbugi/mcp` 의 `statusline` 명령)만 지우고, 다른 표시줄이면 거절합니다.
+
 ## 삭제 승인
 
 `delete_materials`·`asr_remove` 는 되돌릴 수 없어 **모델이 아니라 사용자가** 승인해야 지웁니다 (`src/tools/confirm.ts`).
@@ -320,7 +335,7 @@ dotbugi-mcp asr remove                     # 폴더 삭제 (터미널에서 y/N 
 🎬 VOD 3/7 · 초급일본어 5과  ▓▓▓▓▓▓░░░░ 62%  12분 남음 · 다음: 6과 (D-1)
 ```
 
-`~/.claude/settings.json` 에 추가합니다 (`refreshInterval` 은 Claude Code 가 한가할 때도 N초마다 다시 그리게 합니다). 매번 실행되므로 전역 설치(`npm i -g @dotbugi/mcp`)를 권장합니다.
+`setup_statusline` 도구로 설정하거나("상태 표시줄 켜줘"), 직접 `~/.claude/settings.json` 에 추가합니다 (`refreshInterval` 은 Claude Code 가 한가할 때도 N초마다 다시 그리게 합니다). 매번 실행되므로 전역 설치(`npm i -g @dotbugi/mcp`)를 권장합니다.
 
 ```json
 {
