@@ -1,0 +1,12 @@
+{
+  "name": "dotbugi",
+  "description": "한성대학교 LMS 도구 (돋부기)",
+  "owner": { "name": "6-keem" },
+  "plugins": [
+    {
+      "name": "dotbugi",
+      "source": "./plugin",
+      "description": "dotbugi MCP 서버 + 입력창 위 STT 진행률 표시"
+    }
+  ]
+}

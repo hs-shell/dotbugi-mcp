@@ -36,6 +36,17 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 
 `-s user` 는 모든 프로젝트에서 쓰도록 등록합니다. 확인은 `claude mcp list`.
 
+**Claude Code 플러그인** (위 명령 대신, v2.1.287 이상) — 같은 MCP 서버에 더해 STT 진행률을 **입력창 위에** 한 줄로 보여 줍니다 (`STT 2/3 ▸ 과목 강의 ▓▓▓░░░░░ 42%`). 사용자 설정은 바꾸지 않습니다. Claude Code 입력창에서:
+
+```text
+/plugin marketplace add hs-shell/dotbugi-mcp
+/plugin install dotbugi@dotbugi
+```
+
+위 `claude mcp add` 로 이미 등록했다면 서버가 두 개 뜨지 않게 `claude mcp remove -s user dotbugi` 로 지우세요. 플러그인은 늘 최신 버전(`@dotbugi/mcp@latest`)을 실행합니다. 입력창 위 표시는 대화형 세션(터미널·Desktop 앱)에서만 보이고(`-p`·SDK 제외), 상태 표시줄(`setup_statusline`)은 선택 사항입니다.
+
+플러그인으로 설치하면 Claude Code 가 서버 이름을 `plugin:dotbugi:dotbugi` 로 붙여, 아래 [슬래시 명령](#슬래시-명령)은 `/dotbugi:status` 대신 `/mcp__plugin_dotbugi_dotbugi__status` 처럼 입력합니다 (`/` 를 누르면 목록에 보입니다). 권한 규칙 등에 쓰는 도구 이름도 `mcp__plugin_dotbugi_dotbugi__get_status` 형태가 됩니다.
+
 **Claude Desktop** — `claude_desktop_config.json` 의 `mcpServers` 에 추가하고 Claude Desktop 을 다시 시작합니다.
 
 ```json
@@ -151,7 +162,7 @@ Claude Code 에서는 `/dotbugi:notes 자료구조 5주차 시험 대비로`, `/
 - **원하는 과목이 안 보임**: `/dotbugi:courses` 로 체크박스 창을 열어 켜세요 (기본: 비교과 꺼짐).
 - **STT 대상에 강의가 빠짐**: 아직 공개 전("…부터 사용가능")이거나 열람 기간이 지난 강의는 영상을 받지 못해 대상에서 빼고 따로 알립니다. 이미 STT 결과가 있는 강의도 건너뜁니다.
 - **WSL 에서 Google Drive 를 못 찾음**: Drive 가상 드라이브(G: 등)는 WSL 에 자동으로 붙지 않습니다. `/dotbugi:drive` 가 알려 주는 마운트 명령(관리자 권한)을 한 번 실행한 뒤 다시 부르세요.
-- **상태 표시줄에 STT 진행이 안 보임**: "상태 표시줄 켜줘" 라고 하면 `setup_statusline` 이 승인 후 설정합니다 (Claude Code 전용).
+- **상태 표시줄에 STT 진행이 안 보임**: 설정을 바꾸지 않으려면 [플러그인](#설치등록)을 쓰세요 (입력창 위에 표시). 상태 표시줄을 쓰려면 "상태 표시줄 켜줘" 라고 하면 `setup_statusline` 이 승인 후 설정합니다 (Claude Code 전용).
 
 ## 라이선스·기여
 

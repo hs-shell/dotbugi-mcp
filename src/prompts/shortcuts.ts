@@ -8,6 +8,9 @@ import { summaryRequest, summaryText } from './summary.js';
 // 슬래시 명령 바로가기 (Claude Code: /dotbugi:status). 인자는 본문에 들어가므로 한 줄로 접고 길이를 묶는다.
 // 원칙: 선택 인자를 비우면 추적 과목 전체가 대상, 리소스가 큰 작업(STT)은 실행 전에 대상 목록을 확인받는다
 // 따옴표·백틱은 본문의 "..."·`도구` 구분을 깨므로 받지 않는다
+// 플러그인으로 띄우면 Claude Code 가 서버 이름을 plugin:dotbugi:dotbugi 로 바꿔 명령이 /mcp__plugin_dotbugi_dotbugi__status 가 된다.
+// CLAUDE_PLUGIN_ROOT 는 플러그인이 띄운 서버에만 들어온다
+const SLASH = process.env.CLAUDE_PLUGIN_ROOT ? '/mcp__plugin_dotbugi_dotbugi__' : '/dotbugi:';
 const freeText = (describe: string) =>
   z
     .string()
@@ -101,7 +104,7 @@ const shortcuts: Shortcut[] = [
     title: '할 일 현황',
     description: '할 일 현황 (과목을 주면 그 과목 상세, past 면 마감 지난 항목 포함)',
     usage: 'status [과목|courseId] [past]',
-    example: '/dotbugi:status 자료구조 past',
+    example: `${SLASH}status 자료구조 past`,
     args: { course: statusArg },
     text: ({ course: arg }) => {
       // 토큰 past 만 옵션으로 보고(순서 무관) 나머지는 과목으로
@@ -114,7 +117,7 @@ const shortcuts: Shortcut[] = [
         : '과목별로 묶어 보여 줘. 과목마다 제목 줄에 남은 동영상 강의·과제·퀴즈 개수를 쓰고, 곧 마감(▸)을 앞에 둔 표(종류, 제목, 상태, 남은 시간, cmid)로.';
       const overdue = past
         ? '마감 지난 미완료(overdue: true, ✗)는 맨 앞에 따로 표로 보여 줘.'
-        : 'overdue: true 항목은 목록에서 빼고, 1개 이상이면 맨 끝에 "마감 지난 항목 N개 — /dotbugi:status past" 한 줄만 안내해.';
+        : `overdue: true 항목은 목록에서 빼고, 1개 이상이면 맨 끝에 "마감 지난 항목 N개 — ${SLASH}status past" 한 줄만 안내해.`;
       // 마지막 pull 이 오래됐으면 최신화부터 — 과제 목록은 방금 받은 결과를 쓰고 get_status 는 다시 부르지 않는다
       const pullFirst = `결과의 pullStale 이 true 면 현황을 보여 주기 전에 \`pull_materials\` 를 ${withArgs(courseArg(c))}more 가 false 가 될 때까지 부르고, 이 결과의 미완료 과제(type: assign, done: false)마다 \`get_assignment\` 를 불러 최신화한 뒤 바뀐 것(새·갱신 강의자료, 지시사항이 바뀐 과제)을 짧게 요약해 현황 앞에 둬. get_status 는 다시 부르지 않는다.`;
       return `${call} ${pullFirst} ${show} ${overdue} 그 밖의 도구는 부르지 않는다.`;
@@ -125,7 +128,7 @@ const shortcuts: Shortcut[] = [
     title: '강의자료·과제 최신화',
     description: '강의자료·과제 최신화',
     usage: 'pull [과목|courseId]',
-    example: '/dotbugi:pull',
+    example: `${SLASH}pull`,
     args: { course },
     text: ({ course: c }) =>
       [
@@ -142,7 +145,7 @@ const shortcuts: Shortcut[] = [
     title: '추적 과목 선택',
     description: '추적 과목 선택',
     usage: 'courses',
-    example: '/dotbugi:courses',
+    example: `${SLASH}courses`,
     text: () =>
       '`set_course_tracking` 을 인자 없이 불러 현재 추적 상태가 체크된 선택 창에서 켜기·끄기를 고르게 하고, 바뀐 과목(● 켜짐 / ○ 꺼짐)만 알려 줘. 선택 창이 안 뜨면 돌려받은 표를 보여 주고 바꿀 과목을 물어봐.',
   },
@@ -151,7 +154,7 @@ const shortcuts: Shortcut[] = [
     title: '과제 함께 수행',
     description: '과제 함께 수행 (생략하면 미완료 과제 목록에서 선택, 참고 자료를 생략하면 같은 주차 자료 참고)',
     usage: 'work [cmid|과제명] [참고 자료…]',
-    example: '/dotbugi:work 보고서 3주차-정리.md',
+    example: `${SLASH}work 보고서 3주차-정리.md`,
     args: { work },
     text: ({ work: w }) => {
       // 첫 단어가 숫자면 cmid, 나머지는 참고 자료. 과제명이면 경계는 모델이 나눈다 (notes 의 범위·지시와 같은 방식)
@@ -182,7 +185,7 @@ const shortcuts: Shortcut[] = [
     title: '주차별 강의 노트',
     description: '주차별 강의 노트 생성 (범위 뒤에 작성 지시를 붙일 수 있음)',
     usage: 'notes [과목|courseId|교수] [N주차] [지시]',
-    example: '/dotbugi:notes 자료구조 3주차 시험 대비로 예제 위주',
+    example: `${SLASH}notes 자료구조 3주차 시험 대비로 예제 위주`,
     args: { request: notesRequest },
     // 대상 확인·변경 감지·저장은 list_notes·save_notes 가, 노트 본문은 모델이 쓴다
     text: ({ request: r }) => notesText(r),
@@ -192,7 +195,7 @@ const shortcuts: Shortcut[] = [
     title: '핵심 요약',
     description: '핵심 요약 (노트 기반, 범위 뒤에 요약 지시를 붙일 수 있음)',
     usage: 'summary [과목|courseId|교수] [N주차|N-M주차] [지시]',
-    example: '/dotbugi:summary 자료구조 1-7주차 시험에 나올 개념 위주',
+    example: `${SLASH}summary 자료구조 1-7주차 시험에 나올 개념 위주`,
     args: { request: summaryRequest },
     // 대상 확인·변경 감지·저장은 list_summary·save_summary 가, 요약 본문은 모델이 쓴다
     text: ({ request: r }) => summaryText(r),
@@ -202,7 +205,7 @@ const shortcuts: Shortcut[] = [
     title: '동영상 강의 STT 변환',
     description: '동영상 강의 STT 변환 (과목·생략은 대상 확인 후, cmid·all 은 바로 시작)',
     usage: 'transcribe [cmid…|과목|all]',
-    example: '/dotbugi:transcribe 자료구조',
+    example: `${SLASH}transcribe 자료구조`,
     args: { target },
     // 대상 확인(선택 창·확인 목록)은 transcribe_lecture 가 맡는다 (과목·생략만 확인, cmid·all 은 확인 없이 바로)
     text: ({ target: t }) =>
@@ -213,7 +216,7 @@ const shortcuts: Shortcut[] = [
     title: 'Google Drive 연동',
     description: 'Google Drive 연동 (저장 위치를 내 드라이브로)',
     usage: 'drive',
-    example: '/dotbugi:drive',
+    example: `${SLASH}drive`,
     text: () =>
       '`find_google_drive` 를 불러 결과를 보여 줘. suggested(추천 위치)가 있고 current 와 다르면 `set_storage_dir` 를 path: suggested 로 불러 옮겨 (확인 창은 서버가 띄운다. 확인 창 대신 목록과 confirmToken 이 오면 사용자에게 보여 주고 동의한 뒤에만 그 토큰으로 다시 불러). 마운트되지 않았으면 도구가 준 안내를 그대로 보여 줘. 그 밖의 도구는 부르지 않는다.',
   },
@@ -222,7 +225,7 @@ const shortcuts: Shortcut[] = [
     title: 'LMS 로그인',
     description: 'LMS 로그인',
     usage: 'login',
-    example: '/dotbugi:login',
+    example: `${SLASH}login`,
     text: () => '`login` 을 불러 안내를 그대로 따라 줘. 그 밖의 도구는 부르지 않는다.',
   },
 ];
@@ -232,7 +235,7 @@ const help: Shortcut = {
   title: '명령 안내',
   description: '명령 안내',
   usage: 'help',
-  example: '/dotbugi:help',
+  example: `${SLASH}help`,
   text: () =>
     [
       '아래 명령 안내를 그대로 보여 줘. 도구는 부르지 않는다.',
@@ -240,7 +243,7 @@ const help: Shortcut = {
       '| 명령 | 설명 | 예시 |',
       '| --- | --- | --- |',
       ...[...shortcuts, help].map(
-        (s) => `| \`/dotbugi:${cell(s.usage)}\` | ${cell(s.description)} | \`${s.example}\` |`
+        (s) => `| \`${SLASH}${cell(s.usage)}\` | ${cell(s.description)} | \`${s.example}\` |`
       ),
       '',
       '▸ [ ] 안 인자는 생략 가능 — 생략하면 추적 과목 전체가 대상',
