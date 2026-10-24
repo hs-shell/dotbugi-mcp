@@ -32,5 +32,6 @@ export const syncMaterialsOutput = z.object({
     .array(z.object({ course: z.string(), path: z.string(), locallyModified: z.boolean() }))
     .describe('LMS 에서 사라진 파일. 로컬 파일은 지우지 않았다 — 삭제는 delete_materials(사용자 승인)'),
   warnings: z.array(z.string()).describe('받지 못했거나 덮어쓰지 않고 따로 저장한 파일 등 안내 (없으면 빈 배열)'),
+  more: z.boolean().describe('true 면 한 번 호출 상한에 걸려 남은 자료가 있다 — 다시 호출하면 이어서 받는다'),
 });
 export type SyncMaterialsOutput = z.infer<typeof syncMaterialsOutput>;

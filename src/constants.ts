@@ -101,6 +101,12 @@ export const MATERIAL_REQUEST_TIMEOUT_MS = 10 * 60_000;
 // 한 번 실행에서 새로 받는 양의 상한 (디스크를 채우거나 LMS 에 오래 매달리지 않게). 넘으면 나머지는 다음 실행으로 미룬다
 export const MATERIAL_MAX_FILES_PER_RUN = 300;
 export const MATERIAL_MAX_BYTES_PER_RUN = 2 * 1024 * 1024 * 1024;
+// MCP 도구 한 번 호출의 작업량 상한 — 클라이언트 요청 시간 초과 전에 끝내고 남은 건 다음 호출로 (CLI sync 는 위 상한)
+export const MATERIAL_MCP_MAX_FILES = 60;
+export const MATERIAL_MCP_MAX_BYTES = 500 * 1024 * 1024;
+export const MCP_CALL_TIME_BUDGET_MS = 4 * 60_000;
+// 진행 알림(notifications/progress) 최소 간격
+export const PROGRESS_INTERVAL_MS = 1000;
 // sync_materials·sync 를 한 번에 하나만 (같은 manifest 를 번갈아 덮지 않게)
 export const MATERIALS_LOCK_NAME = '.dotbugi-sync.lock';
 
