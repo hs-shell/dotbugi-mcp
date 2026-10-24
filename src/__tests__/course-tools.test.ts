@@ -146,6 +146,24 @@ describe('set_course_tracking', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('인자 없이 부르면 선택 창을 못 띄우는 클라이언트에 전체 표와 안내를, 저장은 하지 않는다', async () => {
+    const result = await call('set_course_tracking');
+    expect(result.structuredContent).toMatchObject({
+      saved: false,
+      courses: [{ courseId: '100' }, { courseId: '200' }, { courseId: '300' }],
+    });
+    expect(text(result)).toContain('선택 창(elicitation)을 지원하지 않습니다');
+    await expect(readFile(COURSES_FILE)).rejects.toThrow();
+  });
+
+  it('course·tracked 중 하나만 주면 LMS 요청 전에 거부한다', async () => {
+    for (const args of [{ course: '100' }, { tracked: true }]) {
+      const result = await call('set_course_tracking', args);
+      expect(result.isError).toBe(true);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('바꾸면 list_tasks 캐시를 쓰지 않고 다시 가져온다', async () => {
     const before = await call('list_tasks', { refresh: true });
     expect(JSON.stringify(before.structuredContent)).toContain('자료구조');
@@ -154,5 +172,51 @@ describe('set_course_tracking', () => {
     const after = await call('list_tasks');
     expect(fetchMock.mock.calls.length).toBeGreaterThan(fetched);
     expect(JSON.stringify(after.structuredContent)).not.toContain('자료구조');
+  });
+});
+
+describe('set_course_tracking — 체크박스 선택 창', () => {
+  // 선택 창(elicitation)을 지원하는 클라이언트: 받은 창에 answer 로 답한다
+  const connect = async (answer: Record<string, unknown>) => {
+    const [client, server] = InMemoryTransport.createLinkedPair();
+    const pending = new Map<number, (result: Record<string, unknown>) => void>();
+    client.onmessage = (msg: JSONRPCMessage) => {
+      if ('method' in msg && msg.method === 'elicitation/create' && 'id' in msg)
+        void client.send({ jsonrpc: '2.0', id: msg.id, result: answer });
+      else if ('id' in msg && 'result' in msg) pending.get(msg.id as number)?.(msg.result as Record<string, unknown>);
+    };
+    await createServer().connect(server);
+    let id = 0;
+    const rpc = (method: string, params?: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        pending.set(++id, resolve);
+        void client.send({ jsonrpc: '2.0', id, method, params });
+      });
+    await rpc('initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: { elicitation: { form: {} } },
+      clientInfo: { name: 'test', version: '0' },
+    });
+    await client.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    return () => rpc('tools/call', { name: 'set_course_tracking', arguments: {} });
+  };
+
+  it('체크한 대로 바뀐 강좌만 한 번에 저장한다', async () => {
+    const choose = await connect({ action: 'accept', content: { '100': false, '200': true, '300': true } });
+    const result = await choose();
+    expect(result.structuredContent).toEqual({
+      saved: true,
+      courses: [
+        { courseId: '100', title: '자료구조', kind: '정규', tracked: false, explicit: true },
+        { courseId: '300', title: '비교과 활동', kind: '비교과', tracked: true, explicit: true },
+      ],
+    });
+    expect(await readConfig()).toEqual({ version: 1, courses: { '100': false, '300': true } });
+  });
+
+  it('취소하면 저장하지 않는다', async () => {
+    const choose = await connect({ action: 'cancel' });
+    expect((await choose()).structuredContent).toEqual({ saved: false, courses: [] });
+    await expect(readFile(COURSES_FILE)).rejects.toThrow();
   });
 });

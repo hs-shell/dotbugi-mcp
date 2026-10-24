@@ -33,7 +33,7 @@ export const confirmTokenInput = z
   );
 
 // 사람이 읽고 누르는 시간 — 기본 60초로는 부족하다
-const ELICIT_TIMEOUT_MS = 10 * 60_000;
+export const ELICIT_TIMEOUT_MS = 10 * 60_000;
 const TOKEN_TTL_MS = 5 * 60_000;
 // 토큰 → 묶인 대상 집합의 지문. 서버 메모리에만 두고 한 번 쓰면(맞든 틀리든) 버린다
 const tokens = new Map<string, { fingerprint: string; expires: number }>();
