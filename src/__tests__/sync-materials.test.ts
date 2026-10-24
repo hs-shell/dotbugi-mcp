@@ -18,11 +18,14 @@ vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
 // 한 번 실행 상한은 테스트에서만 줄인다
-const caps = vi.hoisted(() => ({ files: 300 }));
+const caps = vi.hoisted(() => ({ files: 300, mcpFiles: 60 }));
 vi.mock('../constants.js', async (orig) => ({
   ...(await orig<typeof import('../constants.js')>()),
   get MATERIAL_MAX_FILES_PER_RUN() {
     return caps.files;
+  },
+  get MATERIAL_MCP_MAX_FILES() {
+    return caps.mcpFiles;
   },
 }));
 
@@ -130,6 +133,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   caps.files = 300;
+  caps.mcpFiles = 60;
   fetchMock.mockClear();
   fetchMock.mockImplementation(async (input) => page(String(input)));
   await rm(state.home, { recursive: true, force: true });
@@ -330,6 +334,52 @@ describe('sync_materials 도구', () => {
     expect(out.removed[0]).toEqual({ course: '자료구조', path: course('3주차', 'a.txt'), locallyModified: false });
     expect(JSON.stringify(result)).not.toContain(SESSION);
     expect((result.content as { text: string }[])[0].text).toContain('delete_materials');
+  });
+
+  it('한 번 호출은 MCP 상한까지만 받고 more 로 알리며, 다시 호출하면 중복 없이 이어 받는다. 진행 알림은 토큰이 있을 때만', async () => {
+    getSession.mockResolvedValue({ session: SESSION, savedAt: '', method: 'extension' });
+    caps.mcpFiles = 2;
+    const [client, server] = InMemoryTransport.createLinkedPair();
+    const replies = new Map<number, (r: Record<string, unknown>) => void>();
+    const progress: Record<string, unknown>[] = [];
+    client.onmessage = (msg: JSONRPCMessage) => {
+      if ('method' in msg && msg.method === 'notifications/progress')
+        progress.push(msg.params as Record<string, unknown>);
+      if ('id' in msg) replies.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
+    };
+    await createServer().connect(server);
+    let id = 0;
+    const send = (method: string, params?: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        replies.set(++id, resolve);
+        void client.send({ jsonrpc: '2.0', id, method, params });
+      });
+    await send('initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 't', version: '0' },
+    });
+    type Out = { files: { status: string }[]; removed: unknown[]; more: boolean };
+    const first = await send('tools/call', { name: 'sync_materials', arguments: { course: '자료구조' } });
+    const a = first.structuredContent as Out;
+    expect(a.files.filter((f) => f.status === 'added')).toHaveLength(2);
+    expect(a).toMatchObject({ more: true, removed: [] });
+    expect((first.content as { text: string }[])[0].text).toContain('다시 호출하면 이어서 받습니다');
+    expect(progress).toEqual([]);
+
+    const second = await send('tools/call', {
+      name: 'sync_materials',
+      arguments: { course: '자료구조' },
+      _meta: { progressToken: 7 },
+    });
+    const b = second.structuredContent as Out;
+    expect(b.more).toBe(false);
+    expect(b.files.map((f) => f.status).sort()).toEqual(['added', 'added', 'unchanged', 'unchanged']);
+    expect((await readdir(course('3주차'))).sort()).toEqual(['a.txt', 'b.txt']);
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress.every((p) => p.progressToken === 7 && typeof p.message === 'string')).toBe(true);
+    // 진행 메시지에 과목명(LMS 데이터)을 넣지 않는다
+    expect(JSON.stringify(progress)).not.toContain('자료구조');
   });
 });
 
@@ -534,6 +584,14 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     expect(r.removed).toEqual([]);
     caps.files = 300;
     expect((await sync()).files.filter((f) => f.status === 'added')).toHaveLength(3);
+  });
+
+  it('시간 상한이 지나면 파일 사이에서 멈추고, 못 받은 파일을 사라진 것으로 보지 않는다', async () => {
+    const r = await syncMaterials(SESSION, undefined, { maxFiles: 300, maxBytes: 2 ** 40, maxMs: 0 });
+    expect(r.files).toEqual([]);
+    expect(r).toMatchObject({ more: true, removed: [] });
+    expect(r.warnings).toContainEqual(expect.stringContaining('0분)에 걸려'));
+    expect((await sync()).more).toBe(false);
   });
 });
 

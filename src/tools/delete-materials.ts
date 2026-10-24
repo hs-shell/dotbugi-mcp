@@ -2,11 +2,12 @@ import { resolve } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { syncMaterialsInput } from '../materials/schema.js';
-import { resolveRemoved, syncMaterials, withSyncLock, type RemoveOutcome } from '../materials/sync.js';
+import { mcpCaps, resolveRemoved, syncMaterials, withSyncLock, type RemoveOutcome } from '../materials/sync.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { storageRoot } from '../storage.js';
 import { askerOf, confirmDestructive, confirmTokenInput, type Asker } from './confirm.js';
+import { progressOf, type Progress } from './progress.js';
 
 const REASONS: Record<Exclude<RemoveOutcome, 'deleted' | 'kept'>, string> = {
   missing: '파일·기록이 이미 없음',
@@ -22,9 +23,15 @@ export interface DeleteMaterialsArgs {
 
 // 대상은 지금 다시 동기화해 얻은 "LMS 에서 사라진 파일"뿐 — 예전 보고를 기억해 두면 그사이 LMS 에 다시 올라온 파일까지 지울 수 있다.
 // 확인부터 삭제까지 sync 잠금 안에서 해 CLI·sync_materials 가 그사이 기록을 바꾸지 않게 한다
-export async function deleteMaterials(session: string, args: DeleteMaterialsArgs, asker: Asker): Promise<string> {
+export async function deleteMaterials(
+  session: string,
+  args: DeleteMaterialsArgs,
+  asker: Asker,
+  progress?: Progress
+): Promise<string> {
   return withSyncLock(async () => {
-    const { removed, files, warnings } = await syncMaterials(session, args.course);
+    // 동기화도 MCP 상한까지만 — 상한에 걸려도 사라진 파일 판정은 그대로다 (못 받은 파일도 LMS 에 있는 것으로 센다)
+    const { removed, files, warnings } = await syncMaterials(session, args.course, mcpCaps(progress));
     const root = storageRoot();
     const want = args.paths && new Set(args.paths.map((p) => resolve(root, p)));
     const picked = want ? removed.filter((f) => want.has(f.path)) : removed;
@@ -97,7 +104,7 @@ export function registerDeleteMaterials(server: McpServer): void {
       let session = '';
       try {
         ({ session } = await getSession());
-        const text = await deleteMaterials(session, args, askerOf(server, ctx));
+        const text = await deleteMaterials(session, args, askerOf(server, ctx), progressOf(ctx));
         return { content: [{ type: 'text', text: redact(text, [session]) }] };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

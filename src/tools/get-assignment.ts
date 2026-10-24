@@ -3,22 +3,37 @@ import { join } from 'node:path';
 import { assignDirName, attachmentName, downloadDir, saveAttachment } from '../assign/download.js';
 import { parseAssignPage } from '../assign/page.js';
 import { getAssignmentInput, getAssignmentOutput, type GetAssignmentOutput } from '../assign/schema.js';
-import { ASSIGN_VIEW_PATH, ATTACHMENT_MAX_COUNT, LMS_ORIGIN } from '../constants.js';
+import { ASSIGN_VIEW_PATH, ATTACHMENT_MAX_COUNT, LMS_ORIGIN, MCP_CALL_TIME_BUDGET_MS } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
 import { withSyncLock } from '../materials/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { moveLegacyDir, storageRoot } from '../storage.js';
+import { progressOf, type Progress } from './progress.js';
 
-async function downloadAll(urls: URL[], dir: string, session: string) {
+async function downloadAll(urls: URL[], dir: string, session: string, progress?: Progress) {
   const attachments: GetAssignmentOutput['attachments'] = [];
   const warnings: string[] = [];
   if (urls.length > ATTACHMENT_MAX_COUNT)
     warnings.push(`첨부파일이 많아 앞의 ${ATTACHMENT_MAX_COUNT}개만 받았습니다 (전체 ${urls.length}개).`);
+  const targets = urls.slice(0, ATTACHMENT_MAX_COUNT);
+  // 한 번 호출이 클라이언트 시간 초과를 넘기지 않게 파일 사이에서 멈춘다 (첨부 20개 × 요청 120초가 최악)
+  const deadline = Date.now() + MCP_CALL_TIME_BUDGET_MS;
   // 하나씩 받는다 — LMS 에 동시 요청을 늘리지 않는다
-  for (const url of urls.slice(0, ATTACHMENT_MAX_COUNT)) {
+  for (const [i, url] of targets.entries()) {
     const name = attachmentName(url);
+    if (Date.now() >= deadline) {
+      // 첨부는 받은 기록이 없어 다시 호출하면 처음부터 받는다 — 이미 받은 파일은 번호를 붙여 옆에 저장된다
+      warnings.push(
+        `시간 상한(${MCP_CALL_TIME_BUDGET_MS / 60_000}분)에 걸려 첨부 ${targets.length - i}개는 받지 않았습니다: ${targets
+          .slice(i)
+          .map(attachmentName)
+          .join(', ')}`
+      );
+      break;
+    }
+    progress?.(i, `첨부 ${i + 1}/${targets.length} 받는 중`, targets.length);
     try {
       const saved = await saveAttachment(url, dir, name, session);
       attachments.push({ name: saved.name, path: saved.path });
@@ -30,6 +45,7 @@ async function downloadAll(urls: URL[], dir: string, session: string) {
       warnings.push(`첨부파일을 받지 못했습니다 (${name}): ${redact(message, [session])}`);
     }
   }
+  if (targets.length) progress?.(targets.length, '첨부 받기 끝', targets.length);
   return { attachments, warnings };
 }
 
@@ -62,7 +78,7 @@ export function registerGetAssignment(server: McpServer): void {
       // LMS 에는 쓰지 않지만 로컬 전용 폴더에 파일을 만든다 (기존 파일은 덮어쓰지 않음)
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ cmid }) => {
+    async ({ cmid }, ctx) => {
       let session = '';
       try {
         ({ session } = await getSession());
@@ -72,7 +88,7 @@ export function registerGetAssignment(server: McpServer): void {
         // sync 잠금 안에서 — set_storage_dir 가 저장 위치를 옮기는 도중에 옛 위치에 쓰지 않게
         const { moved, attachments, warnings } = await withSyncLock(async () => ({
           moved: await moveLegacyDir(join(storageRoot(), assignDirName(cmid)), dir),
-          ...(await downloadAll(page.attachmentUrls, dir, session)),
+          ...(await downloadAll(page.attachmentUrls, dir, session, progressOf(ctx))),
         }));
         if (moved) warnings.unshift(moved);
         const result: GetAssignmentOutput = {

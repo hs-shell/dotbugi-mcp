@@ -18,6 +18,14 @@ const state = vi.hoisted(() => ({ home: '' }));
 vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => state.home }));
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
+// 한 번 호출 시간 상한은 테스트에서만 줄인다
+const budget = vi.hoisted(() => ({ ms: 4 * 60_000 }));
+vi.mock('../constants.js', async (orig) => ({
+  ...(await orig<typeof import('../constants.js')>()),
+  get MCP_CALL_TIME_BUDGET_MS() {
+    return budget.ms;
+  },
+}));
 
 // 익명화한 Moodle 3.2 과제 화면 (본문·첨부는 #intro, 제출 상황 표)
 const ASSIGN_PAGE = `<html><body><div role="main"><h2>과제1</h2>
@@ -53,10 +61,13 @@ const fetchMock = vi.fn<typeof fetch>(fakeFetch);
 vi.stubGlobal('fetch', fetchMock);
 
 let send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+const progress: Record<string, unknown>[] = [];
 beforeAll(async () => {
   const [client, server] = InMemoryTransport.createLinkedPair();
   const pending = new Map<number, (result: Record<string, unknown>) => void>();
   client.onmessage = (msg: JSONRPCMessage) => {
+    if ('method' in msg && msg.method === 'notifications/progress')
+      progress.push(msg.params as Record<string, unknown>);
     if ('id' in msg) pending.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
   };
   await createServer().connect(server);
@@ -86,6 +97,8 @@ beforeEach(async () => {
   fetchMock.mockImplementation(fakeFetch);
 });
 afterEach(async () => {
+  budget.ms = 4 * 60_000;
+  progress.length = 0;
   fetchMock.mockClear();
   await rm(state.home, { recursive: true, force: true });
 });
@@ -237,5 +250,23 @@ describe('get_assignment', () => {
     const result = await call({ cmid: 5 });
     expect(result.isError).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('progressToken 이 있을 때만 첨부 진행 알림을 보낸다', async () => {
+    await call({ cmid: 5 });
+    expect(progress).toEqual([]);
+    await send('tools/call', { name: 'get_assignment', arguments: { cmid: 5 }, _meta: { progressToken: 'p1' } });
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress.every((p) => p.progressToken === 'p1' && p.total === 2)).toBe(true);
+    // 마지막(끝) 알림은 간격과 상관없이 보낸다
+    expect(progress.at(-1)).toMatchObject({ progress: 2 });
+  });
+
+  it('시간 상한에 걸리면 남은 첨부는 받지 않고 알린다', async () => {
+    budget.ms = 0;
+    const out = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
+    expect(out.attachments).toEqual([]);
+    expect(out.warnings).toEqual([expect.stringContaining('시간 상한(0분)에 걸려 첨부 2개는 받지 않았습니다')]);
+    expect(await allFiles()).toEqual([]);
   });
 });
