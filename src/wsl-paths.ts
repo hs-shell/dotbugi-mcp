@@ -48,6 +48,7 @@ export function windowsToWslPath(winPath: string, root: string): string | null {
   return posix.join(root, m[1].toLowerCase(), ...m[2].split('\\').filter(Boolean));
 }
 
+// shortcut: Windows 가 C: 에 설치됐다고 가정, 다른 드라이브 설치 요청이 있으면 %SystemRoot% 로 해석한다
 const systemDrive = (): string => `${wslAutomountRoot()}c`;
 export const wslPowerShell = (): string => `${systemDrive()}/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe`;
 export const wslRundll32 = (): string => `${systemDrive()}/WINDOWS/System32/rundll32.exe`;
