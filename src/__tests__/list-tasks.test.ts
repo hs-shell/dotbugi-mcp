@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { rm } from 'node:fs/promises';
 import { LMS_DATA_NOTICE, PULL_STALE_MS, TASKS_CACHE_TTL_MS } from '../constants.js';
 import { createServer } from '../server.js';
-import { LAST_PULL_FILE, recordPull } from '../tasks/last-pull.js';
+import { lastPullFile, recordPull } from '../tasks/last-pull.js';
 import { PULL_FIRST, toText } from '../tools/list-tasks.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, NOW } from './fixtures/lms-pages.js';
 
@@ -111,7 +111,7 @@ describe('get_status', () => {
     let result = await call({ refresh: true });
     expect(result.structuredContent).toMatchObject({ lastPullAt: new Date(now).toISOString(), pullStale: false });
 
-    await rm(LAST_PULL_FILE, { force: true });
+    await rm(lastPullFile(), { force: true });
     result = await call();
     expect(result.structuredContent).toMatchObject({ lastPullAt: null, pullStale: true });
     expect((result.content as { text: string }[])[0].text.split('\n')[1]).toBe(

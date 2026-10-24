@@ -17,7 +17,7 @@ import { cell, code } from '../tasks/text.js';
 
 // 사용자에게 현황을 보여 주기 전에 해야 할 일 — 도구 설명·결과 텍스트에 같은 문구
 export const PULL_FIRST =
-  'pull_materials 를 more 가 false 가 될 때까지 부르고 미완료 과제마다 get_assignment 를 불러 최신화한 뒤, 바뀐 것을 짧게 요약하고 현황을 보여 준다.';
+  'pull_materials 를 more 가 false 가 될 때까지 부르고 미완료 과제마다 get_assignment 를 불러 최신화한 뒤, 바뀐 것을 짧게 요약하고 현황을 보여 준다. 이번 요청에서 이미 pull 했으면 다시 하지 않는다.';
 
 const TYPE_LABELS: Record<TaskType, string> = { vod: '동영상 강의', assign: '과제', quiz: '퀴즈' };
 

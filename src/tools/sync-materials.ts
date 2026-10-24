@@ -53,8 +53,8 @@ export function registerSyncMaterials(server: McpServer): void {
         const { root, files, removed, warnings, more } = await withSyncLock(() =>
           syncMaterials(session, course, mcpCaps({ onProgress: progressOf(ctx), signal: ctx.mcpReq.signal }))
         );
-        // 남은 자료 없이 끝났을 때만 pull 완료로 기록한다 (기록 실패는 결과에 영향 없음)
-        if (!more) await recordPull().catch(() => {});
+        // 전체 과목을 남은 자료 없이 받았을 때만 pull 완료로 기록한다 — 과목 하나만 받으면 다른 과목은 낡은 채라 기록하지 않음 (기록 실패는 결과에 영향 없음)
+        if (!more && !course) await recordPull().catch(() => {});
         const result: SyncMaterialsOutput = {
           root,
           files,

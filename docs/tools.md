@@ -58,7 +58,7 @@ LMS 세션을 받아 OS 키체인에 저장합니다. **승인·로그인을 기
 - `cmid` 는 LMS 주소의 `id=` 숫자(LMS 출처가 아니면 `null`)로, `get_assignment`·`transcribe_lecture` 에 그대로 넘깁니다.
 - `includePast` 로 나온 지난 항목은 마감 순 정렬상 맨 앞에 옵니다.
 - 결과는 메모리에 1시간 캐시합니다. 추적 강좌 설정이 바뀌면 새로 가져옵니다. 슬래시 명령(`status`·`pull`·`work`)은 항상 `refresh: true` 로 불러 새로 가져오고, `refresh` 면 지난 퀴즈의 제출 상태도 다시 조회합니다.
-- `lastPullAt`(마지막으로 `pull_materials` 를 끝까지 마친 시각)·`pullStale`(1시간 넘게 지났거나 기록 없음)도 돌려줍니다. `pullStale` 이면 텍스트 맨 앞에 안내가 붙고, 현황을 보여 주기 전에 `pull_materials` 와 미완료 과제 `get_assignment` 로 먼저 최신화합니다.
+- `lastPullAt`(마지막으로 `pull_materials` 를 과목 지정 없이 끝까지 마친 시각)·`pullStale`(1시간 넘게 지났거나 기록 없음)도 돌려줍니다. `pullStale` 이면 텍스트 맨 앞에 안내가 붙고, 현황을 보여 주기 전에 `pull_materials` 와 미완료 과제 `get_assignment` 로 먼저 최신화합니다.
 - 일부 과목·항목을 가져오지 못하면 `warnings`(텍스트 맨 앞에도)에 실패 건수를 알리고, 그 결과는 캐시하지 않습니다.
 
 ## `export_ics`
