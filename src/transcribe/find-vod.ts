@@ -16,8 +16,8 @@ export interface VodMeta {
   dimmed?: boolean;
 }
 
-// 파서 목록에서 빠진 dimmed VOD: li#module-<cmid>.modtype_vod 를 직접 읽는다 (링크·기간 표시가 없다)
-function findDimmed(doc: Document, cmid: number): { week: string; title: string } | undefined {
+// 파서 목록에서 빠진 VOD(열람 기간이 지나 링크가 없는 dimmed 등): li#module-<cmid>.modtype_vod 를 직접 읽는다
+function findDimmed(doc: Document, cmid: number): { week: string; title: string; dimmed: boolean } | undefined {
   const li = doc.querySelector(`li#module-${cmid}.modtype_vod`);
   const name = li?.querySelector('.instancename')?.cloneNode(true) as Element | undefined;
   if (!li || !name) return;
@@ -31,6 +31,8 @@ function findDimmed(doc: Document, cmid: number): { week: string; title: string 
       section?.querySelector('.sectionname')?.textContent ?? ''
     ),
     title,
+    // 파서는 기간 표시가 없는 일반 VOD 도 빠뜨린다 — 실제 dimmed 표시가 있을 때만 "기간 지남" 으로 안내
+    dimmed: !!li.querySelector('.dimmed, .dimmed_text'),
   };
 }
 
@@ -56,7 +58,7 @@ export async function findVod(fetchHtml: FetchHtml, cmid: number): Promise<VodMe
     const vod = vods.find((v) => cmidOf(v.url) === String(cmid));
     if (!vod) {
       const dimmed = page && findDimmed(page, cmid);
-      if (dimmed) return { course: clean(course.courseTitle), courseId: course.courseId, ...dimmed, dimmed: true };
+      if (dimmed) return { course: clean(course.courseTitle), courseId: course.courseId, ...dimmed };
       continue;
     }
     // 파서는 섹션 이름이 없으면 섹션 번호를 넣는다 — weekName 이 section-N 으로 정하게 비운다

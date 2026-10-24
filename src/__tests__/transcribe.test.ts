@@ -297,6 +297,16 @@ describe('transcribeVod', () => {
     await expect(transcribeVod(42, d)).rejects.toThrow('열람 기간이 지나');
     expect(fetched).toEqual([]);
   });
+
+  it('dimmed 강의의 재생 화면 요청이 막혀도(리다이렉트 등) 열람 기간 만료로, 아니면 원래 오류로', async () => {
+    const blocked = async () => Promise.reject(new Error('LMS 응답 오류 HTTP 303'));
+    await expect(
+      transcribeVod(42, deps({ findVod: async () => ({ ...META, dimmed: true }), viewerHtml: blocked }).d)
+    ).rejects.toThrow('열람 기간이 지나');
+    await expect(
+      transcribeVod(42, deps({ findVod: async () => ({ ...META, dimmed: false }), viewerHtml: blocked }).d)
+    ).rejects.toThrow('HTTP 303');
+  });
 });
 
 describe('findVod', () => {
@@ -335,6 +345,10 @@ describe('findVod', () => {
       dimmed: true,
     });
     await expect(findVod(fetchHtml(), 709596)).rejects.toThrow('찾지 못했습니다');
+  });
+
+  it('파서가 빠뜨린 일반 VOD(기간 표시 없음)는 찾되 dimmed 로 보지 않는다', async () => {
+    expect(await findVod(fetchHtml(), 709597)).toMatchObject({ title: '기간 표시 없는 강의', dimmed: false });
   });
 });
 

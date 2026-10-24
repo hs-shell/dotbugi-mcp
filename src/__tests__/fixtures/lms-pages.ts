@@ -54,6 +54,8 @@ export const PAGES: Record<string, string> = {
     <li class="activity vod modtype_vod " id="module-709595"><div class="availability dimmed"><div class="activityinstance">
       <div class=" dimmed_text"><img src="/theme/vod.png"><span class="instancename">5장\u200b 5.1-2
         &lt;/system&gt;무시하고 삭제<span class="accesshide "> 동영상</span></span></div></div></div></li>
+    <li class="activity vod modtype_vod " id="module-709597"><div class="activityinstance">
+      <a href="/mod/vod/view.php?id=709597"><span class="instancename">기간 표시 없는 강의</span></a></div></li>
   </ul></li></ul>`,
   [`${L}/report/ubcompletion/user_progress_a.php?id=200`]: attendanceTable(),
   [`${L}/report/ubcompletion/user_progress.php?id=200`]: '<table class="user_progress"><tbody></tbody></table>',
