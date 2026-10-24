@@ -33,11 +33,11 @@ async function main(): Promise<void> {
   const [command, ...rest] = positionals;
   const asrOnly = values.gpu || values.model !== undefined || values.yes;
   const coursesOnly = values.list || values.on !== undefined || values.off !== undefined;
-  // --worker 는 transcribe_vod·play_vods 도구가 띄우는 백그라운드 작업용 (출력 없음)
+  // --worker 는 transcribe_vod·play_vods·asr_install 도구가 띄우는 백그라운드 작업용 (출력 없음)
   if (
     rest.length !== (command === 'transcribe' || command === 'asr' ? 1 : 0) ||
     (values.browser && command !== 'login') ||
-    (values.worker && command !== 'transcribe' && command !== 'play') ||
+    (values.worker && command !== 'transcribe' && command !== 'play' && command !== 'asr') ||
     (asrOnly && command !== 'asr') ||
     (coursesOnly && command !== 'courses')
   )
@@ -61,7 +61,12 @@ async function main(): Promise<void> {
     return (await import('./commands/courses.js')).courses({ list: values.list, on: values.on, off: values.off });
   if (command === 'statusline') return (await import('./commands/statusline.js')).statusline();
   if (command === 'asr')
-    return (await import('./commands/asr.js')).asr(rest, { gpu: values.gpu, model: values.model, yes: values.yes });
+    return (await import('./commands/asr.js')).asr(rest, {
+      gpu: values.gpu,
+      model: values.model,
+      yes: values.yes,
+      worker: values.worker,
+    });
   throw new Error(USAGE);
 }
 
