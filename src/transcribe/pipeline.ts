@@ -140,6 +140,9 @@ async function writeNew(path: string, body: string): Promise<boolean> {
   return true;
 }
 
+// 결과 파일 이름 — 대상 고르기(targets)와 같은 규칙을 쓰게 한 곳에서
+export const transcriptFileName = (title: string) => safeFileName(`녹취-${title}.md`);
+
 // VOD 하나 → <저장 위치>/<학기>/<과목>/<주차 폴더>/녹취-<강의명>.md. 이미 있으면 건너뛴다(덮어쓰지 않음). 임시 파일은 어떤 경우에도 지운다
 export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise<TranscribeResult> {
   const tmp = deps.tmpDir;
@@ -162,7 +165,7 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
       { ms: SYNC_LOCK_WAIT_MS, busy: '강의자료 동기화가 실행 중입니다. 강의자료 동기화가 끝난 뒤 다시 시도하세요.' }
     );
     const weekDir = childDir(courseDir, meta.week);
-    const path = join(weekDir, safeFileName(`녹취-${meta.title}.md`));
+    const path = join(weekDir, transcriptFileName(meta.title));
     if (await lstat(path).catch(() => null)) return { status: 'skipped', path, meta };
     // 받기 전에 확인 — 설치 안 됐으면 내려받지 않는다
     const rt = await deps.runtime();

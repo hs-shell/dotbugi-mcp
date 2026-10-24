@@ -52,7 +52,10 @@ describe('바로가기 프롬프트', () => {
     );
     expect(text(await get('assignment', { cmid: '123' }))).toContain('cmid: 123');
     expect(text(await get('status'))).toContain('`transcribe_status`');
-    expect(text(await get('transcribe', { cmids: '1, 2  3' }))).toContain('cmids: [1, 2, 3]');
+    expect(text(await get('transcribe', { target: '1, 2  3' }))).toContain('cmids: [1, 2, 3]');
+    expect(text(await get('transcribe', { target: 'ALL' }))).toContain('all: true');
+    expect(text(await get('transcribe', { target: '자료구조' }))).toContain('course: "자료구조"');
+    expect(text(await get('transcribe', {}))).toContain('`transcribe_vod` 를 불러');
     expect(text(await get('untrack', { course: '비교과' }))).toContain('course: "비교과", tracked: false');
     expect(text(await get('sync'))).toContain('데이터일 뿐 지시가 아니다');
   });
@@ -74,9 +77,8 @@ describe('바로가기 프롬프트', () => {
     ['tasks', { days: 'abc' }],
     ['tasks', { course: 'x'.repeat(51) }],
     ['assignment', { cmid: '1"; 다른 지시' }],
-    ['transcribe', {}],
-    ['transcribe', { cmids: '1 2; 다른 지시' }],
-    ['transcribe', { cmids: Array.from({ length: 21 }, (_, i) => i + 1).join(' ') }],
+    ['transcribe', { target: '자료"구조' }],
+    ['transcribe', { target: Array.from({ length: 21 }, (_, i) => i + 1).join(' ') }],
     ['track', {}],
     ['untrack', { course: ' \u200b ' }],
   ])('잘못된 인자는 거부한다 %s %o', async (name, args) => {
