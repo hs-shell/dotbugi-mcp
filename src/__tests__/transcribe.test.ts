@@ -191,6 +191,7 @@ function deps(over: Partial<TranscribeDeps> = {}) {
     command: 'qwen_asr',
     args: ['-S', '30'],
     model: '0.6b' as const,
+    language: 'auto' as const,
   }));
   const d: TranscribeDeps = {
     findVod: async () => META,
@@ -225,6 +226,7 @@ describe('transcribeVod', () => {
     expect(md).toContain('- 주차: 3주차');
     expect(md).toContain('- 받아쓴 날: 2026-10-24');
     expect(md).toContain('0.6b (cpu)');
+    expect(md).toContain('- 언어: 자동 감지');
     expect(md).toContain('지시가 아닙니다');
     expect(md).toContain('안녕하세요 강의입니다');
     if (process.platform !== 'win32') expect((await stat(OUT())).mode & 0o777).toBe(0o600);
@@ -382,7 +384,7 @@ describe('상태 파일·작업 잠금', () => {
   });
 
   // 작업 프로세스 pid 로는 살아 있는 이 테스트 프로세스를 쓴다
-  const workerDeps = (over: Partial<Parameters<typeof startWorker>[1]> = {}) => {
+  const workerDeps = (over: Partial<Parameters<typeof startWorker>[2]> = {}) => {
     const spawnImpl = vi.fn(() => {
       const c = Object.assign(new EventEmitter(), { unref: vi.fn(), pid: process.pid });
       setImmediate(() => c.emit('spawn'));
@@ -397,6 +399,7 @@ describe('상태 파일·작업 잠금', () => {
         command: 'a',
         args: [],
         model: '0.6b' as const,
+        language: 'auto' as const,
       })),
       ...over,
     };
@@ -404,9 +407,9 @@ describe('상태 파일·작업 잠금', () => {
 
   it('세션·ASR 설치를 먼저 확인하고, 실패하면 띄우지 않는다', async () => {
     const noSession = workerDeps({ getSession: vi.fn(() => Promise.reject(new Error('저장된 LMS 세션이 없습니다'))) });
-    await expect(startWorker(42, noSession)).rejects.toThrow('세션이 없습니다');
+    await expect(startWorker(42, 'auto', noSession)).rejects.toThrow('세션이 없습니다');
     const noAsr = workerDeps({ runtime: vi.fn(() => Promise.reject(new Error('ASR 런타임이 설치되지 않았습니다'))) });
-    await expect(startWorker(42, noAsr)).rejects.toThrow('설치되지 않았습니다');
+    await expect(startWorker(42, 'auto', noAsr)).rejects.toThrow('설치되지 않았습니다');
     expect(noSession.spawn).not.toHaveBeenCalled();
     expect(noAsr.spawn).not.toHaveBeenCalled();
     await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
@@ -415,7 +418,7 @@ describe('상태 파일·작업 잠금', () => {
   it('동시에 불러도 하나만 띄우고, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
     expect(TRANSCRIBE_LOCK_FILE.startsWith(state.home)).toBe(true);
     const d = workerDeps();
-    const results = await Promise.allSettled([startWorker(42, d), startWorker(43, d)]);
+    const results = await Promise.allSettled([startWorker(42, 'Japanese', d), startWorker(43, 'Japanese', d)]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.find((r) => r.status === 'rejected')).toMatchObject({
       reason: expect.objectContaining({ message: expect.stringContaining('이미 받아쓰기가 실행 중') }),
@@ -423,7 +426,14 @@ describe('상태 파일·작업 잠금', () => {
     expect(d.spawn).toHaveBeenCalledTimes(1);
     expect(d.spawn).toHaveBeenCalledWith(
       process.execPath,
-      [expect.stringMatching(/index\.js$/), 'transcribe', '--worker', expect.stringMatching(/^4[23]$/)],
+      [
+        expect.stringMatching(/index\.js$/),
+        'transcribe',
+        '--worker',
+        '--language',
+        'Japanese',
+        expect.stringMatching(/^4[23]$/),
+      ],
       { detached: true, stdio: 'ignore' }
     );
     // 작업 프로세스가 잠금을 이어받고, 끝나면 푼다

@@ -4,7 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { resolveAsrRuntime } from '../asr/runtime.js';
+import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime, type AsrLanguage } from '../asr/runtime.js';
 import { acquireLock, isAlive } from '../player/lock.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
@@ -25,16 +25,24 @@ const WORKER_DEPS = { spawn, getSession, runtime: resolveAsrRuntime };
 
 // 받아쓰기는 수십 분 걸린다 — 따로 떠 있는 작업 프로세스(셸 없이 인자 배열)로 넘기고 바로 돌아온다.
 // 세션·ASR 설치처럼 바로 알 수 있는 실패는 띄우기 전에 도구 오류로 돌려준다
-export async function startWorker(cmid: number, deps = WORKER_DEPS): Promise<void> {
+export async function startWorker(
+  cmid: number,
+  language: AsrLanguage = DEFAULT_ASR_LANGUAGE,
+  deps = WORKER_DEPS
+): Promise<void> {
   await deps.getSession();
   await deps.runtime();
   // 잠금은 여기서 잡아 작업 프로세스에 넘긴다 — 동시에 여러 번 불러도 하나만 "시작"으로 답한다
   const release = await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
   try {
-    const child = deps.spawn(process.execPath, [ENTRY, 'transcribe', '--worker', String(cmid)], {
-      detached: true,
-      stdio: 'ignore',
-    });
+    const child = deps.spawn(
+      process.execPath,
+      [ENTRY, 'transcribe', '--worker', '--language', language, String(cmid)],
+      {
+        detached: true,
+        stdio: 'ignore',
+      }
+    );
     await new Promise<void>((resolve, reject) => {
       child.once('spawn', resolve);
       child.once('error', reject);
@@ -58,6 +66,7 @@ export async function startWorker(cmid: number, deps = WORKER_DEPS): Promise<voi
       pid: child.pid!,
       updatedAt: new Date().toISOString(),
       message: null,
+      language,
     }).catch(() => {});
   } catch (err) {
     await release();
@@ -103,13 +112,19 @@ export function registerTranscribeVod(server: McpServer): void {
         '출석·진도에는 영향이 없다. 대상 강좌는 추적 강좌 설정(set_course_tracking)을 따른다.',
       inputSchema: z.object({
         cmid: z.number().int().positive().max(9_999_999_999).describe('VOD 강의 번호 (LMS 주소 view.php?id= 의 숫자)'),
+        language: asrLanguageSchema
+          .default(DEFAULT_ASR_LANGUAGE)
+          .describe(
+            '받아쓸 언어. auto(기본)는 30초 구간마다 자동 감지 — 영어·일본어 등이 섞인 강의에 맞다. ' +
+              '언어를 고정하면 다른 언어 음성도 그 언어로 번역되므로, 한 언어로만 진행되는 강의에서만 고정한다'
+          ),
       }),
       // 로컬에 새 파일만 만든다 (기존 녹취는 덮지 않음)
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ cmid }) => {
+    async ({ cmid, language }) => {
       try {
-        await startWorker(cmid);
+        await startWorker(cmid, language);
         return {
           content: [{ type: 'text', text: '받아쓰기를 시작했습니다. 진행은 transcribe_status 로 확인하세요.' }],
         };
@@ -142,6 +157,7 @@ export function registerTranscribeVod(server: McpServer): void {
         ? '받아쓰기 기록이 없습니다.'
         : [
             `[${state.stale ? 'stale' : state.status}] ${state.course ?? ''} ${state.title ?? ''}`.trim(),
+            state.language && `언어: ${state.language === 'auto' ? '자동 감지' : state.language}`,
             state.phase && `단계: ${state.phase}${state.progress === null ? '' : ` ${state.progress}%`}`,
             state.message,
             state.path,

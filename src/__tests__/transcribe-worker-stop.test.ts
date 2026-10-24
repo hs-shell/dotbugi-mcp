@@ -24,12 +24,18 @@ afterEach(() => {
 });
 afterAll(() => rm(state.home, { recursive: true, force: true }));
 
+it('목록에 없는 언어는 잠금을 잡기 전에 거절한다', async () => {
+  for (const bad of ['Klingon', 'korean', '--help', 'Korean; rm -rf /'])
+    await expect(transcribe('42', false, bad)).rejects.toThrow('--language 는 auto 또는');
+  await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
+});
+
 it('SIGTERM 을 받으면 파이프라인을 멈추고 stopped 를 쓴 뒤 잠금을 푼다', async () => {
-  const done = transcribe('42');
+  const done = transcribe('42', false, 'English');
   await vi.waitFor(() => expect(readTranscribeState()?.phase).toBe('download'));
   process.emit('SIGTERM', 'SIGTERM');
   await done;
-  expect(readTranscribeState()).toMatchObject({ status: 'stopped', pid: process.pid });
+  expect(readTranscribeState()).toMatchObject({ status: 'stopped', pid: process.pid, language: 'English' });
   expect(process.exitCode).toBe(143);
   await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
 });

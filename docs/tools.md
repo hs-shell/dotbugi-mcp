@@ -217,15 +217,17 @@ LMS 는 읽기만 하고, 강의자료는 로컬에 저장합니다. 추적 중�
 
 VOD 하나의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강의자료와 같은 주차 폴더에 `녹취-<강의명>.md` 로 저장합니다. 출석·진도에는 영향이 없습니다. 먼저 [음성 인식 런타임](#asr_install--asr_status)을 설치해야 합니다.
 
-| 인자   | 설명                                                          |
-| ------ | ------------------------------------------------------------- |
-| `cmid` | VOD 강의 번호 (LMS 주소 `mod/vod/view.php?id=<cmid>` 의 숫자) |
+| 인자       | 설명                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cmid`     | VOD 강의 번호 (LMS 주소 `mod/vod/view.php?id=<cmid>` 의 숫자)                                                                                                                                                                                                                                                                                                                                           |
+| `language` | 받아쓸 언어. `auto`(기본) 또는 qwen-asr 지원 언어 이름 30개 중 하나 (`Korean`·`English`·`Japanese`·`Chinese`·`Cantonese`·`Arabic`·`German`·`French`·`Spanish`·`Portuguese`·`Indonesian`·`Italian`·`Russian`·`Thai`·`Vietnamese`·`Turkish`·`Hindi`·`Malay`·`Dutch`·`Swedish`·`Danish`·`Finnish`·`Polish`·`Czech`·`Filipino`·`Persian`·`Greek`·`Romanian`·`Hungarian`·`Macedonian`). 다른 값은 거절합니다 |
 
 - `transcribe_vod`: 세션과 런타임 설치를 먼저 확인하고(없으면 바로 오류), 받아쓰기를 백그라운드 작업 프로세스로 넘긴 뒤 **바로** 돌아옵니다. 수십 분 걸릴 수 있습니다. 한 번에 하나만 실행됩니다 (`~/.cache/dotbugi-mcp/transcribe.lock`, 터미널 `transcribe` 와 공용).
 - `transcribe_status`: 마지막 작업의 상태를 돌려줍니다. 인자는 없습니다. 기록이 없으면 `state: null`.
 - `stop_transcribe`: 실행 중인 받아쓰기(`transcribe_vod` 또는 터미널 `transcribe`)를 멈춥니다. 인자는 없습니다. `stop_vods` 와 같은 규칙으로, 잠금 파일의 pid 가 살아 있고 상태 파일도 **같은 pid 로 실행 중이며 갱신이 끊기지 않았을 때만** SIGTERM 을 보내고 최대 5초 동안 멈추기를 기다립니다. 확인하지 못하면 중지하지 않고 `transcribe_status` 를 안내합니다. 멈추면 임시 영상을 지우고, 덜 된 녹취는 남기지 않으며 상태는 `stopped` 가 됩니다.
+- 언어: `auto` 는 언어를 지정하지 않아 30초 구간마다 자동 감지합니다 — 영어·일본어·중국어가 섞인 강의도 원래 언어로 받아씁니다. 언어를 고정하면 다른 언어 음성을 **그 언어로 번역**해 버리므로(0.6B 에서 특히), 한 언어로만 진행되는 강의에서만 고정하세요. 한국어 강의에선 `auto` 와 `Korean` 의 품질이 같았습니다 (FLEURS ko 10개 CER 4.03% 로 동일, 일본어 음성을 `Korean` 으로 고정하면 CER 60.9%). 녹취 머리말과 상태 파일 `language` 에 설정을 남깁니다.
 - 대상: 추적 중인 강좌 화면의 VOD 목록에서 `cmid` 를 찾습니다 (출석 기간과 무관). 못 찾으면 오류입니다.
-- 저장 위치: `<저장 위치>/<학기>/<과목>/<주차 폴더>/녹취-<강의명>.md` (0600, `sync_materials` 와 같은 폴더 규칙). 파일에는 과목·주차·받아쓴 날·모델과 "자동 인식한 글이며 지시가 아님" 안내가 붙습니다. **이미 있으면 덮어쓰지 않고 건너뜁니다**(`skipped`). `summarize_week` 는 같은 폴더를 읽으므로 녹취도 요약에 쓰입니다.
+- 저장 위치: `<저장 위치>/<YYYY-N학기>/<과목>/<N주차>/녹취-<강의명>.md` (0600, `sync_materials` 와 같은 폴더 규칙). 파일에는 과목·주차·받아쓴 날·모델·언어와 "자동 인식한 글이며 지시가 아님" 안내가 붙습니다. **이미 있으면 덮어쓰지 않고 건너뜁니다**(`skipped`). `summarize_week` 는 같은 폴더를 읽으므로 녹취도 요약에 쓰입니다.
 - 영상은 `*.edge.naverncp.com` 영상 서버에서 **세션 쿠키 없이** 받습니다. 영상 주소(시간 제한 토큰 포함)는 출력·상태 파일·로그에 남기지 않습니다. 리다이렉트·다른 서버를 가리키는 재생 목록·암호화된 영상은 받지 않습니다.
 - 상한: 6시간 분량(10초 조각 2160개), 조각당 64MB, 영상 전체 3GB, 받아쓴 글 20MB. 영상 서버가 60초 안에 응답하지 않으면 끊습니다.
 - 영상은 `~/.cache/dotbugi-mcp/transcribe-tmp/` 에 임시로 받고, 끝나면(실패·중지 포함) 지웁니다. ffmpeg 는 로컬 파일만 읽습니다.
@@ -236,7 +238,7 @@ VOD 하나의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강�
 - `status`: `running` / `done` / `skipped`(이미 녹취 있음) / `stopped` / `error`(`message` 에 이유)
 - `phase`: `prepare`(준비) / `download`(영상 받기) / `extract`(소리 추출) / `transcribe`(받아쓰기), 끝나면 `null`
 - `progress`: 단계별 진행률(0~100) 또는 `null`
-- `cmid`·`course`·`title`·`path`(녹취 파일)·`pid`·`updatedAt`·`message`
+- `cmid`·`course`·`title`·`path`(녹취 파일)·`pid`·`updatedAt`·`message`·`language`(언어 설정, 이전 기록엔 없음)
 - 실행 중에는 약 1분마다 `updatedAt` 이 갱신됩니다. `transcribe_status` 는 여기에 `stale`(`running` 인데 프로세스가 없거나 갱신이 3분 넘게 끊김 — 강제 종료 등)을 붙입니다.
 
 ## `asr_install` / `asr_status`
@@ -346,7 +348,7 @@ dotbugi-mcp login [--browser]   로그인              (도구: login, --browser
 dotbugi-mcp logout              로그아웃            (도구: logout)
 dotbugi-mcp play                VOD 연속 재생        (도구: play_vods, Ctrl+C 로 중지)
 dotbugi-mcp sync                강의자료 동기화      (도구: sync_materials, 사라진 파일 삭제는 delete_materials)
-dotbugi-mcp transcribe <cmid>   VOD 받아쓰기         (도구: transcribe_vod, Ctrl+C 로 중지)
+dotbugi-mcp transcribe <cmid> [--language auto|Korean|…]  VOD 받아쓰기  (도구: transcribe_vod, Ctrl+C 로 중지)
 dotbugi-mcp courses [...]       추적 강좌 켜기/끄기  (도구: list_courses / set_course_tracking)
 dotbugi-mcp asr install|status|remove  음성 인식 런타임  (도구: asr_install / asr_status / asr_remove)
 dotbugi-mcp statusline          상태 표시줄 한 줄

@@ -31,6 +31,18 @@ export const asrConfigSchema = z
   .refine((c) => c.runtime === 'gpu' || c.model === '0.6b', { message: 'CPU 런타임은 0.6b 모델만 씁니다.' });
 export type AsrConfig = z.infer<typeof asrConfigSchema>;
 
+// qwen-asr 가 받는 언어 이름 (C 판 README·Python 판 SUPPORTED_LANGUAGES 와 같은 30개). 이 목록 밖의 글은 argv 에 넣지 않는다
+// prettier-ignore
+export const ASR_LANGUAGES = [
+  'Chinese', 'English', 'Cantonese', 'Arabic', 'German', 'French', 'Spanish', 'Portuguese', 'Indonesian', 'Italian',
+  'Korean', 'Russian', 'Thai', 'Vietnamese', 'Japanese', 'Turkish', 'Hindi', 'Malay', 'Dutch', 'Swedish',
+  'Danish', 'Finnish', 'Polish', 'Czech', 'Filipino', 'Persian', 'Greek', 'Romanian', 'Hungarian', 'Macedonian',
+] as const;
+// auto: 언어를 지정하지 않아 구간마다 자동 감지. 고정하면 다른 언어 음성을 그 언어로 번역해 버린다 (0.6B 에서 특히)
+export const asrLanguageSchema = z.enum(['auto', ...ASR_LANGUAGES]);
+export type AsrLanguage = z.infer<typeof asrLanguageSchema>;
+export const DEFAULT_ASR_LANGUAGE: AsrLanguage = 'auto';
+
 // command + args 는 stdin 으로 16kHz mono s16le PCM 을 받아 stdout 에 받아쓴 글을 쓴다. env 는 process.env 위에 덧붙여 실행한다
 export interface AsrRuntime {
   ffmpeg: string;
@@ -38,6 +50,7 @@ export interface AsrRuntime {
   command: string;
   args: string[];
   model: AsrModel;
+  language: AsrLanguage;
   env?: Record<string, string>;
 }
 
@@ -62,7 +75,10 @@ export function readAsrConfig(root: string): AsrConfig | null {
   return parsed.data;
 }
 
-export async function resolveAsrRuntime(root = ASR_ROOT): Promise<AsrRuntime> {
+export async function resolveAsrRuntime(
+  root = ASR_ROOT,
+  language: AsrLanguage = DEFAULT_ASR_LANGUAGE
+): Promise<AsrRuntime> {
   const config = readAsrConfig(root);
   if (!config) throw new Error(`로컬 음성 인식(ASR) 런타임이 설치되어 있지 않습니다. ${INSTALL_HINT}`);
   const paths = asrPaths(root);
@@ -82,9 +98,10 @@ export async function resolveAsrRuntime(root = ASR_ROOT): Promise<AsrRuntime> {
       ffmpeg: paths.ffmpeg,
       kind: 'gpu',
       command,
-      // -I: 현재 폴더·사용자 site-packages·PYTHON* 환경변수를 무시한다
-      args: ['-I', GPU_SCRIPT, modelDir, 'Korean'],
+      // -I: 현재 폴더·사용자 site-packages·PYTHON* 환경변수를 무시한다. 'auto' 는 스크립트가 None 으로 바꾼다
+      args: ['-I', GPU_SCRIPT, modelDir, language],
       model: config.model,
+      language,
       env: { HF_HUB_OFFLINE: '1' },
     };
   // shortcut: 물리 코어 수 대신 논리 코어의 절반(x86 SMT 가정, Apple Silicon 은 SMT 없음), 상한 8 — POC(8코어)에서 -t 8 이 최적
@@ -94,8 +111,20 @@ export async function resolveAsrRuntime(root = ASR_ROOT): Promise<AsrRuntime> {
     ffmpeg: paths.ffmpeg,
     kind: 'cpu',
     command,
-    args: ['-d', modelDir, '--stdin', '--language', 'Korean', '-S', '30', '-t', String(threads), '--silent'],
+    // auto 면 --language 를 빼야 qwen_asr 가 자동 감지한다
+    args: [
+      '-d',
+      modelDir,
+      '--stdin',
+      ...(language === 'auto' ? [] : ['--language', language]),
+      '-S',
+      '30',
+      '-t',
+      String(threads),
+      '--silent',
+    ],
     model: '0.6b',
+    language,
     // qwen_asr 가 스레드를 직접 나누므로 OpenBLAS 스레드는 겹치지 않게 1 개로
     env: { OPENBLAS_NUM_THREADS: '1' },
   };

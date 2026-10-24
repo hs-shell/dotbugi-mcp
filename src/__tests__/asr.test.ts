@@ -7,7 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { download } from '../asr/download.js';
 import { installAsr, missingCpuFlags, parseInstallOptions } from '../asr/install.js';
 import { isAllowedDownloadUrl, MODELS, QWEN_ASR_BINARY, UNPINNED } from '../asr/pins.js';
-import { asrConfigSchema, asrPaths, GPU_SCRIPT, modelFilePath, resolveAsrRuntime } from '../asr/runtime.js';
+import {
+  asrConfigSchema,
+  asrLanguageSchema,
+  asrPaths,
+  GPU_SCRIPT,
+  modelFilePath,
+  resolveAsrRuntime,
+} from '../asr/runtime.js';
 import { extractZipEntry } from '../asr/zip.js';
 
 const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
@@ -187,6 +194,19 @@ describe('resolveAsrRuntime', () => {
     expect(rt.env).toEqual({ OPENBLAS_NUM_THREADS: '1' });
   });
 
+  it('CPU: auto(기본)면 --language 를 빼고, 고정하면 그 언어를 넘긴다', async () => {
+    const p = asrPaths(root);
+    await install({ runtime: 'cpu', model: '0.6b' }, [p.ffmpeg, p.qwenAsr, ...modelFiles('0.6b')]);
+    const auto = await resolveAsrRuntime(root);
+    expect(auto.language).toBe('auto');
+    expect(auto.args).not.toContain('--language');
+    expect(auto.args).not.toContain('auto');
+    const ko = await resolveAsrRuntime(root, 'Korean');
+    expect(ko.language).toBe('Korean');
+    expect(ko.args).toEqual(expect.arrayContaining(['--language', 'Korean']));
+    expect(ko.args[ko.args.indexOf('--language') + 1]).toBe('Korean');
+  });
+
   it('GPU: venv python -I + 동봉 스크립트, 오프라인', async () => {
     const p = asrPaths(root);
     await install({ runtime: 'gpu', model: '1.7b' }, [p.ffmpeg, p.venvPython, ...modelFiles('1.7b')]);
@@ -194,10 +214,25 @@ describe('resolveAsrRuntime', () => {
       ffmpeg: p.ffmpeg,
       kind: 'gpu',
       command: p.venvPython,
-      args: ['-I', GPU_SCRIPT, join(p.models, '1.7b'), 'Korean'],
+      args: ['-I', GPU_SCRIPT, join(p.models, '1.7b'), 'auto'],
       model: '1.7b',
+      language: 'auto',
       env: { HF_HUB_OFFLINE: '1' },
     });
+    expect((await resolveAsrRuntime(root, 'Japanese')).args).toEqual([
+      '-I',
+      GPU_SCRIPT,
+      join(p.models, '1.7b'),
+      'Japanese',
+    ]);
+  });
+
+  it('언어는 auto 와 qwen-asr 지원 목록(30개)만 받는다', () => {
+    expect(asrLanguageSchema.options).toHaveLength(31);
+    for (const ok of ['auto', 'Korean', 'English', 'Japanese', 'Chinese', 'Macedonian'])
+      expect(asrLanguageSchema.safeParse(ok).success).toBe(true);
+    for (const bad of ['korean', 'Klingon', '', '--help', 'Korean --prompt x', 'None'])
+      expect(asrLanguageSchema.safeParse(bad).success).toBe(false);
   });
 });
 

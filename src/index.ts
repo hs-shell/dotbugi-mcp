@@ -9,7 +9,8 @@ const USAGE = `사용법:
   dotbugi-mcp logout           저장된 세션 삭제
   dotbugi-mcp play             미출석 VOD 를 마감 임박 순으로 공식 플레이어 창에 차례로 열기 (Ctrl+C 로 중지)
   dotbugi-mcp sync             강의자료를 <저장 위치>/<YYYY-N학기>/<과목>/<N주차>/ 에 받기 (기본 ~/Downloads/dotbugi-mcp) (LMS 에서 사라진 파일은 하나씩 삭제 여부 확인)
-  dotbugi-mcp transcribe <cmid>  VOD 하나를 로컬 ASR 로 받아써 강의자료 주차 폴더에 녹취-<강의명>.md 로 저장 (Ctrl+C 로 중지)
+  dotbugi-mcp transcribe <cmid> [--language auto|Korean|English|Japanese|…]
+                               VOD 하나를 로컬 ASR 로 받아써 강의자료 주차 폴더에 녹취-<강의명>.md 로 저장 (Ctrl+C 로 중지)
   dotbugi-mcp courses          list_tasks·play·sync 등이 다룰 강좌 켜기/끄기 (터미널에서 ↑↓·Space·Enter)
   dotbugi-mcp courses --list | --on <과목명|courseId> | --off <과목명|courseId>
   dotbugi-mcp statusline       VOD 재생 상태 한 줄 출력 (Claude Code 상태 표시줄용)
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
       list: { type: 'boolean' },
       on: { type: 'string' },
       off: { type: 'string' },
+      language: { type: 'string' },
     },
   });
   const [command, ...rest] = positionals;
@@ -39,7 +41,8 @@ async function main(): Promise<void> {
     (values.browser && command !== 'login') ||
     (values.worker && command !== 'transcribe' && command !== 'play' && command !== 'asr') ||
     (asrOnly && command !== 'asr') ||
-    (coursesOnly && command !== 'courses')
+    (coursesOnly && command !== 'courses') ||
+    (values.language !== undefined && command !== 'transcribe')
   )
     throw new Error(USAGE);
   // stdout 은 MCP 프로토콜 전용 — 로그는 반드시 stderr 로
@@ -56,7 +59,7 @@ async function main(): Promise<void> {
   if (command === 'play') return (await import('./commands/play.js')).play(values.worker === true);
   if (command === 'sync') return (await import('./commands/sync.js')).sync();
   if (command === 'transcribe')
-    return (await import('./commands/transcribe.js')).transcribe(rest[0], values.worker === true);
+    return (await import('./commands/transcribe.js')).transcribe(rest[0], values.worker === true, values.language);
   if (command === 'courses')
     return (await import('./commands/courses.js')).courses({ list: values.list, on: values.on, off: values.off });
   if (command === 'statusline') return (await import('./commands/statusline.js')).statusline();

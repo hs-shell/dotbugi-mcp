@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { resolveAsrRuntime } from '../asr/runtime.js';
+import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime } from '../asr/runtime.js';
 import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES, VOD_VIEWER_PATH } from '../constants.js';
 import { createFetchHtml, limit } from '../lms-html.js';
 import { lmsFetch } from '../lms.js';
@@ -40,9 +40,16 @@ const viewerHtml = (session: string, cmid: number) =>
   });
 
 // 포그라운드 CLI 와 MCP 가 띄운 백그라운드 작업(worker: 출력 없음, 잠금은 도구가 넘겨준다)이 같이 쓴다. 진행은 상태 파일에 남긴다
-export async function transcribe(arg: string, worker = false): Promise<void> {
+export async function transcribe(arg: string, worker = false, languageArg?: string): Promise<void> {
   if (!LMS_NUMERIC_ID.test(arg)) throw new Error('강의 번호(cmid)는 숫자여야 합니다.');
   const cmid = Number(arg);
+  // CLI 인자는 그대로 ASR argv 에 들어가므로 목록에 있는 이름만 받는다
+  const parsed = asrLanguageSchema.safeParse(languageArg ?? DEFAULT_ASR_LANGUAGE);
+  if (!parsed.success)
+    throw new Error(
+      `--language 는 auto 또는 다음 중 하나여야 합니다: ${asrLanguageSchema.options.slice(1).join(', ')}`
+    );
+  const language = parsed.data;
   const release = worker
     ? await adoptLock(TRANSCRIBE_LOCK_FILE)
     : await acquireLock(TRANSCRIBE_LOCK_FILE, TRANSCRIBE_BUSY);
@@ -73,6 +80,7 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
       title: meta?.title ?? null,
       pid: process.pid,
       updatedAt: new Date().toISOString(),
+      language,
     };
     writes = writes.then(() => writeTranscribeState(state)).catch(() => {});
   };
@@ -95,7 +103,7 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
     const result = await transcribeVod(cmid, {
       findVod: async (id) => (meta = await findVod(createFetchHtml(session), id)),
       viewerHtml: (id) => viewerHtml(session, id),
-      runtime: resolveAsrRuntime,
+      runtime: () => resolveAsrRuntime(undefined, language),
       fetch,
       spawn,
       root: storageRoot(),
