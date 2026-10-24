@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+import { LMS_DATA_NOTICE } from '../constants.js';
 import { PLAYER_STATE_FILE, playerStateSchema, readPlayerState } from '../player/state.js';
 import { isStale, renderStatusLine } from '../player/status-line.js';
 import { redact } from '../redact.js';
@@ -39,13 +40,13 @@ export function registerVodStatus(server: McpServer): void {
       const line = renderStatusLine(state, now);
       try {
         const result = await loadTasks(refresh, { type: 'vod', incompleteOnly: true, includePast: false }, now);
-        const text = [line, toText(result.tasks, result.warnings)].filter(Boolean).join('\n');
+        const text = [LMS_DATA_NOTICE, line, toText(result.tasks, result.warnings)].filter(Boolean).join('\n');
         return { content: [{ type: 'text', text }], structuredContent: { ...result, player } };
       } catch (err) {
         // 세션 없음·만료·LMS 오류여도 로컬 재생 상태는 보여준다 (login 안내는 warnings 로)
         const warning = redact(err instanceof Error ? err.message : String(err));
         return {
-          content: [{ type: 'text', text: [line, warning].filter(Boolean).join('\n') }],
+          content: [{ type: 'text', text: [LMS_DATA_NOTICE, line, warning].filter(Boolean).join('\n') }],
           structuredContent: { fetchedAt: null, tasks: [], warnings: [warning], player },
         };
       }

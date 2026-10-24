@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { syncMaterialsInput, syncMaterialsOutput, type SyncMaterialsOutput } from '../materials/schema.js';
 import { mcpCaps, syncMaterials, withSyncLock } from '../materials/sync.js';
+import { LMS_DATA_NOTICE } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { progressOf } from './progress.js';
@@ -12,6 +13,7 @@ const STATUS_LABELS = { added: '추가', updated: '갱신', unchanged: '변경 �
 function toText(r: SyncMaterialsOutput): string {
   const count = (s: keyof typeof STATUS_LABELS) => r.files.filter((f) => f.status === s).length;
   return [
+    LMS_DATA_NOTICE,
     `저장 폴더: ${r.root} — 추가 ${count('added')} · 갱신 ${count('updated')} · 변경 없음 ${count('unchanged')}`,
     ...r.warnings,
     ...r.files.filter((f) => f.status !== 'unchanged').map((f) => `[${STATUS_LABELS[f.status]}] ${f.path}`),

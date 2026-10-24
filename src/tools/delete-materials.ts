@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { syncMaterialsInput } from '../materials/schema.js';
 import { mcpCaps, resolveRemoved, syncMaterials, withSyncLock, type RemoveOutcome } from '../materials/sync.js';
+import { LMS_DATA_NOTICE } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { storageRoot } from '../storage.js';
@@ -110,7 +111,18 @@ export function registerDeleteMaterials(server: McpServer): void {
       try {
         ({ session } = await getSession());
         const text = await deleteMaterials(session, args, askerOf(server, ctx), progressOf(ctx), ctx.mcpReq.signal);
-        return { content: [{ type: 'text', text: redact(text, [session]) }] };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: redact(
+                `${LMS_DATA_NOTICE}
+${text}`,
+                [session]
+              ),
+            },
+          ],
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: redact(message, [session]) }], isError: true };

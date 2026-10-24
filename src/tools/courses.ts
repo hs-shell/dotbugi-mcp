@@ -1,7 +1,7 @@
 import type { CourseBase } from '@dotbugi/lms-parser';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { COURSE_FILTER_MAX_LENGTH } from '../constants.js';
+import { COURSE_FILTER_MAX_LENGTH, LMS_DATA_NOTICE } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { listConfigurableCourses } from '../tasks/collect.js';
@@ -72,7 +72,9 @@ export function registerListCourses(server: McpServer): void {
         const all = await listConfigurableCourses(session);
         const config = readCoursesConfig();
         const courses = all.map((c) => toEntry(c, config));
-        const text = courses.length ? courses.map(line).join('\n') : 'LMS 메인에 강좌가 없습니다.';
+        const text = courses.length
+          ? [LMS_DATA_NOTICE, ...courses.map(line)].join('\n')
+          : 'LMS 메인에 강좌가 없습니다.';
         return { content: [{ type: 'text', text }], structuredContent: { courses } };
       } catch (err) {
         return fail(err);
@@ -104,13 +106,17 @@ export function registerSetCourseTracking(server: McpServer): void {
         if (matches.length > 1) {
           const config = readCoursesConfig();
           const courses = matches.map((c) => toEntry(c, config));
-          const text = ['여러 강좌가 일치해 저장하지 않았습니다. courseId 로 다시 지정하세요:', ...courses.map(line)];
+          const text = [
+            LMS_DATA_NOTICE,
+            '여러 강좌가 일치해 저장하지 않았습니다. courseId 로 다시 지정하세요:',
+            ...courses.map(line),
+          ];
           return { content: [{ type: 'text', text: text.join('\n') }], structuredContent: { saved: false, courses } };
         }
         // 설정이 바뀌면 list_tasks 캐시 키(tracking)가 달라져 다음 조회는 LMS 에서 다시 가져온다
         await saveCourseTracking(matches[0].courseId, tracked);
         const entry = toEntry(matches[0], readCoursesConfig());
-        const text = `${tracked ? '켰습니다' : '껐습니다'}: ${line(entry)}`;
+        const text = `${LMS_DATA_NOTICE}\n${tracked ? '켰습니다' : '껐습니다'}: ${line(entry)}`;
         return { content: [{ type: 'text', text }], structuredContent: { saved: true, courses: [entry] } };
       } catch (err) {
         return fail(err);

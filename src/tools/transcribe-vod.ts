@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime, type AsrLanguage } from '../asr/runtime.js';
+import { LMS_DATA_NOTICE } from '../constants.js';
 import { acquireLock, isAlive } from '../player/lock.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
@@ -156,6 +157,7 @@ export function registerTranscribeVod(server: McpServer): void {
       const text = !state
         ? '받아쓰기 기록이 없습니다.'
         : [
+            LMS_DATA_NOTICE,
             `[${state.stale ? 'stale' : state.status}] ${state.course ?? ''} ${state.title ?? ''}`.trim(),
             state.language && `언어: ${state.language === 'auto' ? '자동 감지' : state.language}`,
             state.phase && `단계: ${state.phase}${state.progress === null ? '' : ` ${state.progress}%`}`,
