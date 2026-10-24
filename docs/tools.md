@@ -58,6 +58,16 @@ LMS 세션을 받아 OS 키체인에 저장합니다. **승인·로그인을 기
 - 결과는 메모리에 1시간 캐시합니다. 추적 강좌 설정이 바뀌면 새로 가져옵니다.
 - 일부 과목·항목을 가져오지 못하면 `warnings`(텍스트 맨 앞에도)에 실패 건수를 알리고, 그 결과는 캐시하지 않습니다.
 
+## `export_ics`
+
+`list_tasks` 와 **같은 인자·같은 기준**으로 고른 항목의 마감을 캘린더 파일 `<저장 위치>/<학기>/dotbugi-할일.ics` 로 저장하고 경로·개수를 돌려줍니다. Google·Apple·Outlook 캘린더의 "가져오기"로 넣습니다.
+
+- 항목마다 일정 하나: 제목 `[과목] 제목 (VOD/과제/퀴즈)`, 마감 1시간 전 ~ 마감 (UTC 로 기록, 앱이 현지 시간으로 표시), 설명에 LMS 주소(LMS 출처만).
+- UID 는 `<종류>-<cmid>@dotbugi-mcp` (cmid 가 없으면 주소 해시) 로 고정이라, 다시 내보내 같은 파일을 덮어쓴 뒤 다시 가져오면 기존 일정이 갱신됩니다.
+- 마감 정보가 없거나 해석할 수 없는 항목은 건너뛰고 개수(`skipped`)만 알립니다.
+- LMS 에는 아무것도 쓰지 않습니다. 파일은 임시 파일에 쓴 뒤 바꿔치기하며 권한은 `0600` 입니다. 과목·제목의 제어 문자는 지웁니다.
+- 출력(`structuredContent`): `path`, `count`, `skipped`, `warnings`.
+
 ## `list_courses` / `set_course_tracking`
 
 `list_tasks`·`vod_status`·`play_vods`·`sync_materials`·`delete_materials`·`transcribe_vod` 가 다룰 강좌를 고릅니다. dotbugi 확장의 강좌 토글과는 **별개**입니다 (공유하지 않음). 강좌 목록은 LMS 메인의 내 강좌에서 가져오므로 로그인이 필요합니다.

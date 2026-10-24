@@ -60,6 +60,7 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 | 요청 예시                                               | 쓰는 도구                                                  |
 | ------------------------------------------------------- | ---------------------------------------------------------- |
 | "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?"     | `list_tasks`                                               |
+| "할 일을 캘린더 파일로 만들어줘"                        | `export_ics`                                               |
 | "운영체제 과목은 추적 꺼줘"                             | `list_courses` / `set_course_tracking`                     |
 | "자료구조 과제 내용이랑 첨부파일 받아줘"                | `get_assignment`                                           |
 | "운영체제 강의자료 받아줘"                              | `sync_materials`                                           |
@@ -83,6 +84,7 @@ Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구�
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
 | 로그인   | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                              | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃                 |
 | 할 일    | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                       | VOD·과제·퀴즈를 마감 임박 순으로 조회                               |
+|          | [`export_ics`](docs/tools.md#export_ics)                                                                                                                                       | 할 일 마감을 캘린더 파일(.ics)로 저장                               |
 |          | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 강좌 추적 켜기·끄기                        |
 |          | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기                             |
 | 재생     | [`vod_status`](docs/tools.md#vod_status)                                                                                                                                       | 남은 VOD 와 연속 재생 진행 상황                                     |

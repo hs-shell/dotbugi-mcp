@@ -6,6 +6,7 @@ import { registerAsrRemove } from './tools/asr-remove.js';
 import { registerAsrTools } from './tools/asr.js';
 import { registerListCourses, registerSetCourseTracking } from './tools/courses.js';
 import { registerDeleteMaterials } from './tools/delete-materials.js';
+import { registerExportIcs } from './tools/export-ics.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerPlayVods } from './tools/play-vods.js';
@@ -26,6 +27,7 @@ export function createServer(): McpServer {
   registerLogin(server);
   registerLogout(server);
   registerListTasks(server);
+  registerExportIcs(server);
   registerListCourses(server);
   registerSetCourseTracking(server);
   registerVodStatus(server);
