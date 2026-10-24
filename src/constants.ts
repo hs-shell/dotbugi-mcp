@@ -143,6 +143,13 @@ export const READ_MATERIAL_PDF_MAX_BYTES = 8 * 1024 * 1024;
 export const READ_MATERIAL_IMAGE_MAX_BYTES = 3.75 * 1024 * 1024;
 export const READ_MATERIAL_TEXT_MAX_CHARS = 100_000;
 export const READ_MATERIAL_LIST_MAX_ENTRIES = 1000;
+// 문서(pptx·docx·hwpx) 안 그림을 함께 읽을 때 한 번에 보내는 개수·원본 총량 (한 장은 READ_MATERIAL_IMAGE_MAX_BYTES 까지). 넘으면 imageOffset 으로 이어 읽기
+// 원본 6MB → base64 약 8MB: 클라이언트 한 메시지 크기에 여유를 두고, 한 장 상한(3.75MB)보다 커서 매번 한 장은 들어간다
+export const READ_MATERIAL_DOC_IMAGES_MAX = 8;
+export const READ_MATERIAL_DOC_IMAGES_MAX_BYTES = 6 * 1024 * 1024;
+// 그림 하나당 글자가 이보다 적으면 '그림 위주'로 표시한다. 그림으로 붙인 슬라이드는 슬라이드 제목 표시('## 슬라이드 N')만 남아
+// 그림당 10~20자, 글 위주 문서는 그림 하나에 수백 자 이상이라 그 사이에서 넉넉히 고른 값
+export const READ_MATERIAL_IMAGE_HEAVY_CHARS = 200;
 
 // 문서(hwp·hwpx·docx·pptx·xlsx) 글자 추출 — 믿을 수 없는 파일이라 압축을 풀 총량·항목 수·시간을 묶는다 (zip bomb)
 export const DOC_TEXT_MAX_INFLATED_BYTES = 100 * 1024 * 1024;

@@ -58,8 +58,8 @@ export function paraText(...parts: (string | { ctrl: number; wide?: boolean })[]
   return record(PARA_TEXT, buf);
 }
 
-// 테스트용 HWP 5.0: FileHeader + BodyText/Section<n>. 압축 플래그면 본문을 raw deflate 로
-export function hwp(sections: Buffer[][], flags = 1): Buffer {
+// 테스트용 HWP 5.0: FileHeader + BodyText/Section<n> (+ BinData 그림 bins 개). 압축 플래그면 본문을 raw deflate 로
+export function hwp(sections: Buffer[][], flags = 1, bins = 0): Buffer {
   const doc = CFB.utils.cfb_new();
   const header = Buffer.alloc(256);
   header.write('HWP Document File', 'latin1');
@@ -70,5 +70,30 @@ export function hwp(sections: Buffer[][], flags = 1): Buffer {
     const body = Buffer.concat([record(66, Buffer.alloc(22)), ...records]);
     CFB.utils.cfb_add(doc, `/BodyText/Section${i}`, flags & 1 ? deflateRawSync(body) : body);
   });
+  for (let i = 1; i <= bins; i++) CFB.utils.cfb_add(doc, `/BinData/BIN000${i}.png`, PNG);
   return Buffer.from(CFB.write(doc, { type: 'buffer' }) as Buffer);
+}
+
+// 매직 바이트만 맞춘 최소 그림 (내용 확인용 꼬리표를 붙인다)
+export const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+export const png = (tag: string) => Buffer.concat([PNG, Buffer.from(tag)]);
+export const jpg = (tag: string) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.from(tag)]);
+
+const rels = (targets: Record<string, string>) =>
+  `<Relationships>${Object.entries(targets)
+    .map(([id, t]) => `<Relationship Id="${id}" Type="http://x/image" Target="${t}"/>`)
+    .join('')}</Relationships>`;
+
+// 테스트용 pptx: 슬라이드마다 [글, 그림 파일 이름들]. 그림은 ppt/media/<이름> 에 media 로 넣는다
+export function pptx(slides: [string, string[]][], media: Record<string, Buffer>): Buffer {
+  const files: Record<string, string | Buffer> = {};
+  slides.forEach(([text, imgs], i) => {
+    files[`ppt/slides/slide${i + 1}.xml`] =
+      `<p:sld><p:sp><a:p><a:t>${text}</a:t></a:p></p:sp>${imgs.map((_, j) => `<a:blip r:embed="rId${j + 1}"/>`).join('')}</p:sld>`;
+    files[`ppt/slides/_rels/slide${i + 1}.xml.rels`] = rels(
+      Object.fromEntries(imgs.map((m, j) => [`rId${j + 1}`, `../media/${m}`]))
+    );
+  });
+  for (const [k, v] of Object.entries(media)) files[`ppt/media/${k}`] = v;
+  return zip(files);
 }

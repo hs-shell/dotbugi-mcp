@@ -67,7 +67,8 @@ function sectionText(data: Buffer, budget: Budget): string {
 }
 
 // 구형 한글(.hwp) 본문 글자. OLE 컨테이너는 cfb 로 열고, 본문 레코드는 직접 읽는다 (외부 프로세스·네이티브 없음)
-export function hwpText(buf: Buffer, budget: Budget): string {
+// images: BinData 안 그림 개수 (꺼내지는 않는다 — 구형 hwp 그림은 범위 밖, 있다는 안내만)
+export function hwpText(buf: Buffer, budget: Budget): { text: string; images: number } {
   if (buf.length < 512) throw new Error('한글(hwp) 문서 형식이 아닙니다.');
   // 한글이 쓴 파일 중엔 FAT 이 가리키는 끝 섹터가 파일에 없는 것이 있어 cfb 가 깨진다 —
   // FAT 이 덮는 크기(섹터 크기 · FAT 섹터 수)까지 0 으로 채워 읽는다 (olefile 과 같은 결과)
@@ -104,5 +105,6 @@ export function hwpText(buf: Buffer, budget: Budget): string {
     budget.spend(data.length);
     sections.push(sectionText(data, budget));
   }
-  return sections.join('\n');
+  const images = doc.FileIndex.filter((e, i) => e.type === 2 && /\/BinData\/[^/]+$/.test(doc.FullPaths[i])).length;
+  return { text: sections.join('\n'), images };
 }
