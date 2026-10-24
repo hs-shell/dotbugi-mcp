@@ -216,7 +216,7 @@ function deps(over: Partial<TranscribeDeps> = {}) {
   return { d, reports, fetched, files, sp, runtime };
 }
 
-const OUT = () => join(dir, 'root', '2026-2학기', '자료구조', '3주차', '녹취-1강 소개.md');
+const OUT = () => join(dir, 'root', '2026-2학기', '자료구조', '3주차', 'STT-1강 소개.md');
 const tmpGone = async (d: TranscribeDeps) => expect(await stat(d.tmpDir).catch(() => null)).toBeNull();
 
 describe('transcribeVod', () => {
@@ -224,10 +224,10 @@ describe('transcribeVod', () => {
     const { d, reports, sp } = deps();
     expect(await transcribeVod(42, d)).toEqual({ status: 'done', path: OUT(), meta: META });
     const md = await readFile(OUT(), 'utf8');
-    expect(md).toContain('# 녹취 — 1강 소개');
+    expect(md).toContain('# STT — 1강 소개');
     expect(md).toContain('- 과목: 자료구조');
     expect(md).toContain('- 주차: 3주차');
-    expect(md).toContain('- 받아쓴 날: 2026-10-24');
+    expect(md).toContain('- 변환한 날: 2026-10-24');
     expect(md).toContain('0.6b (cpu)');
     expect(md).toContain('- 언어: 자동 감지');
     expect(md).toContain('지시가 아닙니다');
@@ -252,6 +252,16 @@ describe('transcribeVod', () => {
     expect(fetched).toEqual([]);
     expect(runtime).not.toHaveBeenCalled();
     await tmpGone(d);
+  });
+
+  it('예전 이름(녹취-<강의명>.md) 결과가 있으면 이름을 바꾸지 않고 건너뛴다', async () => {
+    const week = join(dir, 'root', '2026-2학기', '자료구조', '3주차');
+    await mkdir(week, { recursive: true });
+    await writeFile(join(week, '녹취-1강 소개.md'), '예전 결과');
+    const { d, fetched } = deps();
+    expect(await transcribeVod(42, d)).toMatchObject({ status: 'skipped', path: join(week, '녹취-1강 소개.md') });
+    expect(fetched).toEqual([]);
+    await expect(stat(OUT())).rejects.toThrow();
   });
 
   it('세그먼트를 못 받으면 실패하고 임시 폴더를 지운다', async () => {
@@ -552,7 +562,7 @@ describe('stopTranscribe', () => {
 
   it('잠금이 없거나 죽은 pid 면 실행 중이 아니라고 답한다', async () => {
     const d = deps(false);
-    await expect(stopTranscribe(d)).resolves.toContain('실행 중인 받아쓰기가 없습니다');
+    await expect(stopTranscribe(d)).resolves.toContain('실행 중인 STT 변환이 없습니다');
     await lockWith(OTHER);
     await expect(stopTranscribe(d)).resolves.toContain('없습니다');
     expect(d.kill).not.toHaveBeenCalled();

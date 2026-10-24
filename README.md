@@ -1,16 +1,16 @@
 # dotbugi-mcp
 
-한성대 LMS(learn.hansung.ac.kr)의 강의 영상(VOD)·과제·퀴즈·강의자료를 Claude Code / Claude Desktop 대화에서 다루게 해 주는 연결 기능(MCP 서버)입니다. 마감 임박 할 일 조회, 과제 본문·첨부 받기, 강의자료 동기화, 주차별 요약, 강의 받아쓰기를 Claude 에게 말로 요청하면 됩니다. LMS 에 제출하거나 글을 쓰지는 않습니다.
+한성대 LMS(learn.hansung.ac.kr)의 강의 영상(VOD)·과제·퀴즈·강의자료를 Claude Code / Claude Desktop 대화에서 다루게 해 주는 연결 기능(MCP 서버)입니다. 마감 임박 할 일 조회, 과제 본문·첨부 받기, 강의자료 동기화, 주차별 요약, 강의 STT 변환을 Claude 에게 말로 요청하면 됩니다. LMS 에 제출하거나 글을 쓰지는 않습니다.
 
 ## 요구사항
 
 - **Node.js 22.22.1 이상**
 - 로그인용 [dotbugi 확장](https://github.com/hs-shell/dotbugi) **5.1.0 이상**
 
-| 기능                     | Windows  | macOS             | Linux  | WSL |
-| ------------------------ | -------- | ----------------- | ------ | --- |
-| 조회·과제·강의자료·요약  | O        | O                 | O      | O   |
-| 받아쓰기(로컬 음성 인식) | WSL 에서 | O (Apple Silicon) | x64 만 | O   |
+| 기능                    | Windows  | macOS             | Linux  | WSL |
+| ----------------------- | -------- | ----------------- | ------ | --- |
+| 조회·과제·강의자료·요약 | O        | O                 | O      | O   |
+| STT(로컬 음성 인식)     | WSL 에서 | O (Apple Silicon) | x64 만 | O   |
 
 ## 설치·등록
 
@@ -57,20 +57,20 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 
 ## 이렇게 물어보세요
 
-| 요청 예시                                               | 쓰는 도구                                                  |
-| ------------------------------------------------------- | ---------------------------------------------------------- |
-| "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?"     | `list_tasks`                                               |
-| "할 일을 캘린더 파일로 만들어줘"                        | `export_ics`                                               |
-| "운영체제 과목은 추적 꺼줘"                             | `list_courses` / `set_course_tracking`                     |
-| "자료구조 과제 내용이랑 첨부파일 받아줘"                | `get_assignment`                                           |
-| "운영체제 강의자료 받아줘"                              | `sync_materials`                                           |
-| "3주차 강의자료 읽고 요약해줘"                          | `read_material`                                            |
-| "LMS 에서 지워진 자료 정리해줘"                         | `delete_materials` (승인 화면)                             |
-| "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?"   | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
-| "자료구조 5주차 정리해줘"                               | `summarize_week` 프롬프트                                  |
-| "받아쓰기 준비해줘"                                     | `asr_install`, `asr_status`                                |
-| "이 강의 받아써줘" / "어디까지 됐어?" / "받아쓰기 멈춰" | `transcribe_vod` / `transcribe_status` / `stop_transcribe` |
-| "LMS 로그아웃해줘"                                      | `logout`                                                   |
+| 요청 예시                                             | 쓰는 도구                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------------- |
+| "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?"   | `list_tasks`                                               |
+| "할 일을 캘린더 파일로 만들어줘"                      | `export_ics`                                               |
+| "운영체제 과목은 추적 꺼줘"                           | `list_courses` / `set_course_tracking`                     |
+| "자료구조 과제 내용이랑 첨부파일 받아줘"              | `get_assignment`                                           |
+| "운영체제 강의자료 받아줘"                            | `sync_materials`                                           |
+| "3주차 강의자료 읽고 요약해줘"                        | `read_material`                                            |
+| "LMS 에서 지워진 자료 정리해줘"                       | `delete_materials` (승인 화면)                             |
+| "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?" | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
+| "자료구조 5주차 정리해줘"                             | `summarize_week` 프롬프트                                  |
+| "STT 준비해줘"                                        | `asr_install`, `asr_status`                                |
+| "이 강의 STT 해줘" / "어디까지 됐어?" / "STT 멈춰"    | `transcribe_vod` / `transcribe_status` / `stop_transcribe` |
+| "LMS 로그아웃해줘"                                    | `logout`                                                   |
 
 Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` 처럼 직접 부를 수도 있습니다.
 
@@ -94,39 +94,39 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 
 인자·출력·상한·파일 위치는 [docs/tools.md](docs/tools.md) 에 있습니다.
 
-| 분류     | 이름                                                                                                                                                                           | 하는 일                                                                    |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| 로그인   | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                              | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃                        |
-| 할 일    | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                       | VOD·과제·퀴즈를 마감 임박 순으로 조회                                      |
-|          | [`export_ics`](docs/tools.md#export_ics)                                                                                                                                       | 할 일 마감을 캘린더 파일(.ics)로 저장                                      |
-|          | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 추적 과목 선택(체크박스)·켜기·끄기                |
-|          | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기                                    |
-| 자료     | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                                         |
-|          | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir)                                      | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동)        |
-|          | [`read_material`](docs/tools.md#read_material)                                                                                                                                 | 받은 자료·첨부·녹취 읽기, 폴더 살펴보기                                    |
-|          | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                               |
-|          | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                                          |
-| 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | 동영상 강의를 로컬 음성 인식으로 받아쓰기(여러 개는 대기열) / 진행 상황    |
-|          | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                          | 받아쓰기 중지                                                              |
-|          | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                           | Claude Code 상태 표시줄에 받아쓰기 진행 표시 (승인 후, 기존 표시줄과 합침) |
-|          | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                      | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제                           |
+| 분류   | 이름                                                                                                                                                                           | 하는 일                                                                 |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| 로그인 | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                              | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃                     |
+| 할 일  | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                       | VOD·과제·퀴즈를 마감 임박 순으로 조회                                   |
+|        | [`export_ics`](docs/tools.md#export_ics)                                                                                                                                       | 할 일 마감을 캘린더 파일(.ics)로 저장                                   |
+|        | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 추적 과목 선택(체크박스)·켜기·끄기             |
+|        | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기                                 |
+| 자료   | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                                      |
+|        | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir)                                      | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동)     |
+|        | [`read_material`](docs/tools.md#read_material)                                                                                                                                 | 받은 자료·첨부·STT 결과 읽기, 폴더 살펴보기                             |
+|        | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                            |
+|        | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                                       |
+| STT    | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | 동영상 강의를 로컬 음성 인식으로 STT 변환(여러 개는 대기열) / 진행 상황 |
+|        | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                          | STT 변환 중지                                                           |
+|        | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                           | Claude Code 상태 표시줄에 STT 진행 표시 (승인 후, 기존 표시줄과 합침)   |
+|        | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                      | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제                        |
 
 모든 기능을 대화로 쓸 수 있습니다. 같은 일을 터미널 명령으로도 할 수 있습니다 → [docs/tools.md](docs/tools.md#터미널에서도-할-수-있는-것)
 
 ## 개인정보·보안
 
 - LMS 세션은 **OS 키체인에만** 저장합니다 (파일 저장 없음). 같은 사용자 권한의 프로세스는 키체인을 읽을 수 있으니 필요 없을 때는 "LMS 로그아웃해줘" 라고 하세요.
-- 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 그 밖의 외부 접속은 받아쓰기용 영상 서버(`*.edge.naverncp.com`, 쿠키 없음)와 음성 인식 런타임 설치 때의 github.com·huggingface.co·PyPI 뿐이며, 텔레메트리는 없습니다.
+- 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 그 밖의 외부 접속은 STT 용 영상 서버(`*.edge.naverncp.com`, 쿠키 없음)와 음성 인식 런타임 설치 때의 github.com·huggingface.co·PyPI 뿐이며, 텔레메트리는 없습니다.
 - 도구 출력·로그에는 세션 값·연결 코드·영상 주소를 넣지 않습니다.
 - LMS 에 제출·작성·수정하지 않습니다. 과제 제출은 직접 하세요.
-- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`, 받아쓰기 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
+- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`, STT 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
 
 ## 문제 해결
 
 - **"저장된 LMS 세션이 없습니다" / "세션이 만료되었습니다"**: "dotbugi 로그인해줘" 라고 다시 요청하세요.
 - **연결 창이 안 뜸**: dotbugi 확장이 5.1.0 이상인지, 열린 LMS 탭에 로그인돼 있는지 확인하세요.
 - **Claude Desktop 에서 서버가 안 뜸**: 대개 `npx` 경로 문제입니다. 위 [설치·등록](#설치등록)의 macOS·Windows·WSL 안내를 보세요.
-- **받아쓰기가 "런타임이 설치되어 있지 않습니다"**: "받아쓰기 준비해줘" 라고 해 음성 인식 런타임을 한 번 설치하세요 (약 2GB, [상세](docs/tools.md#asr_install--asr_status)).
+- **STT 변환이 "런타임이 설치되어 있지 않습니다"**: "STT 준비해줘" 라고 해 음성 인식 런타임을 한 번 설치하세요 (약 2GB, [상세](docs/tools.md#asr_install--asr_status)).
 - **원하는 과목이 안 보임**: "내 강좌 추적 설정 보여줘" 로 확인하고 켜 달라고 하세요 (기본: 비교과 꺼짐).
 
 ## 라이선스·기여

@@ -4,7 +4,7 @@ import type { Task, TaskType } from './schema.js';
 import { clean } from './text.js';
 import { deadlineMs } from './time.js';
 
-const TYPE_LABELS: Record<TaskType, string> = { vod: 'VOD', assign: '과제', quiz: '퀴즈' };
+const TYPE_LABELS: Record<TaskType, string> = { vod: '동영상 강의', assign: '과제', quiz: '퀴즈' };
 // 캘린더에는 마감 1시간 전부터 마감까지의 일정으로 넣는다 (마감 시각에 끝나는 블록이 앱마다 가장 눈에 띈다)
 const EVENT_MS = 60 * 60_000;
 const MAX_LINE_OCTETS = 75;

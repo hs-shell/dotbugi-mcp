@@ -18,7 +18,7 @@ const show = (text: string) => {
 const paint = (format: 'cyan' | 'green' | 'red' | 'dim', text: string, color: boolean) =>
   color ? styleText(format, text, { validateStream: false }) : text;
 
-// 표시할 게 없으면 빈 문자열. 예) 받아쓰기 2/5 ▸ 데이터베이스 3주차 ▓▓▓▓░░░░ 42% (이모지는 쓰지 않는다)
+// 표시할 게 없으면 빈 문자열. 예) STT 2/5 ▸ 데이터베이스 3주차 ▓▓▓▓░░░░ 42% (이모지는 쓰지 않는다)
 export function renderTranscribeStatusLine(
   state: TranscribeState | null,
   queue: TranscribeQueue,
@@ -32,7 +32,7 @@ export function renderTranscribeStatusLine(
   if (state.status === 'running') {
     // 강제 종료로 running 만 남은 흔적은 보이지 않는다
     if (isTranscribeStale(state, now) || !alive(state.pid)) return '';
-    const parts = [`받아쓰기${count}`];
+    const parts = [`STT${count}`];
     const title = [state.course, state.title]
       .filter((t): t is string => !!t)
       .map(show)
@@ -47,8 +47,8 @@ export function renderTranscribeStatusLine(
   const age = now - Date.parse(state.updatedAt);
   if (!(age >= 0 && age < STATUSLINE_HIDE_AFTER_MS)) return '';
   const failed = queue.finished.filter((f) => f.status === 'error').length;
-  if (state.status === 'stopped') return paint('dim', '○ 받아쓰기 중지', color);
+  if (state.status === 'stopped') return paint('dim', '○ STT 중지', color);
   if (state.status === 'error' && total <= 1)
-    return paint('red', `✗ 받아쓰기 오류${state.message ? `: ${show(state.message)}` : ''}`, color);
-  return paint('green', `✓ 받아쓰기 끝${total > 1 ? ` ${total}개` : ''}${failed ? ` (실패 ${failed})` : ''}`, color);
+    return paint('red', `✗ STT 오류${state.message ? `: ${show(state.message)}` : ''}`, color);
+  return paint('green', `✓ STT${total > 1 ? ` ${total}개` : ''} 완료${failed ? ` (실패 ${failed})` : ''}`, color);
 }

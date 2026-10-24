@@ -25,6 +25,9 @@ import { stripUrls } from '../redact.js';
 import type { VodMeta } from './find-vod.js';
 import { extractPlaylistUrl, loadSegments, mediaGet } from './hls.js';
 
+// STT- 이전 결과 파일 이름 앞부분
+const LEGACY_PREFIX = '녹취-';
+
 export type Phase = 'prepare' | 'download' | 'extract' | 'transcribe';
 
 export interface TranscribeDeps {
@@ -111,7 +114,7 @@ async function transcribeFile(media: string, seconds: number, rt: AsrRuntime, de
     }
   });
   try {
-    await Promise.all([pipeline(ff.stdout!, counter, asr.stdin!), exited(ff, 'ffmpeg'), exited(asr, '받아쓰기')]);
+    await Promise.all([pipeline(ff.stdout!, counter, asr.stdin!), exited(ff, 'ffmpeg'), exited(asr, 'STT')]);
   } catch (err) {
     ac.abort();
     if (tooLarge) throw new Error('받아쓴 글이 상한을 넘어 중단했습니다.');
@@ -140,10 +143,13 @@ async function writeNew(path: string, body: string): Promise<boolean> {
   return true;
 }
 
-// 결과 파일 이름 — 대상 고르기(targets)와 같은 규칙을 쓰게 한 곳에서
-export const transcriptFileName = (title: string) => safeFileName(`녹취-${title}.md`);
+// 결과 파일 이름 — 앞이 새 이름, 뒤는 STT- 로 바꾸기 전 이름. 대상 고르기(targets)와 같은 규칙을 쓰게 한 곳에서
+export const transcriptFileNames = (title: string) => [
+  safeFileName(`STT-${title}.md`),
+  safeFileName(`${LEGACY_PREFIX}${title}.md`),
+];
 
-// VOD 하나 → <저장 위치>/<학기>/<과목>/<주차 폴더>/녹취-<강의명>.md. 이미 있으면 건너뛴다(덮어쓰지 않음). 임시 파일은 어떤 경우에도 지운다
+// 동영상 강의 하나 → <저장 위치>/<학기>/<과목>/<주차 폴더>/STT-<강의명>.md. 이미 있으면(예전 이름 녹취-<강의명>.md 포함) 건너뛴다(덮어쓰지 않음). 임시 파일은 어떤 경우에도 지운다
 export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise<TranscribeResult> {
   const tmp = deps.tmpDir;
   try {
@@ -165,8 +171,10 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
       { ms: SYNC_LOCK_WAIT_MS, busy: '강의자료 동기화가 실행 중입니다. 강의자료 동기화가 끝난 뒤 다시 시도하세요.' }
     );
     const weekDir = childDir(courseDir, meta.week);
-    const path = join(weekDir, transcriptFileName(meta.title));
-    if (await lstat(path).catch(() => null)) return { status: 'skipped', path, meta };
+    const [path, ...legacy] = transcriptFileNames(meta.title).map((name) => join(weekDir, name));
+    // 이름을 STT- 로 바꾸기 전에 만든 결과는 이름을 그대로 두고 이미 변환된 것으로 본다
+    for (const done of [path, ...legacy])
+      if (await lstat(done).catch(() => null)) return { status: 'skipped', path: done, meta };
     // 받기 전에 확인 — 설치 안 됐으면 내려받지 않는다
     const rt = await deps.runtime();
 
@@ -203,11 +211,11 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     await ensureRealDir(deps.root, weekDir);
     const date = deps.now().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
     const body = [
-      `# 녹취 — ${meta.title}`,
+      `# STT — ${meta.title}`,
       '',
       `- 과목: ${meta.course}`,
       `- 주차: ${meta.week}`,
-      `- 받아쓴 날: ${date}`,
+      `- 변환한 날: ${date}`,
       `- 모델: Qwen3-ASR ${rt.model} (${rt.kind})`,
       `- 언어: ${rt.language === 'auto' ? '자동 감지' : rt.language}`,
       '',

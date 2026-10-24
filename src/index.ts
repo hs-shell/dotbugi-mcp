@@ -9,10 +9,10 @@ const USAGE = `사용법:
   dotbugi-mcp logout           저장된 세션 삭제
   dotbugi-mcp sync             강의자료를 <저장 위치>/<YYYY-N학기>/<과목>/<N주차>/ 에 받기 (기본 ~/Downloads/dotbugi-mcp) (LMS 에서 사라진 파일은 하나씩 삭제 여부 확인)
   dotbugi-mcp transcribe <cmid> [--language auto|Korean|English|Japanese|…]
-                               VOD 하나를 로컬 ASR 로 받아써 강의자료 주차 폴더에 녹취-<강의명>.md 로 저장 (Ctrl+C 로 중지)
+                               동영상 강의 하나를 로컬 ASR 로 STT 변환해 강의자료 주차 폴더에 STT-<강의명>.md 로 저장 (Ctrl+C 로 중지)
   dotbugi-mcp courses          list_tasks·sync 등이 다룰 강좌 켜기/끄기 (터미널에서 ↑↓·Space·Enter)
   dotbugi-mcp courses --list | --on <과목명|courseId> | --off <과목명|courseId>
-  dotbugi-mcp statusline       받아쓰기 진행 한 줄 출력 (Claude Code 상태 표시줄용)
+  dotbugi-mcp statusline       STT 진행 한 줄 출력 (Claude Code 상태 표시줄용)
   dotbugi-mcp asr install [--gpu] [--model 0.6b|1.7b] | status | remove [--yes]
                                로컬 음성 인식(Qwen3-ASR) 런타임 관리 (~/.cache/dotbugi-mcp/asr)`;
 

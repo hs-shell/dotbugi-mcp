@@ -64,9 +64,13 @@ describe('list_tasks', () => {
     expect(tasks[0].remaining).toBe('1일 6시간');
     const [text] = result.content as { text: string }[];
     expect(text.text.split('\n')[0]).toBe(LMS_DATA_NOTICE);
-    expect(text.text.split('\n')[1]).toBe(
-      '[과제] 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00 | cmid 5'
-    );
+    expect(text.text.split('\n').slice(1, 6)).toEqual([
+      '**항목 4개**',
+      '',
+      '| | 종류 | 과목 | 제목 | 상태 | 남은 시간 | 마감 | cmid |',
+      '|---|---|---|---|---|---|---|---|',
+      '| ● | 과제 | 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00 | 5 |',
+    ]);
     expect(result.structuredContent).toMatchObject({ warnings: [] });
     expect(JSON.stringify(result)).not.toContain(SESSION);
     // 스케줄러 내부용 필드는 응답에 나가지 않는다
@@ -93,8 +97,8 @@ describe('list_tasks', () => {
     const result = await call({ refresh: true });
     expect(result.structuredContent).toMatchObject({ warnings: ['일부 과목/항목을 가져오지 못했습니다 (1건).'] });
     const lines = (result.content as { text: string }[])[0].text.split('\n');
-    expect(lines[1]).toBe('일부 과목/항목을 가져오지 못했습니다 (1건).');
-    expect(lines[2]).toContain('과제\\|1 |');
+    expect(lines[1]).toBe('※ 일부 과목/항목을 가져오지 못했습니다 (1건).');
+    expect(lines.some((l) => l.includes('과제\\|1 |'))).toBe(true);
   });
 
   it('1시간 동안 캐시를 쓰고, refresh 나 TTL 만료 시 다시 가져온다', async () => {

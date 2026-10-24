@@ -148,7 +148,7 @@ async function remove(root: string, yes: boolean): Promise<void> {
   log(`삭제했습니다: ${root}`);
 }
 
-const TRANSCRIBE_RUNNING = '받아쓰기가 실행 중이라 지우지 않았습니다. 끝난 뒤 다시 실행하세요.';
+const TRANSCRIBE_RUNNING = 'STT 변환이 실행 중이라 지우지 않았습니다. 끝난 뒤 다시 실행하세요.';
 export const ASR_REMOVE_LOCKS: [file: string, busy: string][] = [
   [ASR_INSTALL_LOCK_FILE, ASR_INSTALL_BUSY],
   [TRANSCRIBE_LOCK_FILE, TRANSCRIBE_RUNNING],

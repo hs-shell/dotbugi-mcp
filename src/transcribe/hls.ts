@@ -81,7 +81,7 @@ export function parsePlaylist(text: string, base: URL): { segments: URL[]; secon
     if (!isMediaUrl(url) || url.hostname !== base.hostname)
       throw new Error('재생 목록이 다른 서버의 주소를 가리켜 중단했습니다.');
     segments.push(url);
-    if (segments.length > VOD_MAX_SEGMENTS) throw new Error('영상이 너무 길어 받아쓰지 않습니다.');
+    if (segments.length > VOD_MAX_SEGMENTS) throw new Error('영상이 너무 길어 STT 변환하지 않습니다.');
   }
   if (segments.length === 0) throw new Error('영상 재생 목록이 비어 있습니다.');
   return { segments, seconds };

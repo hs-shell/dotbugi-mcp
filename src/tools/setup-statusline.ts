@@ -135,7 +135,7 @@ export async function setupStatusline(
 
   if (action === 'disable') return `상태 표시줄을 해제했습니다 (${file}).`;
   return [
-    `상태 표시줄을 설정했습니다 (${file}). Claude Code 에서 받아쓰기 진행 상황이 아래쪽에 한 줄로 보입니다.`,
+    `상태 표시줄을 설정했습니다 (${file}). Claude Code 에서 STT 진행 상황이 아래쪽에 한 줄로 보입니다.`,
     'Claude Desktop 앱에는 상태 표시줄이 없습니다 (Claude Code 전용).',
     ...(/[\\/]_npx[\\/]/.test(command)
       ? [
@@ -151,7 +151,7 @@ export function registerSetupStatusline(server: McpServer): void {
     {
       title: 'Claude Code 상태 표시줄 설정',
       description:
-        'Claude Code 사용자 설정(~/.claude/settings.json)의 statusLine 에 동영상 강의 받아쓰기 진행 표시(몇 번째/전체·진행률)를 넣거나(enable) 뺀다(disable). ' +
+        'Claude Code 사용자 설정(~/.claude/settings.json)의 statusLine 에 동영상 강의 STT(받아쓰기) 진행 표시(몇 번째/전체·진행률)를 넣거나(enable) 뺀다(disable). ' +
         '이미 쓰는 상태 표시줄이 있으면 지우지 않고 그 아래 줄에 더한다. 사용자가 확인 창에서 승인해야 바꾸고, statusLine 외 설정은 건드리지 않는다. disable 은 dotbugi 가 넣은 줄만 뺀다. ' +
         'Claude Desktop 에는 상태 표시줄이 없다. 확인 창이 없는 클라이언트면 confirmToken 을 돌려준다 — 사용자 동의를 받은 뒤에만 그 토큰으로 다시 호출한다.',
       inputSchema: z.object({

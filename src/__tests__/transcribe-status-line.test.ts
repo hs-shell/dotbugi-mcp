@@ -31,10 +31,10 @@ const render = (s: TranscribeState | null, q = queue(), alive = true) =>
 describe('renderTranscribeStatusLine', () => {
   it('실행 중이면 몇 번째/전체·과목·제목·진행 막대를 한 줄로', () => {
     expect(render(state(), queue(3, [{ cmid: 1, status: 'done', title: null }]))).toBe(
-      '받아쓰기 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%'
+      'STT 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%'
     );
     // 하나뿐이면 개수를 빼고, 받아쓰기 전 단계는 단계 이름만
-    expect(render(state({ phase: 'download', progress: null }))).toBe('받아쓰기 ▸ 데이터베이스 3주차 영상 받는 중');
+    expect(render(state({ phase: 'download', progress: null }))).toBe('STT ▸ 데이터베이스 3주차 영상 받는 중');
   });
 
   it('이모지 없이 기호만 쓴다', () => {
@@ -72,7 +72,7 @@ describe('renderTranscribeStatusLine', () => {
 
   it('끝나면 잠시 결과를 보여 주고 시간이 지나면 숨긴다', () => {
     const done = state({ status: 'done', phase: null, progress: 100 });
-    expect(render(done)).toBe('✓ 받아쓰기 끝');
+    expect(render(done)).toBe('✓ STT 완료');
     expect(
       render(
         done,
@@ -81,9 +81,9 @@ describe('renderTranscribeStatusLine', () => {
           { cmid: 2, status: 'done', title: null },
         ])
       )
-    ).toBe('✓ 받아쓰기 끝 2개 (실패 1)');
-    expect(render(state({ status: 'error', message: '세션 만료' }))).toBe('✗ 받아쓰기 오류: 세션 만료');
-    expect(render(state({ status: 'stopped' }))).toBe('○ 받아쓰기 중지');
+    ).toBe('✓ STT 2개 완료 (실패 1)');
+    expect(render(state({ status: 'error', message: '세션 만료' }))).toBe('✗ STT 오류: 세션 만료');
+    expect(render(state({ status: 'stopped' }))).toBe('○ STT 중지');
     expect(render({ ...done, updatedAt: new Date(NOW - STATUSLINE_HIDE_AFTER_MS).toISOString() })).toBe('');
   });
 });

@@ -10,7 +10,7 @@ import { matchCourses } from '../tasks/courses.js';
 import { cmidOfUrl } from '../tasks/select.js';
 import { clean } from '../tasks/text.js';
 import type { VodMeta } from './find-vod.js';
-import { transcriptFileName } from './pipeline.js';
+import { transcriptFileNames } from './pipeline.js';
 
 export type VodTarget = VodMeta & { cmid: number };
 
@@ -18,7 +18,9 @@ export type VodTarget = VodMeta & { cmid: number };
 async function hasTranscript(root: string, t: VodTarget, now: Date): Promise<boolean> {
   try {
     const { dir } = await openCourseDir(root, t.course, t.courseId, now);
-    return !!(await lstat(join(childDir(dir, t.week), transcriptFileName(t.title))).catch(() => null));
+    const week = childDir(dir, t.week);
+    for (const name of transcriptFileNames(t.title)) if (await lstat(join(week, name)).catch(() => null)) return true;
+    return false;
   } catch {
     // 같은 이름의 다른 과목 폴더 등 — 대상에 남기고 작업 프로세스가 판단하게 한다
     return false;

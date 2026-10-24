@@ -185,7 +185,7 @@ export function registerStorageDirTools(server: McpServer): void {
     {
       title: '저장 위치 확인',
       description:
-        '강의자료·과제 첨부·녹취를 저장하는 위치와 이번 학기 폴더를 알려준다. 자료는 <저장 위치>/<YYYY-N학기>/<과목>/<N주차>/ 에 쌓인다 ' +
+        '강의자료·과제 첨부·STT 결과를 저장하는 위치와 이번 학기 폴더를 알려준다. 자료는 <저장 위치>/<YYYY-N학기>/<과목>/<N주차>/ 에 쌓인다 ' +
         '(3~8월 1학기, 9~2월 2학기). 바꾸려면 set_storage_dir.',
       outputSchema: getStorageDirOutput,
       annotations: { readOnlyHint: true, openWorldHint: false },
@@ -203,7 +203,7 @@ export function registerStorageDirTools(server: McpServer): void {
     {
       title: '저장 위치 변경',
       description:
-        '강의자료·과제 첨부·녹취의 저장 위치를 바꾼다 (예: "자료는 문서/돋부기에 저장해줘" → path "~/Documents/돋부기"). ' +
+        '강의자료·과제 첨부·STT 결과의 저장 위치를 바꾼다 (예: "자료는 문서/돋부기에 저장해줘" → path "~/Documents/돋부기"). ' +
         '홈 폴더 아래의 일반 폴더만 된다 (링크·숨김·시스템 폴더, 지금 위치의 안쪽·상위 폴더는 거부). WSL 에서는 C:\\Users\\<사용자>\\... 도 된다. ' +
         '위치 변경은 항상 사용자가 클라이언트 확인 창에서 직접 승인해야 한다. moveExisting(기본 true)이면 기존 자료도 새 위치로 옮긴다. ' +
         '확인 창이 없는 클라이언트면 목록과 confirmToken 을 돌려준다 — 사용자에게 보여주고 동의를 받은 뒤에만 그 토큰으로 다시 호출한다.',

@@ -14,7 +14,7 @@ export async function confirmRemovals(removed: RemovedFile[], ask?: (question: s
     );
   for (const item of removed) {
     log(`\nLMS 에서 삭제된 파일: ${item.path}`);
-    if (item.locallyModified) log('⚠ 받은 뒤 수정된 파일입니다. 삭제하면 수정한 내용도 사라집니다.');
+    if (item.locallyModified) log('※ 받은 뒤 수정된 파일입니다. 삭제하면 수정한 내용도 사라집니다.');
     const answer = (await ask('삭제할까요? [y/N] ')).trim().toLowerCase();
     const remove = answer === 'y' || answer === 'yes';
     const outcome = await resolveRemoved(item, remove);
