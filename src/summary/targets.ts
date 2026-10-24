@@ -102,7 +102,14 @@ export async function scanSummaryTargets(
         const reasons = sourceChanges(meta.sources, sources, () => '노트');
         if (instructions !== meta.instructions) reasons.push('지시사항 변경');
         if (reasons.length) out.targets.push({ ...base, status: 'stale', reasons, instructions });
-        else out.upToDate++;
+        else {
+          out.upToDate++;
+          // 요약은 최신이어도 노트 없는 주차는 빠져 있다 — 조용히 건너뛰면 '노트 먼저' 를 물을 기회가 없다
+          if (missingNotes.length)
+            out.warnings.push(
+              `[${title}] 노트가 없어 요약에 빠진 주차: ${missingNotes.join(', ')} — 노트를 먼저 만들지 사용자에게 물어보세요 (만들면 다시 요약 대상)`
+            );
+        }
       }
     } catch (err) {
       out.warnings.push(`[${title}] ${err instanceof Error ? err.message : String(err)}`);

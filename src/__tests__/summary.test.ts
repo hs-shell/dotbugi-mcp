@@ -65,7 +65,10 @@ describe('scanSummaryTargets + saveSummary', () => {
       instructions: '개념',
     });
     expect(path).toBe(join(courseDir(), '요약-1-7주차.md'));
-    expect((await scan({ range })).upToDate).toBe(1);
+    const fresh = await scan({ range });
+    expect(fresh.upToDate).toBe(1);
+    // 최신 요약이어도 노트 없는 주차(2주차)는 알려서 '노트 먼저' 를 묻게 한다
+    expect(fresh.warnings).toEqual([expect.stringContaining('요약에 빠진 주차: 2주차')]);
 
     await saveNotes({ dir: weekDir('2주차'), content: '# 2주차 노트' });
     await saveNotes({ dir: weekDir('1주차'), content: '# 1주차 새 노트', replace: true });
