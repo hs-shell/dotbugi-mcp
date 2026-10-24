@@ -3,6 +3,7 @@ import * as z from 'zod/v4';
 import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
 import { cell, clean } from '../tasks/text.js';
 import { notesRequest, notesText } from './notes.js';
+import { summaryRequest, summaryText } from './summary.js';
 
 // 슬래시 명령 바로가기 (Claude Code: /dotbugi:status). 인자는 본문에 들어가므로 한 줄로 접고 길이를 묶는다.
 // 원칙: 선택 인자를 비우면 추적 과목 전체가 대상, 리소스가 큰 작업(STT)은 실행 전에 대상 목록을 확인받는다
@@ -154,6 +155,16 @@ const shortcuts: Shortcut[] = [
     args: { request: notesRequest },
     // 대상 확인·변경 감지·저장은 list_notes·save_notes 가, 노트 본문은 모델이 쓴다
     text: ({ request: r }) => notesText(r),
+  },
+  {
+    name: 'summary',
+    title: '핵심 요약',
+    description: '핵심 요약 (노트 기반, 범위 뒤에 요약 지시를 붙일 수 있음)',
+    usage: 'summary [과목|courseId|교수] [N주차|N-M주차] [지시]',
+    example: '/dotbugi:summary 자료구조 1-7주차 시험에 나올 개념 위주',
+    args: { request: summaryRequest },
+    // 대상 확인·변경 감지·저장은 list_summary·save_summary 가, 요약 본문은 모델이 쓴다
+    text: ({ request: r }) => summaryText(r),
   },
   {
     name: 'transcribe',

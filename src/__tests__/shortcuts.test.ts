@@ -31,7 +31,7 @@ describe('바로가기 프롬프트', () => {
   it('prompts/list 에 새 명령만 나오고 설명은 명사형이다', async () => {
     const { prompts } = (await send('prompts/list')) as { prompts: { name: string; description: string }[] };
     const names = prompts.map((p) => p.name);
-    for (const n of ['status', 'pull', 'courses', 'work', 'notes', 'transcribe', 'drive', 'login', 'help'])
+    for (const n of ['status', 'pull', 'courses', 'work', 'notes', 'summary', 'transcribe', 'drive', 'login', 'help'])
       expect(names).toContain(n);
     for (const n of ['tasks', 'overdue', 'sync', 'track', 'untrack', 'assignment', 'summarize_week'])
       expect(names).not.toContain(n);
@@ -94,7 +94,7 @@ describe('바로가기 프롬프트', () => {
 
   it('help 는 모든 명령을 표로 보여 준다', async () => {
     const t = text(await get('help'));
-    for (const n of ['status', 'pull', 'courses', 'work', 'notes', 'transcribe', 'drive', 'login', 'help'])
+    for (const n of ['status', 'pull', 'courses', 'work', 'notes', 'summary', 'transcribe', 'drive', 'login', 'help'])
       expect(t).toContain(`/dotbugi:${n}`);
     // 등록된 바로가기와 help 표의 행이 정확히 일치 (명령을 추가·삭제하면 표도 따라간다)
     const { prompts } = (await send('prompts/list')) as { prompts: { name: string }[] };
@@ -106,7 +106,7 @@ describe('바로가기 프롬프트', () => {
   });
 
   it('이모지·VOD 표현을 쓰지 않는다', async () => {
-    for (const n of ['status', 'pull', 'courses', 'work', 'notes', 'transcribe', 'drive', 'login', 'help']) {
+    for (const n of ['status', 'pull', 'courses', 'work', 'notes', 'summary', 'transcribe', 'drive', 'login', 'help']) {
       const t = text(await get(n, {}));
       expect(t).not.toMatch(/\p{Extended_Pictographic}/u);
       expect(t.replace('"VOD" 대신', '')).not.toContain('VOD');
