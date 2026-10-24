@@ -99,7 +99,8 @@ describe('login 도구', () => {
       timeout: 2000,
     });
     await expect(post(port, {})).rejects.toThrow();
-    await login();
+    // 직전 실패 이유는 다음 응답에 한 번만 보여 준다
+    expect(await login()).toContain('직전 로그인 실패');
     expect(opened).toHaveLength(2);
     stderr.mockRestore();
   });

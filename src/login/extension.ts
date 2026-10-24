@@ -17,6 +17,8 @@ export interface ExtensionLogin {
 // 브라우저를 연 뒤 바로 돌아온다 — login 도구가 승인을 기다리지 않고 확인 코드부터 돌려줄 수 있게
 export async function startExtensionLogin(): Promise<ExtensionLogin> {
   const server = await startCallbackServer(ALLOWED_ORIGINS, LOGIN_TIMEOUT_MS);
+  // 브라우저를 여는 사이 잘못된 요청이 오면 rejection 이 처리되지 않아 프로세스가 죽는다. 실제 처리는 호출한 쪽이 한다
+  server.session.catch(() => {});
   // 포트·코드는 URL 해시에만 담는다 (서버로 전송되지 않고, 확장이 읽은 뒤 주소창에서 지운다)
   const url = `${LMS_ORIGIN}${LMS_HOME_PATH}#${CONNECT_HASH_KEY}=${server.port}.${server.code}`;
   try {
