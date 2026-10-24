@@ -20,6 +20,10 @@ export const getAssignmentOutput = z.object({
     .describe('서버가 받아 둔 첨부파일의 로컬 경로'),
   downloadDir: z.string().describe('이 과제 전용 저장 폴더'),
   submitUrl: z.string().describe('제출 페이지. 제출은 사용자가 직접 한다'),
+  instructionsPath: z
+    .string()
+    .nullable()
+    .describe('본문(LMS 화면) 지시사항과 첨부별 글자를 합친 과제-<제목>.md 경로. 못 썼으면 null (warnings 에 이유)'),
   warnings: z.array(z.string()).describe('받지 못했거나 건너뛴 첨부파일 안내 (없으면 빈 배열)'),
 });
 export type GetAssignmentOutput = z.infer<typeof getAssignmentOutput>;
