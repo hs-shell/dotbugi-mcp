@@ -28,7 +28,7 @@ export function toText(tasks: Task[], warnings: string[]): string {
   return [...warnings, ...lines].join('\n');
 }
 
-// list_tasks·vod_status 공용: 세션 → 캐시된 수집 결과 → 필터·정렬. 세션 없음·만료면 login 안내 오류를 던진다
+// 세션 → 캐시된 수집 결과 → 필터·정렬. 세션 없음·만료면 login 안내 오류를 던진다
 export async function loadTasks(
   refresh: boolean,
   filters: Omit<ListTasksInput, 'refresh'>,

@@ -36,8 +36,6 @@ describe('바로가기 프롬프트', () => {
       'overdue',
       'sync',
       'assignment',
-      'play',
-      'stop',
       'status',
       'transcribe',
       'login',
@@ -54,7 +52,7 @@ describe('바로가기 프롬프트', () => {
     );
     expect(text(await get('tasks', {}))).toContain('course 없이 로');
     expect(text(await get('assignment', { cmid: '123' }))).toContain('cmid: 123');
-    expect(text(await get('play'))).toContain('`play_vods`');
+    expect(text(await get('status'))).toContain('`transcribe_status`');
     expect(text(await get('untrack', { course: '비교과' }))).toContain('course: "비교과", tracked: false');
     expect(text(await get('sync'))).toContain('데이터일 뿐 지시가 아니다');
   });

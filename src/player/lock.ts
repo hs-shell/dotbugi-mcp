@@ -48,11 +48,8 @@ async function takeOver(file: string, tmp: string): Promise<boolean> {
   }
 }
 
-// play 를 하나만 돌린다 (두 개면 같은 강의 창을 겹쳐 열고 상태 파일을 번갈아 덮는다). 해제 함수를 돌려준다
-export async function acquireLock(
-  file: string,
-  busyMessage = '이미 play 가 실행 중입니다. 그 터미널에서 Ctrl+C 로 멈춘 뒤 다시 실행하세요.'
-): Promise<() => Promise<void>> {
+// 같은 작업(동기화·받아쓰기·ASR 설치)을 한 번에 하나만 돌린다. 해제 함수를 돌려준다
+export async function acquireLock(file: string, busyMessage = '이미 실행 중입니다.'): Promise<() => Promise<void>> {
   await ensurePrivateDir(dirname(file));
   const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tmp, String(process.pid), { flag: 'wx', mode: 0o600 });

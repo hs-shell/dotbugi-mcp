@@ -61,7 +61,7 @@ export function registerListCourses(server: McpServer): void {
       title: '내 강좌·추적 설정 조회',
       description:
         'LMS 메인의 내 강좌를 courseId·과목명·종류(정규/비교과)·추적 여부와 함께 보여준다. ' +
-        '추적이 꺼진 강좌는 list_tasks·vod_status·sync_materials 등에서 빠진다. 바꾸려면 set_course_tracking. ' +
+        '추적이 꺼진 강좌는 list_tasks·sync_materials 등에서 빠진다. 바꾸려면 set_course_tracking. ' +
         UNTRUSTED,
       outputSchema: listCoursesOutput,
       annotations: { readOnlyHint: true, openWorldHint: true },

@@ -39,7 +39,7 @@ export const readTranscribeState = (file = TRANSCRIBE_STATE_FILE) => readStateFi
 export const writeTranscribeState = (state: TranscribeState, file = TRANSCRIBE_STATE_FILE) =>
   writeStateFile(file, transcribeStateSchema, state);
 
-// 실행 중인데 갱신이 끊김. 미래 시각(시계가 뒤로 감)도 믿을 수 없어 끊긴 것으로 본다 (player isStale 과 같은 규칙)
+// 실행 중인데 갱신이 끊김. 미래 시각(시계가 뒤로 감)도 믿을 수 없어 끊긴 것으로 본다
 export function isTranscribeStale(state: TranscribeState, now: number): boolean {
   const age = now - Date.parse(state.updatedAt);
   return state.status === 'running' && (age > TRANSCRIBE_STATE_STALE_MS || age < 0);

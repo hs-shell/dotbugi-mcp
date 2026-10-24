@@ -10,15 +10,12 @@ import { registerDeleteMaterials } from './tools/delete-materials.js';
 import { registerExportIcs } from './tools/export-ics.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
-import { registerPlayVods } from './tools/play-vods.js';
 import { registerReadMaterial } from './tools/read-material.js';
-import { registerSetupStatusline } from './tools/setup-statusline.js';
 import { registerStorageDirTools } from './tools/storage-dir.js';
 import { registerLogin } from './tools/login.js';
 import { registerLogout } from './tools/logout.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
 import { registerTranscribeVod } from './tools/transcribe-vod.js';
-import { registerVodStatus } from './tools/vod-status.js';
 
 // 버전은 package.json 단일 출처 (src/·dist/ 모두 한 단계 아래라 같은 상대 경로)
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
@@ -32,8 +29,6 @@ export function createServer(): McpServer {
   registerExportIcs(server);
   registerListCourses(server);
   registerSetCourseTracking(server);
-  registerVodStatus(server);
-  registerPlayVods(server);
   registerGetAssignment(server);
   registerSyncMaterials(server);
   registerDeleteMaterials(server);
@@ -42,7 +37,6 @@ export function createServer(): McpServer {
   registerTranscribeVod(server);
   registerAsrTools(server);
   registerAsrRemove(server);
-  registerSetupStatusline(server);
   registerSummarizeWeek(server);
   registerShortcuts(server);
   return server;

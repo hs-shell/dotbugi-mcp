@@ -23,7 +23,7 @@ describe('acquireLock', () => {
 
   it('살아 있는 프로세스가 잡고 있으면 거부한다', async () => {
     const release = await acquireLock(file);
-    await expect(acquireLock(file)).rejects.toThrow('이미 play 가 실행 중입니다');
+    await expect(acquireLock(file)).rejects.toThrow('이미 실행 중입니다');
     await release();
   });
 
