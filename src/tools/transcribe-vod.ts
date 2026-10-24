@@ -43,6 +43,9 @@ const STATUS_MARKS: Record<TranscribeState['status'] | 'stale', string> = {
 };
 
 // dist/tools/ → dist/index.js
+// 대상에서 뺀 강의를 알릴 때 제목을 보여 줄 개수
+const SKIPPED_NAMES_SHOWN = 5;
+
 const ENTRY = fileURLToPath(new URL('../index.js', import.meta.url));
 
 const WORKER_DEPS = { spawn, getSession, runtime: resolveAsrRuntime };
@@ -177,17 +180,39 @@ export function queueRoom(now = Date.now()): { slots: number; queued: Set<number
   };
 }
 
+// 받지 못하는 강의는 대상에서 빼고 종류별로 알린다 (제목은 앞 몇 개만)
+function skippedNotes(unavailable: VodTarget[]): string[] {
+  const names = (list: VodTarget[]) =>
+    list
+      .slice(0, SKIPPED_NAMES_SHOWN)
+      .map((t) => `${t.course} · ${t.week} · ${t.title}`)
+      .join(', ') + (list.length > SKIPPED_NAMES_SHOWN ? ` 외 ${list.length - SKIPPED_NAMES_SHOWN}개` : '');
+  const expired = unavailable.filter((t) => t.unavailable?.kind === 'expired');
+  const notYet = unavailable.filter((t) => t.unavailable?.kind === 'notYet');
+  return [
+    ...(expired.length
+      ? [`※ 열람 기간이 지난 ${expired.length}개는 영상을 받을 수 없어 뺐습니다: ${names(expired)}`]
+      : []),
+    ...(notYet.length
+      ? [`※ 아직 공개 전인 ${notYet.length}개는 뺐습니다 (공개된 뒤 다시 실행): ${names(notYet)}`]
+      : []),
+  ];
+}
+
 // cmids 는 그대로. course·전체는 아직 결과 파일이 없는 강의를 모으고, all 이 아니면 사용자 확인을 받는다
 // (STT 변환은 수십 분씩 걸려 무엇이 돌지 먼저 보여 준다). 대상은 대기열에 남은 자리까지만 — 승인한 뒤에 상한 오류가 나지 않게 확인 전에 자른다
 export async function resolveTargets(
   input: TargetInput,
   asker: Asker,
-  list: (course?: string) => Promise<{ targets: VodTarget[]; failures: number }>,
+  list: (course?: string) => Promise<{ targets: VodTarget[]; unavailable: VodTarget[]; failures: number }>,
   room = queueRoom
 ): Promise<{ cmids: number[]; notes: string[] } | { text: string }> {
   if (input.cmids) return { cmids: input.cmids, notes: [] };
-  const { targets: found, failures } = await list(input.course);
-  const notes = failures ? [`과목 ${failures}개의 강의 목록을 읽지 못했습니다.`] : [];
+  const { targets: found, unavailable, failures } = await list(input.course);
+  const notes = [
+    ...(failures ? [`과목 ${failures}개의 강의 목록을 읽지 못했습니다.`] : []),
+    ...skippedNotes(unavailable),
+  ];
   const { slots, queued } = room();
   const targets = found.filter((t) => !queued.has(t.cmid));
   if (!targets.length)

@@ -181,11 +181,11 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     await ensurePrivateDir(tmp);
     let playlist: URL;
     try {
-      // 기간이 지난 강의는 재생 화면 자체를 리다이렉트로 막을 수도 있어 같은 안내로 묶는다
+      // 재생 화면 자체를 리다이렉트로 막을 수도 있어 같은 안내로 묶는다
       playlist = extractPlaylistUrl(await deps.viewerHtml(cmid));
     } catch (err) {
-      // 기간이 지난 강의는 LMS 가 재생 화면에 영상을 싣지 않는다 — 원인을 그대로 알려 준다
-      if (meta.dimmed) throw new Error('열람 기간이 지나 LMS 가 영상을 주지 않습니다.');
+      // 기간이 지났거나 공개 전인 강의는 LMS 가 재생 화면에 영상을 싣지 않는다 — 원인을 그대로 알려 준다
+      if (meta.unavailable) throw new Error(meta.unavailable.reason);
       throw err;
     }
     const { segments, seconds } = await loadSegments(playlist, deps.signal, deps.fetch);

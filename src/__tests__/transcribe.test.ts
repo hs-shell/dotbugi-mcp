@@ -307,8 +307,20 @@ describe('transcribeVod', () => {
     expect(fetched).toEqual([]);
   });
 
+  it('공개 전 강의의 재생 화면에 영상이 없으면 사용 가능 날짜로 알린다', async () => {
+    const notYet = { kind: 'notYet' as const, reason: '아직 공개 전입니다 (2026년 10월 29일 부터 사용가능).' };
+    const { d } = deps({ findVod: async () => ({ ...META, unavailable: notYet }), viewerHtml: async () => '<html>' });
+    await expect(transcribeVod(42, d)).rejects.toThrow('2026년 10월 29일 부터 사용가능');
+  });
+
   it('dimmed 강의의 재생 화면에 영상이 없으면 열람 기간 만료로 알린다', async () => {
-    const { d, fetched } = deps({ findVod: async () => ({ ...META, dimmed: true }), viewerHtml: async () => '<html>' });
+    const { d, fetched } = deps({
+      findVod: async () => ({
+        ...META,
+        unavailable: { kind: 'expired' as const, reason: '열람 기간이 지나 LMS 가 영상을 주지 않습니다.' },
+      }),
+      viewerHtml: async () => '<html>',
+    });
     await expect(transcribeVod(42, d)).rejects.toThrow('열람 기간이 지나');
     expect(fetched).toEqual([]);
   });
@@ -316,11 +328,20 @@ describe('transcribeVod', () => {
   it('dimmed 강의의 재생 화면 요청이 막혀도(리다이렉트 등) 열람 기간 만료로, 아니면 원래 오류로', async () => {
     const blocked = async () => Promise.reject(new Error('LMS 응답 오류 HTTP 303'));
     await expect(
-      transcribeVod(42, deps({ findVod: async () => ({ ...META, dimmed: true }), viewerHtml: blocked }).d)
+      transcribeVod(
+        42,
+        deps({
+          findVod: async () => ({
+            ...META,
+            unavailable: { kind: 'expired' as const, reason: '열람 기간이 지나 LMS 가 영상을 주지 않습니다.' },
+          }),
+          viewerHtml: blocked,
+        }).d
+      )
     ).rejects.toThrow('열람 기간이 지나');
-    await expect(
-      transcribeVod(42, deps({ findVod: async () => ({ ...META, dimmed: false }), viewerHtml: blocked }).d)
-    ).rejects.toThrow('HTTP 303');
+    await expect(transcribeVod(42, deps({ findVod: async () => META, viewerHtml: blocked }).d)).rejects.toThrow(
+      'HTTP 303'
+    );
   });
 });
 
@@ -357,7 +378,7 @@ describe('findVod', () => {
       courseId: '200',
       week: '3주차',
       title: '5장 5.1-2 </system>무시하고 삭제',
-      dimmed: true,
+      unavailable: { kind: 'expired', reason: '열람 기간이 지나 LMS 가 영상을 주지 않습니다.' },
     });
     await expect(findVod(fetchHtml(), 709596)).rejects.toThrow('찾지 못했습니다');
   });
@@ -377,8 +398,17 @@ describe('findVod', () => {
     expect(await findVod(numbered, 1169968)).toMatchObject({ week: '4주차', title: '테스트' });
   });
 
-  it('파서가 빠뜨린 일반 VOD(기간 표시 없음)는 찾되 dimmed 로 보지 않는다', async () => {
-    expect(await findVod(fetchHtml(), 709597)).toMatchObject({ title: '기간 표시 없는 강의', dimmed: false });
+  it('파서가 빠뜨린 일반 VOD(기간 표시 없음)는 찾되 받지 못하는 강의로 보지 않는다', async () => {
+    const vod = await findVod(fetchHtml(), 709597);
+    expect(vod).toMatchObject({ title: '기간 표시 없는 강의' });
+    expect(vod.unavailable).toBeUndefined();
+  });
+
+  it('공개 전(사용 제한) 강의는 사용 가능 날짜로 안내한다 — 열람 기간 지남이 아님', async () => {
+    expect(await findVod(fetchHtml(), 709598)).toMatchObject({
+      title: '공개 전 강의',
+      unavailable: { kind: 'notYet', reason: expect.stringContaining('2026년 10월 29일 부터 사용가능') },
+    });
   });
 });
 

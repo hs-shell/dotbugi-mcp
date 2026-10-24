@@ -45,6 +45,21 @@ describe('listVodTargets', () => {
     expect(targets).toHaveLength(all.length - 1);
   });
 
+  it('파서가 빠뜨리는 강의도 강좌 화면에서 읽고, 열람 기간 지남·공개 전 강의는 따로 돌려준다', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dotbugi-targets-'));
+    roots.push(root);
+    const { targets, unavailable } = await listVodTargets(fetchHtml, root, '운영체제');
+    // 기간 표시가 없는 일반 강의는 대상
+    expect(targets.map((t) => t.cmid)).toEqual([709597]);
+    expect(unavailable.map((t) => [t.cmid, t.unavailable?.kind])).toEqual([
+      [709595, 'expired'],
+      [709598, 'notYet'],
+    ]);
+    const notYet = unavailable.find((t) => t.cmid === 709598)!;
+    expect(notYet).toMatchObject({ week: '3주차', title: '공개 전 강의' });
+    expect(notYet.unavailable?.reason).toContain('2026년 10월 29일 부터 사용가능');
+  });
+
   it('course 로 고르고, 없는 과목이면 오류', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dotbugi-targets-'));
     roots.push(root);
@@ -68,7 +83,11 @@ describe('resolveTargets', () => {
     elicit: vi.fn(async () => ({ action: 'accept' as const, content: { confirm: answer! } })),
   });
   const list = (n: number) =>
-    vi.fn(async () => ({ targets: Array.from({ length: n }, (_, i) => vod(i + 1)), failures: 0 }));
+    vi.fn(async () => ({
+      targets: Array.from({ length: n }, (_, i) => vod(i + 1)),
+      unavailable: [] as VodTarget[],
+      failures: 0,
+    }));
 
   it('cmids 는 목록을 읽지 않고 그대로', async () => {
     const l = list(3);
@@ -115,6 +134,28 @@ describe('resolveTargets', () => {
     const token = 'text' in first ? /confirmToken: "([0-9a-f]+)"/.exec(first.text)?.[1] : undefined;
     expect(token).toBeDefined();
     expect(await resolveTargets({ confirmToken: token }, asker(), list(2))).toEqual({ cmids: [1, 2], notes: [] });
+  });
+
+  it('받지 못하는 강의는 대상에서 빼고 종류별로 알린다', async () => {
+    const yes = asker(true);
+    const gone = (cmid: number, kind: 'expired' | 'notYet'): VodTarget => ({
+      ...vod(cmid),
+      unavailable: { kind, reason: '' },
+    });
+    const l = vi.fn(async () => ({
+      targets: [vod(1)],
+      unavailable: [gone(8, 'expired'), gone(9, 'notYet')],
+      failures: 0,
+    }));
+    const r = await resolveTargets({}, yes, l);
+    expect(r).toMatchObject({ cmids: [1] });
+    const message = yes.elicit.mock.calls[0][0].message;
+    expect(message).toContain('열람 기간이 지난 1개');
+    expect(message).toContain('아직 공개 전인 1개');
+    expect(message).toContain('· 강의 9');
+    // 받을 수 있는 강의가 없어도 왜 없는지 알린다
+    const none = vi.fn(async () => ({ targets: [], unavailable: [gone(9, 'notYet')], failures: 0 }));
+    expect(await resolveTargets({}, asker(true), none)).toMatchObject({ text: expect.stringContaining('공개 전') });
   });
 
   it('대상이 없으면 시작하지 않는다', async () => {
