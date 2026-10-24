@@ -91,5 +91,10 @@ export const wslMountCommand = (letter: string, root = wslAutomountRoot()) => {
   const dir = posix.join(root, letter.toLowerCase());
   return `sudo mkdir -p ${dir} && sudo mount -t drvfs ${letter}: ${dir}`;
 };
+// Claude Code 의 ! 입력처럼 비밀번호를 받을 터미널이 없어도 되는 방식 — Windows 쪽 wsl.exe 로 root 실행
+export const wslRootMountCommand = (letter: string, root = wslAutomountRoot()) => {
+  const dir = posix.join(root, letter.toLowerCase());
+  return `wsl.exe -u root -e sh -c "mkdir -p ${dir} && mount -t drvfs ${letter}: ${dir}"`;
+};
 export const wslFstabLine = (letter: string, root = wslAutomountRoot()) =>
   `${letter}: ${posix.join(root, letter.toLowerCase())} drvfs defaults 0 0`;

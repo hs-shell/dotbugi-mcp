@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { constants, createReadStream } from 'node:fs';
-import { copyFile, lstat, mkdir, readdir, rename, rm } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { lstat, mkdir, readdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
@@ -8,6 +8,11 @@ import { pipeline } from 'node:stream/promises';
 // 숨김 임시 폴더에 복사 → 파일마다 sha256 비교 → 같을 때만 제 이름으로 rename 한다 (중간에 끊겨도 반쯤 복사된 폴더가 제 이름으로 남지 않는다)
 
 export const STAGING_PREFIX = '.dotbugi-moving-';
+
+// 내용만 새 파일(wx: 덮어쓰지 않음)에 쓴다. fs.copyFile 은 원본 권한까지 복사(fchmod)하는데
+// WSL 에 붙인 Windows·Google Drive 드라이브(drvfs)는 이를 EPERM 으로 거부해 복사 자체가 실패한다
+const copyContent = (from: string, to: string) =>
+  pipeline(createReadStream(from), createWriteStream(to, { flags: 'wx', mode: 0o600 }));
 
 async function sha256(path: string): Promise<string> {
   const hash = createHash('sha256');
@@ -51,7 +56,7 @@ export async function copyTreeVerified(src: string, dst: string, stagingName: st
     await mkdir(staging, { mode: 0o700 });
     for (const rel of tree) {
       if (rel.endsWith('/')) await mkdir(join(staging, rel), { mode: 0o700 });
-      else await copyFile(join(src, rel), join(staging, rel), constants.COPYFILE_EXCL);
+      else await copyContent(join(src, rel), join(staging, rel));
     }
     if (!(await sameTree(src, staging))) throw new Error('복사한 내용이 원본과 달라 옮기지 않았습니다.');
     await rename(staging, dst);
