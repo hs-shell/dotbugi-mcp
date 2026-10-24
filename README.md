@@ -149,7 +149,7 @@ Claude Code 에서는 `/dotbugi:notes 자료구조 5주차 시험 대비로`, `/
 - 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 그 밖의 외부 접속은 STT 용 영상 서버(`*.edge.naverncp.com`, 쿠키 없음)와 음성 인식 런타임 설치 때의 github.com·huggingface.co·PyPI 뿐이며, 텔레메트리는 없습니다.
 - 도구 출력·로그에는 세션 값·연결 코드·영상 주소를 넣지 않습니다.
 - LMS 에 제출·작성·수정하지 않습니다. 과제 제출은 직접 하세요.
-- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, WSL 은 Windows 다운로드 폴더, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`, STT 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
+- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, WSL 은 Windows 다운로드 폴더, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`(과제는 그 안의 `과제-<과제 이름>/`), STT 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
 
 ## 문제 해결
 

@@ -44,6 +44,16 @@ export function parseCoursePage(doc: Document): CourseModule[] {
   });
 }
 
+// cmid 모듈이 든 섹션의 폴더 이름 (parseCoursePage 와 같은 규칙). 화면에 없으면 null
+export function moduleWeek(doc: Document, cmid: number): string | null {
+  const section = doc.querySelector(`li#module-${cmid}`)?.closest('li[id^="section-"]');
+  if (!section) return null;
+  return weekName(
+    Number(/^section-(\d+)$/.exec(section.id)?.[1] ?? 0),
+    section.querySelector('.sectionname')?.textContent ?? ''
+  );
+}
+
 // 파일·폴더 모듈 본문 파일만 받는다 (설명란 첨부 등 다른 영역의 pluginfile 은 제외)
 const MATERIAL_PATH = /^\/pluginfile\.php\/\d+\/mod_(resource|folder)\/content\//;
 export const isMaterialUrl = (url: URL) => isLmsFileUrl(url) && MATERIAL_PATH.test(url.pathname);
