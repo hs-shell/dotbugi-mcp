@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { LEGACY_PREFIX } from '../transcribe/pipeline.js';
 
 // 노트(나중엔 요약도)를 만들 때 쓴 자료의 지문. 다음 실행에서 비교해 바뀐 주차를 찾는다
 export interface Source {
@@ -9,8 +10,9 @@ export interface Source {
   sha256: string;
 }
 
-// STT 결과 파일 (예전 이름 녹취- 포함)
-export const isTranscript = (name: string) => /^(STT|녹취)-.+\.md$/.test(name);
+// STT 결과 파일 (이름을 바꾸기 전 예전 접두어 포함)
+export const isTranscript = (name: string) =>
+  name.endsWith('.md') && ['STT-', LEGACY_PREFIX].some((p) => name.startsWith(p) && name.length > p.length + 3);
 
 const sha256Of = (path: string) =>
   new Promise<string>((resolve, reject) => {

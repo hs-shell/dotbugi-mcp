@@ -26,7 +26,7 @@ import type { VodMeta } from './find-vod.js';
 import { extractPlaylistUrl, loadSegments, mediaGet } from './hls.js';
 
 // STT- 이전 결과 파일 이름 앞부분
-const LEGACY_PREFIX = '녹취-';
+export const LEGACY_PREFIX = '녹취-';
 
 export type Phase = 'prepare' | 'download' | 'extract' | 'transcribe';
 
