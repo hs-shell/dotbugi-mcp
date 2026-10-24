@@ -93,6 +93,23 @@ describe('resolveTargets', () => {
     expect('notes' in r && r.notes[0]).toContain(`${TRANSCRIBE_QUEUE_MAX + 3}개`);
   });
 
+  it('이미 대기 중인 강의는 빼고, 대기열에 남은 자리만큼만 확인 창에 올린다', async () => {
+    const yes = asker(true);
+    const room = () => ({ slots: 2, queued: new Set([1]) });
+    expect(await resolveTargets({}, yes, list(5), room)).toMatchObject({ cmids: [2, 3] });
+    const message = yes.elicit.mock.calls[0][0].message;
+    expect(message).toContain('남은 자리가 2개');
+    expect(message).not.toContain('· 강의 1');
+    const full = asker(true);
+    expect(await resolveTargets({}, full, list(5), () => ({ slots: 0, queued: new Set<number>() }))).toMatchObject({
+      text: expect.stringContaining('가득 찼습니다'),
+    });
+    expect(full.elicit).not.toHaveBeenCalled();
+    expect(await resolveTargets({}, asker(true), list(1), room)).toMatchObject({
+      text: expect.stringContaining('이미 모두 대기열'),
+    });
+  });
+
   it('확인 창이 없으면 토큰을 돌려주고, 같은 대상으로 토큰을 넣어야 시작한다', async () => {
     const first = await resolveTargets({}, asker(), list(2));
     const token = 'text' in first ? /confirmToken: "([0-9a-f]+)"/.exec(first.text)?.[1] : undefined;
