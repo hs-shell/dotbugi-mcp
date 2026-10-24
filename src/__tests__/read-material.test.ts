@@ -38,7 +38,7 @@ describe('readMaterial — 경로', () => {
   });
 
   it('인코딩한 .. 는 풀지 않는다 (없는 이름으로 끝남)', async () => {
-    await expect(read('%2e%2e/secret.txt')).rejects.toThrow('없습니다');
+    await expect(read(`${week}/%2e%2e/secret.txt`)).rejects.toThrow('없습니다');
   });
 
   it('링크 파일·링크 폴더는 따라가지 않는다', async () => {
@@ -47,6 +47,18 @@ describe('readMaterial — 경로', () => {
     await expect(read(`${week}/link.md`)).rejects.toThrow('링크');
     await expect(read('2026-2학기/out/secret.txt')).rejects.toThrow('링크');
     await expect(read('2026-2학기/out')).rejects.toThrow('링크');
+  });
+
+  it('저장 위치 바로 아래는 학기 폴더만 — 다른 폴더·파일은 읽지도 보여 주지도 않는다', async () => {
+    await mkdir(join(root, '개인'), { recursive: true });
+    await writeFile(join(root, '개인', 'diary.md'), 'PRIVATE');
+    await writeFile(join(root, 'notes.md'), 'PRIVATE');
+    await mkdir(join(root, '2026-3학기'));
+    for (const p of ['개인', '개인/diary.md', 'notes.md', join(root, 'notes.md'), '2026-3학기'])
+      await expect(read(p)).rejects.toThrow('학기 폴더');
+    const text = textOf(await read(''));
+    expect(text).toContain('- 2026-2학기/');
+    expect(text).not.toMatch(/개인|notes|3학기/);
   });
 
   it('숨김·내부 파일은 읽지 않는다', async () => {
@@ -95,12 +107,25 @@ describe('readMaterial — 읽기', () => {
     expect(png.content[1]).toMatchObject({ type: 'image', mimeType: 'image/png' });
   });
 
+  it('8MB 넘는 PDF 는 첨부하지 않고 경로와 함께 직접 열어 달라고 안내한다', async () => {
+    await writeFile(join(root, week, 'big.pdf'), Buffer.alloc(8 * 1024 * 1024 + 1));
+    const r = await read(`${week}/big.pdf`);
+    expect(r.content).toHaveLength(1);
+    expect(textOf(r)).toContain(join(root, week, 'big.pdf'));
+    expect(textOf(r)).toContain('너무 커서');
+  });
+
+  it('UTF-8 이 아닌 글(CP949 등)은 깨진 채 넘기지 않는다', async () => {
+    await writeFile(join(root, week, 'cp949.csv'), Buffer.from([0xc7, 0xd1, 0xbc, 0xba]));
+    await expect(read(`${week}/cp949.csv`)).rejects.toThrow('UTF-8 이 아닌');
+  });
+
   it('미지원 형식은 거부한다', async () => {
     await expect(read(`${week}/과제.hwp`)).rejects.toThrow('아직 읽을 수 없습니다');
   });
 
   it('크기 상한을 넘으면 읽지 않는다', async () => {
-    await writeFile(join(root, week, 'big.png'), Buffer.alloc(5 * 1024 * 1024 + 1));
+    await writeFile(join(root, week, 'big.png'), Buffer.alloc(3.75 * 1024 * 1024 + 1));
     await expect(read(`${week}/big.png`)).rejects.toThrow('너무 큽니다');
   });
 

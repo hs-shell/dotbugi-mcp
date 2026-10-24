@@ -4,20 +4,23 @@ import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+import {
+  READ_MATERIAL_IMAGE_MAX_BYTES as IMAGE_MAX_BYTES,
+  READ_MATERIAL_LIST_MAX_ENTRIES as LIST_MAX_ENTRIES,
+  READ_MATERIAL_MAX_BYTES as READ_MAX_BYTES,
+  READ_MATERIAL_PDF_MAX_BYTES as PDF_MAX_BYTES,
+  READ_MATERIAL_TEXT_MAX_CHARS as TEXT_MAX_CHARS,
+} from '../constants.js';
 import { storageRoot } from '../storage.js';
-
-// 읽을 파일 상한. PDF·이미지는 base64 로 응답에 그대로 실리므로 크게 두지 않는다
-const READ_MAX_BYTES = 20 * 1024 * 1024;
-// Claude 가 받는 이미지는 5MB 까지라 그보다 큰 이미지는 보내 봐야 버려진다
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const TEXT_MAX_CHARS = 100_000;
-const LIST_MAX_ENTRIES = 1000;
 
 const TEXT_EXT = new Set(['.md', '.txt', '.csv', '.json']);
 const IMAGE_MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
 const PDF_MIME = 'application/pdf';
 // manifest·받는 중인 .part·잠금 등 내부 파일. 받는 중 파일은 '.dotbugi-<uuid>.part' 지만 끝의 .part 도 막아 둔다
 const isInternal = (name: string) => name.startsWith('.') || name.endsWith('.part');
+// 받은 자료는 모두 학기 폴더 아래에 있다. 저장 위치를 ~/Documents 같은 개인 폴더로 바꿔도 그 안의 다른 파일은
+// 읽히지 않게(LMS 자료 속 지시로 개인 파일을 꺼내 가지 못하게) 학기 폴더 아래만 연다
+const SEMESTER_DIR = /^\d{4}-[12]학기$/;
 
 // 자료 내용·파일 이름은 LMS(교수·다른 사용자)가 올린 것이라 모델이 지시로 받아들이지 않게 맨 앞에 알린다
 const DATA_NOTICE =
@@ -57,6 +60,8 @@ export async function resolveMaterial(root: string, input: string): Promise<{ ab
   let st = rootSt;
   let current = base;
   const parts = rel ? rel.split(sep) : [];
+  if (parts.length && !SEMESTER_DIR.test(parts[0]))
+    throw new Error('학기 폴더(예: 2026-2학기) 아래의 자료만 읽습니다. path: "" 로 학기 폴더를 먼저 살펴보세요.');
   for (const [i, part] of parts.entries()) {
     if (isInternal(part)) throw new Error('숨김·내부 파일은 읽지 않습니다.');
     current = join(current, part);
@@ -76,6 +81,8 @@ export async function resolveMaterial(root: string, input: string): Promise<{ ab
 async function listDir(abs: string, rel: string): Promise<CallToolResult> {
   const entries = (await readdir(abs, { withFileTypes: true }))
     .filter((e) => !isInternal(e.name) && (e.isDirectory() || e.isFile()))
+    // 저장 위치 바로 아래는 학기 폴더만 보여 준다 (읽을 수 있는 것만)
+    .filter((e) => rel || (e.isDirectory() && SEMESTER_DIR.test(e.name)))
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const lines: string[] = [];
   for (const e of entries.slice(0, LIST_MAX_ENTRIES)) {
@@ -132,7 +139,16 @@ export async function readMaterial(args: ReadMaterialArgs, root = storageRoot())
   }
   if (kind === 'pdf') {
     // shortcut: PDF 글자 추출 라이브러리 없이 원본을 embedded resource 로 보낸다 — 이를 못 읽는 클라이언트가 많으면 추출 의존성을 검토
-    const data = await readCapped(abs, st, READ_MAX_BYTES);
+    if (st.size > PDF_MAX_BYTES)
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `${head}\nPDF 가 너무 커서(${sizeText(PDF_MAX_BYTES)} 초과) 첨부하지 않았습니다. 사용자에게 직접 열어 달라고 안내하세요: ${abs}`,
+          },
+        ],
+      };
+    const data = await readCapped(abs, st, PDF_MAX_BYTES);
     return {
       content: [
         {
@@ -147,7 +163,16 @@ export async function readMaterial(args: ReadMaterialArgs, root = storageRoot())
     };
   }
 
-  const all = new TextDecoder('utf-8').decode(await readCapped(abs, st, READ_MAX_BYTES));
+  const buf = await readCapped(abs, st, READ_MAX_BYTES);
+  let all: string;
+  try {
+    all = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    // 깨진 글자를 그대로 넘기면 모델이 엉뚱하게 요약한다 — 읽지 못했다고 알린다
+    throw new Error(
+      `${rel} 는 UTF-8 이 아닌 텍스트(예: CP949)라 읽지 못했습니다. 사용자에게 직접 열어 보라고 안내하세요.`
+    );
+  }
   const offset = args.offset ?? 0;
   const end = Math.min(all.length, offset + (args.maxChars ?? TEXT_MAX_CHARS));
   const range =
