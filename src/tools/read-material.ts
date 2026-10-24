@@ -32,7 +32,7 @@ export interface ReadMaterialArgs {
 }
 
 type Kind = 'text' | 'doc' | 'pdf' | 'image' | 'unsupported';
-const kindOf = (name: string): Kind => {
+export const kindOf = (name: string): Kind => {
   const ext = extname(name).toLowerCase();
   if (TEXT_EXT.has(ext)) return 'text';
   if (DOC_EXT.has(ext)) return 'doc';
@@ -113,6 +113,28 @@ async function readCapped(abs: string, checked: Stats, max: number): Promise<Buf
   }
 }
 
+// 글(md·txt·csv·json)·문서(hwp 등) 파일 전체를 글자로. 읽지 못하면 사용자에게 안내할 문구로 던진다
+export async function readText(abs: string, st: Stats, rel: string): Promise<string> {
+  const kind = kindOf(abs);
+  if (kind !== 'text' && kind !== 'doc') throw new Error(`${rel} 는 글·문서 파일이 아닙니다.`);
+  const buf = await readCapped(abs, st, READ_MAX_BYTES);
+  if (kind === 'doc')
+    try {
+      return extractDocText(abs, buf) || '(글자 없음 — 그림만 있는 문서일 수 있습니다)';
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(`${rel} 의 글자를 꺼내지 못했습니다: ${reason} 사용자에게 직접 열어 보라고 안내하세요.`);
+    }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    // 깨진 글자를 그대로 넘기면 모델이 엉뚱하게 요약한다 — 읽지 못했다고 알린다
+    throw new Error(
+      `${rel} 는 UTF-8 이 아닌 텍스트(예: CP949)라 읽지 못했습니다. 사용자에게 직접 열어 보라고 안내하세요.`
+    );
+  }
+}
+
 export async function readMaterial(args: ReadMaterialArgs, root = storageRoot()): Promise<CallToolResult> {
   const { abs, rel, st } = await resolveMaterial(root, args.path);
   if (st.isDirectory()) {
@@ -163,24 +185,7 @@ export async function readMaterial(args: ReadMaterialArgs, root = storageRoot())
     };
   }
 
-  const buf = await readCapped(abs, st, READ_MAX_BYTES);
-  let all: string;
-  if (kind === 'doc') {
-    try {
-      all = extractDocText(abs, buf) || '(글자 없음 — 그림만 있는 문서일 수 있습니다)';
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      throw new Error(`${rel} 의 글자를 꺼내지 못했습니다: ${reason} 사용자에게 직접 열어 보라고 안내하세요.`);
-    }
-  } else
-    try {
-      all = new TextDecoder('utf-8', { fatal: true }).decode(buf);
-    } catch {
-      // 깨진 글자를 그대로 넘기면 모델이 엉뚱하게 요약한다 — 읽지 못했다고 알린다
-      throw new Error(
-        `${rel} 는 UTF-8 이 아닌 텍스트(예: CP949)라 읽지 못했습니다. 사용자에게 직접 열어 보라고 안내하세요.`
-      );
-    }
+  const all = await readText(abs, st, rel);
   const offset = args.offset ?? 0;
   const end = Math.min(all.length, offset + (args.maxChars ?? TEXT_MAX_CHARS));
   const range =
