@@ -5,6 +5,7 @@ import { LMS_DATA_NOTICE } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { progressOf } from './progress.js';
+import { code } from '../tasks/text.js';
 
 const STATUS_LABELS = { added: '추가', updated: '갱신', unchanged: '변경 없음' } as const;
 
@@ -14,11 +15,11 @@ function toText(r: SyncMaterialsOutput): string {
   const count = (s: keyof typeof STATUS_LABELS) => r.files.filter((f) => f.status === s).length;
   return [
     LMS_DATA_NOTICE,
-    `저장 폴더: ${r.root} — 추가 ${count('added')} · 갱신 ${count('updated')} · 변경 없음 ${count('unchanged')}`,
-    ...r.warnings,
-    ...r.files.filter((f) => f.status !== 'unchanged').map((f) => `[${STATUS_LABELS[f.status]}] ${f.path}`),
+    `**저장 폴더** ${code(r.root)} — 추가 ${code(String(count('added')))} · 갱신 ${code(String(count('updated')))} · 변경 없음 ${code(String(count('unchanged')))}`,
+    ...r.warnings.map((w) => `※ ${w}`),
+    ...r.files.filter((f) => f.status !== 'unchanged').map((f) => `[${STATUS_LABELS[f.status]}] ${code(f.path)}`),
     ...r.removed.map(
-      (f) => `[LMS 에서 삭제됨 — 로컬 파일 유지${f.locallyModified ? ', 받은 뒤 수정됨' : ''}] ${f.path}`
+      (f) => `[LMS 에서 삭제됨 — 로컬 파일 유지${f.locallyModified ? ', 받은 뒤 수정됨' : ''}] ${code(f.path)}`
     ),
     ...(r.more ? ['남은 자료가 있어 다시 호출하면 이어서 받습니다.'] : []),
     ...(r.removed.length > 0

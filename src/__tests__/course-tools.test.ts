@@ -86,7 +86,7 @@ describe('list_courses', () => {
       '',
       '| 추적 | courseId | 과목 | 종류 |',
       '|---|---|---|---|',
-      '| ● 켜짐 (기본) | 100 | 자료구조 | 정규 |',
+      '| ● 켜짐 (기본) | `100` | 자료구조 | 정규 |',
     ]);
     expect(JSON.stringify(result)).not.toContain(SESSION);
   });
