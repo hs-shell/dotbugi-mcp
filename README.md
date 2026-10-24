@@ -64,6 +64,7 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 | "운영체제 과목은 추적 꺼줘"                             | `list_courses` / `set_course_tracking`                     |
 | "자료구조 과제 내용이랑 첨부파일 받아줘"                | `get_assignment`                                           |
 | "운영체제 강의자료 받아줘"                              | `sync_materials`                                           |
+| "3주차 강의자료 읽고 요약해줘"                          | `read_material`                                            |
 | "LMS 에서 지워진 자료 정리해줘"                         | `delete_materials` (승인 화면)                             |
 | "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?"   | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
 | "자료구조 5주차 정리해줘"                               | `summarize_week` 프롬프트                                  |
@@ -92,6 +93,7 @@ Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구�
 |          | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                           | Claude Code 상태 표시줄 켜기·끄기 (승인 후)                         |
 | 자료     | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                                  |
 |          | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir)                                      | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동) |
+|          | [`read_material`](docs/tools.md#read_material)                                                                                                                                 | 받은 자료·첨부·녹취 읽기, 폴더 살펴보기                             |
 |          | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                        |
 |          | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                                   |
 | 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | VOD 하나를 로컬 음성 인식으로 받아쓰기 / 진행 상황                  |

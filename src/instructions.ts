@@ -5,6 +5,7 @@ export const SERVER_INSTRUCTIONS = `한성대학교 LMS(learn.hansung.ac.kr, 코
 - 마감·남은 할 일(강의 영상 VOD 출석, 과제, 퀴즈) → list_tasks, 남은 VOD·재생 진행 → vod_status, 할 일을 캘린더 파일(.ics)로 → export_ics
 - 강의 영상 연속 재생·중지 → play_vods / stop_vods (출석은 LMS 공식 플레이어 재생으로만)
 - 과제 내용·첨부 → get_assignment, 강의자료 받기 → sync_materials, LMS 에서 사라진 자료 정리 → delete_materials
+- 받은 자료·첨부·녹취·요약 읽기·폴더 살펴보기 → read_material (예: "3주차 강의자료 읽고 요약해줘", 파일 접근이 없는 Claude Desktop 에서도)
 - 저장 위치(기본 ~/Downloads/dotbugi-mcp, 학기별 폴더) 확인·변경 → get_storage_dir / set_storage_dir (예: "자료는 문서/돋부기에 저장해줘")
 - 주차 요약 → summarize_week 프롬프트, 강의 받아쓰기 → transcribe_vod / transcribe_status / stop_transcribe (먼저 asr_status·asr_install)
 - 추적할 과목 → list_courses / set_course_tracking, 로그인·로그아웃 → login / logout
