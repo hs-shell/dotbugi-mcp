@@ -10,3 +10,7 @@ coverage
 
 # 임시 시제품 스크립트 (커밋 대상 아님)
 scripts
+
+# release-please 가 릴리스마다 다시 쓰는 파일
+CHANGELOG.md
+.release-please-manifest.json
