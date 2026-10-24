@@ -116,6 +116,10 @@ const supported =
   (process.platform === 'linux' && process.arch === 'x64') ||
   (process.platform === 'darwin' && process.arch === 'arm64');
 
+it('지원 플랫폼의 qwen_asr 바이너리는 모두 고정돼 있다', () => {
+  for (const pin of Object.values(QWEN_ASR_BINARY)) expect(pin.sha256).toMatch(/^[0-9a-f]{64}$/);
+});
+
 describe.skipIf(!supported)('installAsr', () => {
   it('qwen_asr 고정값이 비어 있으면 아무것도 받지 않고 거부', async () => {
     const platform = process.platform === 'darwin' ? 'macos-arm64' : 'linux-x64';

@@ -32,10 +32,10 @@ stdout 은 MCP 프로토콜 전용입니다. 로그는 반드시 stderr 로 씁�
 
 ## qwen_asr 바이너리 고정 (관리자)
 
-`linux-x64` 는 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release `asr-v1` 로 고정돼 있습니다. 새 빌드를 올릴 때는:
+`linux-x64`·`macos-arm64` 는 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release `asr-v2` 로 고정돼 있습니다. 새 빌드를 올릴 때는:
 
-1. dotbugi-asr-binaries 의 **Build qwen_asr** 워크플로를 새 태그(`asr-v2` …)로 실행
-2. Release 의 `SHA256SUMS` 값과 파일 크기를 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` 에 넣고 PR (값이 `UNPINNED` 인 플랫폼은 CPU 설치가 거부됩니다 — 현재 `macos-arm64`)
+1. dotbugi-asr-binaries 의 **Build qwen_asr** 워크플로를 새 태그(`asr-v3` …)로 실행
+2. Release 의 `SHA256SUMS` 값과 파일 크기를 `src/asr/pins.ts` 의 `QWEN_ASR_BINARY` 에 넣고 PR (값이 `UNPINNED` 인 플랫폼은 CPU 설치가 거부됩니다)
 
 ## 릴리즈
 
