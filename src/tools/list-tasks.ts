@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
+import { LMS_DATA_NOTICE } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { getTaskItems } from '../tasks/cache.js';
@@ -57,7 +58,10 @@ export function registerListTasks(server: McpServer): void {
     async ({ refresh, ...filters }) => {
       try {
         const result = await loadTasks(refresh, filters);
-        return { content: [{ type: 'text', text: toText(result.tasks, result.warnings) }], structuredContent: result };
+        return {
+          content: [{ type: 'text', text: `${LMS_DATA_NOTICE}\n${toText(result.tasks, result.warnings)}` }],
+          structuredContent: result,
+        };
       } catch (err) {
         // 세션 없음·만료 메시지는 login 도구 안내를 담고 있다. 그 밖의 오류도 마스킹 후 그대로 알린다
         const message = err instanceof Error ? err.message : String(err);
