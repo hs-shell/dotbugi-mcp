@@ -41,6 +41,8 @@ export const WSL_DEFAULT_AUTOMOUNT_ROOT = '/mnt/';
 export const WSL_LOOKUP_TIMEOUT_MS = 5000;
 // 키체인용 powershell 이 멈추면 모든 도구가 멈춘다. 첫 실행(Add-Type 컴파일 포함)은 몇 초 걸릴 수 있어 넉넉히
 export const WSL_KEYCHAIN_TIMEOUT_MS = 15_000;
+// 읽은 세션을 기억하는 시간. 다른 프로세스(CLI)의 logout·재로그인이 실행 중인 서버에도 이 안에 반영된다
+export const SESSION_CACHE_TTL_MS = 60_000;
 export const WSL_INTEROP_FILE = '/proc/sys/fs/binfmt_misc/WSLInterop';
 
 // LMS 화면의 날짜는 한국 시간이다 (실행 환경 시간대와 무관하게 해석)

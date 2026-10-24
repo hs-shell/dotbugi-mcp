@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SESSION_CACHE_TTL_MS } from '../constants.js';
 import { SessionExpiredError } from '../lms.js';
 import { clearSessionCache, deleteSession, getSession, readSession, saveSession } from '../session.js';
 
@@ -41,6 +42,20 @@ describe('getSession 캐시', () => {
     await expect(getSession()).resolves.toEqual(stored);
     await expect(getSession()).resolves.toEqual(stored);
     expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('TTL 이 지나면 키체인을 다시 읽는다 (다른 프로세스의 logout 반영)', async () => {
+    vi.useFakeTimers();
+    await getSession();
+    vi.advanceTimersByTime(SESSION_CACHE_TTL_MS - 1);
+    await getSession();
+    expect(get).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    get.mockResolvedValueOnce(null);
+    await expect(getSession()).rejects.toThrow('login 도구');
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
   it.each([

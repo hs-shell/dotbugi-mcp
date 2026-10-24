@@ -90,6 +90,9 @@ function runPowerShell(script: string, input: string): Promise<{ code: number | 
     const timer = setTimeout(() => {
       reject(new Error(`Windows 자격 증명 관리자가 ${WSL_KEYCHAIN_TIMEOUT_MS / 1000}초 안에 응답하지 않았습니다.`));
       child.kill();
+      // 죽지 않고 남아도 짧은 CLI 가 이 자식을 기다리며 멈추지 않게 놓아 준다
+      child.stdout.destroy();
+      child.unref();
     }, WSL_KEYCHAIN_TIMEOUT_MS);
     child.once('error', () => {
       clearTimeout(timer);

@@ -9,6 +9,7 @@ const child = Object.assign(new EventEmitter(), {
   stdin: new PassThrough(),
   stdout: new PassThrough(),
   kill: vi.fn(() => child.emit('close', null)),
+  unref: vi.fn(),
 });
 vi.mock('node:child_process', () => ({ spawn: vi.fn(() => child) }));
 vi.mock('../wsl-paths.js', () => ({ wslPowerShell: () => '/mnt/c/powershell.exe' }));
@@ -24,6 +25,8 @@ describe('WSL 키체인', () => {
     await vi.advanceTimersByTimeAsync(WSL_KEYCHAIN_TIMEOUT_MS);
     const err = (await result) as Error;
     expect(child.kill).toHaveBeenCalledOnce();
+    expect(child.unref).toHaveBeenCalledOnce();
+    expect(child.stdout.destroyed).toBe(true);
     expect(err.message).toContain('응답하지 않았습니다');
     expect(err.message).not.toContain('secret');
   });
