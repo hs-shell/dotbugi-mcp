@@ -79,7 +79,7 @@ export async function chooseCourses(asker: Asker, courses: CourseEntry[]): Promi
     .elicit(
       {
         mode: 'form',
-        message: '추적 과목 선택 — 체크한 과목만 할 일·강의자료 대상',
+        message: '추적 과목 선택 — 체크한 과목만 할 일·강의자료 대상\n\n스페이스: 켜기·끄기 · 엔터: 저장',
         requestedSchema: {
           type: 'object',
           properties: Object.fromEntries(
@@ -98,7 +98,11 @@ export async function chooseCourses(asker: Asker, courses: CourseEntry[]): Promi
       throw err;
     });
   if (!result) return null;
-  if (result.action !== 'accept') return { ok: false, text: '취소 — 아무것도 바꾸지 않았습니다.' };
+  if (result.action !== 'accept')
+    return {
+      ok: false,
+      text: `취소 — 아무것도 바꾸지 않았습니다 (${result.action === 'decline' ? '거절을 눌렀습니다' : '선택 창이 닫혔습니다'}).`,
+    };
   // 클라이언트 응답도 믿지 않는다: 아는 courseId 의 boolean 값만 본다
   const changed = shown.filter((c) => {
     const v = result.content?.[c.courseId];

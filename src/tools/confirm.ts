@@ -56,6 +56,7 @@ export interface ConfirmRequest {
 }
 export type ConfirmOutcome = { ok: true } | { ok: false; text: string };
 
+// preset: 체크박스 기본값. 되돌릴 수 없는 삭제만 직접 체크해야 하고, 나머지는 창에서 엔터(accept)만으로 승인한다
 const WORDS = {
   delete: {
     label: '위 항목을 삭제합니다',
@@ -63,14 +64,52 @@ const WORDS = {
     warn: '\n\n되돌릴 수 없습니다.',
     none: '아무것도 지우지 않았습니다',
     agree: '삭제',
+    preset: false,
   },
-  change: { label: '위와 같이 변경합니다', warn: '', none: '아무것도 바꾸지 않았습니다', agree: '변경' },
-  move: { label: '위 항목을 옮깁니다', warn: '', none: '아무것도 옮기지 않았습니다', agree: '이동' },
-  relocate: { label: '저장 위치를 바꿉니다', warn: '', none: '저장 위치를 바꾸지 않았습니다', agree: '저장 위치 변경' },
-  transcribe: { label: '위 강의를 STT 변환합니다', warn: '', none: '아무것도 시작하지 않았습니다', agree: 'STT 변환' },
-  notes: { label: '위 주차의 노트를 만듭니다', warn: '', none: '노트를 만들지 않았습니다', agree: '노트 만들기' },
-  summary: { label: '위 범위의 요약을 만듭니다', warn: '', none: '요약을 만들지 않았습니다', agree: '요약 만들기' },
+  change: { label: '위와 같이 변경합니다', warn: '', none: '아무것도 바꾸지 않았습니다', agree: '변경', preset: true },
+  move: { label: '위 항목을 옮깁니다', warn: '', none: '아무것도 옮기지 않았습니다', agree: '이동', preset: true },
+  relocate: {
+    label: '저장 위치를 바꿉니다',
+    warn: '',
+    none: '저장 위치를 바꾸지 않았습니다',
+    agree: '저장 위치 변경',
+    preset: true,
+  },
+  transcribe: {
+    label: '위 강의를 STT 변환합니다',
+    warn: '',
+    none: '아무것도 시작하지 않았습니다',
+    agree: 'STT 변환',
+    preset: true,
+  },
+  notes: {
+    label: '위 주차의 노트를 만듭니다',
+    warn: '',
+    none: '노트를 만들지 않았습니다',
+    agree: '노트 만들기',
+    preset: true,
+  },
+  summary: {
+    label: '위 범위의 요약을 만듭니다',
+    warn: '',
+    none: '요약을 만들지 않았습니다',
+    agree: '요약 만들기',
+    preset: true,
+  },
 };
+
+// Claude Code 확인 창 조작: 스페이스 = 체크 켜기·끄기, 엔터 = 제출 (실사용 확인)
+const GUIDE_PRESET = '엔터: 승인 · 스페이스로 체크를 해제하고 엔터: 취소';
+const GUIDE_CHECK = '스페이스로 체크한 뒤 엔터: 승인 · 체크하지 않고 엔터: 취소';
+
+const refusalReason = (action: ElicitResult['action'], preset: boolean) =>
+  action === 'decline'
+    ? '거절을 눌렀습니다.'
+    : action === 'cancel'
+      ? '확인 창이 닫혔습니다.'
+      : preset
+        ? '체크를 해제하고 제출했습니다.'
+        : '체크하지 않고 제출했습니다. 승인하려면 스페이스로 체크한 뒤 엔터를 누르세요.';
 
 export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Promise<ConfirmOutcome> {
   const w = WORDS[req.kind ?? 'delete'];
@@ -90,10 +129,10 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
       .elicit(
         {
           mode: 'form',
-          message: `${req.message}${w.warn}\n\n${list}`,
+          message: `${req.message}${w.warn}\n\n${list}\n\n${w.preset ? GUIDE_PRESET : GUIDE_CHECK}`,
           requestedSchema: {
             type: 'object',
-            properties: { confirm: { type: 'boolean', title: w.label, default: false } },
+            properties: { confirm: { type: 'boolean', title: w.label, default: w.preset } },
             required: ['confirm'],
           },
         },
@@ -105,9 +144,10 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
         if (err instanceof SdkError && err.code === SdkErrorCode.MethodNotSupportedByProtocolVersion) return null;
         throw err;
       });
-    // 명시적 accept + confirm=true 만 승인. decline·cancel·체크 안 함은 모두 취소
+    // 사용자가 직접 누른 accept + confirm=true 만 승인. decline·cancel·체크 안 함은 모두 취소 — 이유는 구분해 알린다
     if (result?.action === 'accept' && result.content?.confirm === true) return { ok: true };
-    if (result) return { ok: false, text: `사용자가 승인하지 않아 ${w.none}.` };
+    if (result)
+      return { ok: false, text: `사용자가 승인하지 않아 ${w.none} — ${refusalReason(result.action, w.preset)}` };
   }
   // 확인 창을 못 띄우는 클라이언트 — 목록과 일회용 토큰을 돌려주고 두 번째 호출에서만 지운다
   const now = Date.now();

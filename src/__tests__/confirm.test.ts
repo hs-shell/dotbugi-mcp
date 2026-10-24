@@ -41,6 +41,35 @@ describe('confirmDestructive — elicitation', () => {
   });
 });
 
+describe('confirmDestructive — 조작 안내·기본값·취소 이유', () => {
+  type Params = { message: string; requestedSchema: { properties: { confirm: { default: boolean } } } };
+  const paramsOf = (elicit: ReturnType<typeof withElicit>['elicit']) =>
+    (elicit.mock.calls[0] as unknown as [Params])[0];
+
+  it('삭제는 체크가 꺼진 채로 띄우고 스페이스로 체크하라고 안내한다', async () => {
+    const { asker, elicit } = withElicit({ action: 'cancel' });
+    await confirmDestructive(asker, req());
+    expect(paramsOf(elicit).requestedSchema.properties.confirm.default).toBe(false);
+    expect(paramsOf(elicit).message).toContain('스페이스로 체크한 뒤 엔터: 승인');
+  });
+
+  it('삭제가 아닌 확인은 체크가 켜진 채로 띄워 엔터만으로 승인된다', async () => {
+    const { asker, elicit } = withElicit({ action: 'accept', content: { confirm: true } });
+    expect(await confirmDestructive(asker, { ...req(), kind: 'relocate' })).toEqual({ ok: true });
+    expect(paramsOf(elicit).requestedSchema.properties.confirm.default).toBe(true);
+    expect(paramsOf(elicit).message).toContain('엔터: 승인');
+  });
+
+  it.each<[ElicitResult, string]>([
+    [{ action: 'decline' }, '거절을 눌렀습니다'],
+    [{ action: 'cancel' }, '확인 창이 닫혔습니다'],
+    [{ action: 'accept', content: { confirm: false } }, '스페이스로 체크한 뒤 엔터'],
+  ])('%o 는 취소 이유를 구분해 알린다', async (result, reason) => {
+    const out = await confirmDestructive(withElicit(result).asker, req());
+    expect(out).toEqual({ ok: false, text: expect.stringContaining(reason) });
+  });
+});
+
 describe('confirmDestructive — 확인 창이 없는 클라이언트', () => {
   it('첫 호출은 목록과 토큰만 돌려주고, 같은 대상에 한 번만 쓸 수 있다', async () => {
     const first = await confirmDestructive(noElicit, req());
