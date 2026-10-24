@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,10 +32,12 @@ export function statusLineCommand(node = process.execPath, entry = ENTRY, platfo
   return `${q(node)} ${q(entry)} statusline`;
 }
 
-// 우리가 넣은 것(또는 문서대로 손으로 넣은 dotbugi-mcp statusline)만 우리 것으로 본다
-export const isOurStatusLine = (v: unknown): boolean => {
+// 우리가 넣은 것(또는 문서대로 손으로 넣은 dotbugi-mcp statusline)만 우리 것으로 본다.
+// 패키지 이름이 없는 폴더에서 실행해도 enable 이 지금 만드는 명령과 같으면 우리 것
+export const isOurStatusLine = (v: unknown, current?: string): boolean => {
   const cmd = (v as { command?: unknown } | null)?.command;
-  return typeof cmd === 'string' && /dotbugi-mcp|@dotbugi[\\/]mcp/.test(cmd) && /\sstatusline$/.test(cmd.trim());
+  if (typeof cmd !== 'string') return false;
+  return cmd === current || (/dotbugi-mcp|@dotbugi[\\/]mcp/.test(cmd) && /\sstatusline$/.test(cmd.trim()));
 };
 
 async function readRaw(file: string): Promise<string | null> {
@@ -76,7 +78,7 @@ export async function setupStatusline(
     next.statusLine = desired;
   } else {
     if (old === undefined) return `${file} 에 설정된 상태 표시줄이 없습니다.`;
-    if (!isOurStatusLine(old))
+    if (!isOurStatusLine(old, command))
       return `${file} 의 상태 표시줄은 dotbugi 가 넣은 것이 아니라 지우지 않았습니다: ${JSON.stringify(old)}`;
     delete next.statusLine;
   }
@@ -107,7 +109,13 @@ export async function setupStatusline(
   const tmp = `${target}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tmp, out, { mode: mode ?? 0o600 });
   if (mode !== undefined) await chmod(tmp, mode);
-  await rename(tmp, target);
+  try {
+    await rename(tmp, target);
+  } catch (err) {
+    // 설정 전체 복사본을 남기지 않는다
+    await rm(tmp, { force: true });
+    throw err;
+  }
 
   if (action === 'disable') return `상태 표시줄을 해제했습니다 (${file}).`;
   return [

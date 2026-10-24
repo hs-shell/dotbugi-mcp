@@ -1,8 +1,14 @@
 import { existsSync } from 'node:fs';
-import { chmod, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// rename 실패를 흉내 내려고 감싼다 (평소에는 원래 함수 그대로)
+vi.mock('node:fs/promises', async (orig) => {
+  const fs = await orig<typeof import('node:fs/promises')>();
+  return { ...fs, rename: vi.fn(fs.rename) };
+});
 import type { Asker } from '../tools/confirm.js';
 import { isOurStatusLine, setupStatusline, statusLineCommand, userSettingsFile } from '../tools/setup-statusline.js';
 
@@ -127,5 +133,21 @@ describe('setup_statusline', () => {
     expect(await run(asker, 'disable')).toContain('해제했습니다');
     expect(await read()).toEqual({ model: 'opus' });
     expect(await run(asker, 'disable')).toContain('없습니다');
+  });
+
+  it('패키지 이름이 없는 경로라도 enable 이 쓴 명령이면 disable 로 지운다', async () => {
+    const plain = statusLineCommand('/usr/bin/node', '/home/me/src/mcp/dist/index.js', 'linux');
+    const asker = approve();
+    await setupStatusline(asker, 'enable', undefined, file(), plain);
+    expect(await setupStatusline(asker, 'disable', undefined, file(), plain)).toContain('해제했습니다');
+    expect(await read()).toEqual({});
+  });
+
+  it('바꿔치기에 실패하면 임시 파일을 지우고 원본은 그대로 둔다', async () => {
+    await writeFile(file(), '{"model":"opus"}');
+    vi.mocked(rename).mockRejectedValueOnce(new Error('EPERM'));
+    await expect(run(approve())).rejects.toThrow('EPERM');
+    expect(await readdir(dir)).toEqual(['settings.json']);
+    expect(await readFile(file(), 'utf8')).toBe('{"model":"opus"}');
   });
 });
