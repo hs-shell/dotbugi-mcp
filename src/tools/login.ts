@@ -13,6 +13,16 @@ import { readSession, type LoginMethod } from '../session.js';
 let pending: Promise<string> | null = null;
 // 직전 백그라운드 시도의 실패 이유. 다음 호출 응답에 한 번 보여 준다 (stderr 로그는 모델·사용자에게 안 보이므로)
 let lastFailure: string | null = null;
+// 로그인 시도 세대. logout 이 대기 중인 시도를 취소하면 올려서, 늦게 도착한 세션을 저장하지 않게 한다
+let generation = 0;
+
+// 대기 중인 로그인을 취소한다. 취소할 것이 있었는지 돌려준다 (창·콜백 서버는 각자 시간 제한으로 닫힌다)
+export function cancelPendingLogin(): boolean {
+  if (!pending) return false;
+  generation++;
+  pending = null;
+  return true;
+}
 
 // 저장된 세션이 지금도 로그인 상태인지. 형식이 깨진 값은 새로 로그인하면 덮어쓰므로 없는 것으로 본다
 async function hasValidSession(): Promise<boolean> {
@@ -21,6 +31,7 @@ async function hasValidSession(): Promise<boolean> {
 }
 
 async function begin(method: LoginMethod): Promise<string> {
+  const gen = generation;
   try {
     let session: Promise<string>;
     let instructions: string;
@@ -35,19 +46,22 @@ async function begin(method: LoginMethod): Promise<string> {
     }
     // 승인 대기·확인·저장은 도구 응답 뒤에도 이어진다. 실패는 여기서 삼켜 처리되지 않은 rejection 으로 서버가 죽지 않게 한다
     void session
-      .then((s) => verifyAndSave(s, method))
-      .then(
-        () => log('로그인 완료. 세션을 OS 키체인에 저장했습니다.'),
-        (err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          lastFailure = redact(message);
-          log(message);
-        }
-      )
-      .finally(() => (pending = null));
+      .then(async (s) => {
+        if (gen !== generation) return log('취소된 로그인이라 받은 세션을 저장하지 않았습니다.');
+        await verifyAndSave(s, method);
+        log('로그인 완료. 세션을 OS 키체인에 저장했습니다.');
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        // 취소된 시도의 실패는 다음 응답에 보여 주지 않는다
+        if (gen === generation) lastFailure = redact(message);
+        log(message);
+      })
+      // 취소 뒤 새로 시작한 시도의 pending 을 지우지 않는다
+      .finally(() => gen === generation && (pending = null));
     return instructions;
   } catch (err) {
-    pending = null;
+    if (gen === generation) pending = null;
     throw err;
   }
 }
@@ -90,6 +104,7 @@ export function registerLogin(server: McpServer): void {
         const failure = lastFailure ? `직전 로그인 실패: ${lastFailure}\n` : '';
         lastFailure = null;
         await assertKeychain();
+        if (await hasValidSession()) return text(`${failure}이미 로그인되어 있습니다. 저장된 LMS 세션이 유효합니다.`);
         if (method === 'browser') {
           // 창을 띄울 수 없는 환경은 백그라운드로 넘기기 전에 바로 알린다
           try {
@@ -100,7 +115,6 @@ export function registerLogin(server: McpServer): void {
             throw new Error(`${message}\nlogin 을 method=extension(기본)으로 다시 호출하세요.`);
           }
         }
-        if (await hasValidSession()) return text(`${failure}이미 로그인되어 있습니다. 저장된 LMS 세션이 유효합니다.`);
         // 위의 await 사이에 다른 호출이 먼저 시작했을 수 있다
         const started = !pending;
         pending ??= begin(method);

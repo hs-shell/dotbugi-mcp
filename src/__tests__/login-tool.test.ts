@@ -172,9 +172,12 @@ describe('login 도구 method=browser', () => {
     wsl.value = true;
     const result = await call('login', { method: 'browser' });
     expect(result.isError).toBe(true);
-    expect(result.text).toContain('WSL 에서는 --browser 를 지원하지 않습니다');
+    expect(result.text).toContain('WSL 에서는 임시 브라우저 창 로그인을 지원하지 않습니다');
     expect(result.text).toContain('method=extension');
     expect(loginWithBrowser).not.toHaveBeenCalled();
+    // 이미 로그인돼 있으면 WSL 이어도 거절하지 않는다
+    keychain.value = JSON.stringify({ session: SESSION, savedAt: '', method: 'extension' });
+    expect(await login({ method: 'browser' })).toContain('이미 로그인');
   });
 });
 
@@ -190,5 +193,20 @@ describe('logout 도구', () => {
     expect(keychain.value).toBeNull();
     // 다시 불러도 오류 없이 없다고만 알린다
     expect((await call('logout')).text).toContain('저장된 세션이 없습니다');
+  });
+
+  it('대기 중인 로그인을 취소해, 나중에 세션이 도착해도 저장하지 않는다', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let finish!: (s: string) => void;
+    loginWithBrowser.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await login({ method: 'browser' });
+    expect((await call('logout')).text).toContain('진행 중이던 로그인을 취소했습니다');
+    finish(SESSION);
+    await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('저장하지 않았습니다')));
+    expect(keychain.value).toBeNull();
+    // 취소 뒤에는 새 로그인을 시작할 수 있다
+    loginWithBrowser.mockReturnValue(new Promise(() => {}));
+    expect(await login({ method: 'browser' })).toContain('로그인을 시작했습니다');
+    stderr.mockRestore();
   });
 });

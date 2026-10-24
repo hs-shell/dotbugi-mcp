@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { logout } from '../commands/logout.js';
+import { cancelPendingLogin } from './login.js';
 import { redact } from '../redact.js';
 
 export function registerLogout(server: McpServer): void {
@@ -17,7 +18,8 @@ export function registerLogout(server: McpServer): void {
     },
     async () => {
       try {
-        const lines: string[] = [];
+        // 대기 중인 로그인이 나중에 세션을 저장해 로그아웃을 되돌리지 않게 먼저 취소한다
+        const lines = cancelPendingLogin() ? ['진행 중이던 로그인을 취소했습니다.'] : [];
         await logout((message) => lines.push(message));
         return { content: [{ type: 'text' as const, text: redact(lines.join('\n')) }] };
       } catch (err) {
