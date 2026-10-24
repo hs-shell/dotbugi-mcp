@@ -122,8 +122,9 @@ export async function downloadTemp(
   try {
     sha256 = await writeBody(file, url, session, limits);
   } catch (err) {
-    await file.close();
-    await unlink(path);
+    // 정리 실패가 원래 오류(시간 초과 등)를 가리지 않게 삼킨다
+    await file.close().catch(() => {});
+    await unlink(path).catch(() => {});
     throw err;
   }
   await file.close();

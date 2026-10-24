@@ -147,8 +147,8 @@ async function syncFile(
   // 임시 이름으로 받고 다 받은 뒤에만 제자리로 옮긴다
   const part = await limit(() => downloadTemp(file.url, weekDir, session, LIMITS));
   budget.files++;
-  budget.bytes += (await stat(part.path)).size;
   try {
+    budget.bytes += (await stat(part.path)).size;
     // 받는 동안 사용자가 고쳤을 수 있으므로 받은 뒤, 바꾸기 직전에 잰다
     const local = prevPath ? await localHash(prevPath) : null;
     if (prev && prevPath && local !== null) {
