@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
 import { askerOf, confirmDestructive, confirmTokenInput, type Asker } from './confirm.js';
 
@@ -110,7 +111,7 @@ export async function setupStatusline(
   await writeFile(tmp, out, { mode: mode ?? 0o600 });
   if (mode !== undefined) await chmod(tmp, mode);
   try {
-    await rename(tmp, target);
+    await replaceFile(tmp, target);
   } catch (err) {
     // 설정 전체 복사본을 남기지 않는다
     await rm(tmp, { force: true });

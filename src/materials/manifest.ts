@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { mkdir, open, rename, writeFile } from 'node:fs/promises';
+import { mkdir, open, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import * as z from 'zod/v4';
 import { isMaterialUrl } from './course-page.js';
 import { LMS_NUMERIC_ID, MATERIALS_MANIFEST_MAX_BYTES, MATERIALS_MANIFEST_NAME } from '../constants.js';
+import { replaceFile } from '../player/state.js';
 
 // 디스크의 기록은 사용자·다른 프로그램이 고칠 수 있으므로 읽을 때마다 검증한다. path 는 형식만 보고, 쓸 때·지울 때 resolveInside 로 다시 확인한다
 // (files 를 객체 대신 배열로 둬 "__proto__" 같은 키가 끼어들 여지를 없앤다)
@@ -82,11 +83,11 @@ export async function readManifest(courseDir: string): Promise<Manifest | null> 
   }
 }
 
-// 쓰다 만 파일을 남기지 않게 새 임시 파일(wx: 링크 등 기존 경로를 따라가지 않음)에 쓰고 rename 한다. 0600
+// 쓰다 만 파일을 남기지 않게 새 임시 파일(wx: 링크 등 기존 경로를 따라가지 않음)에 쓰고 바꿔 넣는다(replaceFile: Windows 에서 읽는 중이면 잠시 뒤 다시). 0600
 export async function writeManifest(courseDir: string, manifest: Manifest): Promise<void> {
   await mkdir(courseDir, { recursive: true, mode: 0o700 });
   const data = manifestSchema.parse({ version: 1, courseId: manifest.courseId, files: [...manifest.files.values()] });
   const tmp = `${manifestPath(courseDir)}.${randomUUID()}.tmp`;
   await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-  await rename(tmp, manifestPath(courseDir));
+  await replaceFile(tmp, manifestPath(courseDir));
 }

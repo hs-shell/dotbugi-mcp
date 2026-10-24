@@ -1,4 +1,4 @@
-import { lstat, mkdir, rename, stat, unlink } from 'node:fs/promises';
+import { lstat, mkdir, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { getIndexPageLink, type CourseBase, type FetchHtml } from '@dotbugi/lms-parser';
@@ -18,6 +18,7 @@ import {
 import { createFetchHtml, limit } from '../lms-html.js';
 import { SessionExpiredError } from '../lms.js';
 import { acquireLock } from '../player/lock.js';
+import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
 import { moveLegacyDir, previousSemester, semesterOf, storageRoot } from '../storage.js';
 import { listCourses } from '../tasks/collect.js';
@@ -209,7 +210,7 @@ async function syncFile(
       // 받은 그대로인 파일만 새 버전으로 바꾼다
       if (local === prev.sha256) {
         await ensureRealDir(root, dirname(prevPath), false);
-        await rename(part.path, prevPath);
+        await replaceFile(part.path, prevPath);
         return { status: 'updated', path: prevPath, entry: entry(prevPath, part.sha256), downloaded: true };
       }
       const slot = await placeNew(weekDir, name, part.path);
