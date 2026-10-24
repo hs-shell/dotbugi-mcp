@@ -162,7 +162,7 @@ const shortcuts: Shortcut[] = [
     usage: 'drive',
     example: '/dotbugi:drive',
     text: () =>
-      '`find_google_drive` 를 불러 결과를 보여 줘. suggested(추천 위치)가 있으면 `set_storage_dir` 를 path: suggested 로 불러 옮겨 (확인 창은 서버가 띄운다). 마운트되지 않았으면 도구가 준 안내를 그대로 보여 줘. 그 밖의 도구는 부르지 않는다.',
+      '`find_google_drive` 를 불러 결과를 보여 줘. suggested(추천 위치)가 있으면 `set_storage_dir` 를 path: suggested 로 불러 옮겨 (확인 창은 서버가 띄운다. 확인 창 대신 목록과 confirmToken 이 오면 사용자에게 보여 주고 동의한 뒤에만 그 토큰으로 다시 불러). 마운트되지 않았으면 도구가 준 안내를 그대로 보여 줘. 그 밖의 도구는 부르지 않는다.',
   },
   {
     name: 'login',
