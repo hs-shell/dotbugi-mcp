@@ -76,11 +76,23 @@ describe('list_tasks', () => {
     expect(tasks.map((t) => t.title)).toEqual(['과제1', '퀴즈1', '트리 순회', '기한 없는 과제']);
     expect(tasks[0].remaining).toBe('1일 6시간');
     const [text] = result.content as { text: string }[];
-    expect(text.text.split('\n')[0]).toBe('[과제] 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00');
+    expect(text.text.split('\n')[0]).toBe(
+      '[과제] 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00 | cmid 5'
+    );
     expect(result.structuredContent).toMatchObject({ warnings: [] });
     expect(JSON.stringify(result)).not.toContain(SESSION);
     // 스케줄러 내부용 필드는 응답에 나가지 않는다
     expect(JSON.stringify(result)).not.toContain('courseId');
+  });
+
+  it('includePast 면 지난 미완료를 overdue 로 맨 앞에, cmid 와 함께 (같은 캐시를 쓴다)', async () => {
+    await call({ refresh: true });
+    const fetched = fetchMock.mock.calls.length;
+    const result = await call({ includePast: true });
+    expect(fetchMock.mock.calls.length).toBe(fetched);
+    const { tasks } = result.structuredContent as { tasks: { title: string; cmid: number | null; overdue: boolean }[] };
+    expect(tasks[0]).toMatchObject({ title: '지난 과제', cmid: 7, overdue: true });
+    expect(tasks.slice(1).every((t) => !t.overdue)).toBe(true);
   });
 
   it('일부를 못 가져오면 경고를 붙이고, 텍스트 표의 | 는 이스케이프한다', async () => {

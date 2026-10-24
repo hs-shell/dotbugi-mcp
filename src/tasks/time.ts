@@ -30,7 +30,7 @@ export function formatRemaining(deadline: string | null, now: number): string {
   const ms = deadlineMs(deadline);
   if (Number.isNaN(ms)) return '정보 없음';
   const diff = ms - now;
-  if (diff <= 0) return '마감';
+  if (diff <= 0) return '지남';
   const days = Math.floor(diff / MS_PER_DAY);
   const hours = Math.floor((diff % MS_PER_DAY) / MS_PER_HOUR);
   const minutes = Math.floor((diff % MS_PER_HOUR) / MS_PER_MINUTE);
