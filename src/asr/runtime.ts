@@ -41,7 +41,8 @@ export interface AsrRuntime {
   env?: Record<string, string>;
 }
 
-const INSTALL_HINT = '`dotbugi-mcp asr install` 을 실행하세요.';
+// 사용자는 대화에서 쓰므로 도구를 먼저 안내한다
+export const INSTALL_HINT = 'asr_install 도구(터미널에선 `dotbugi-mcp asr install`)로 설치하세요.';
 
 export function readAsrConfig(root: string): AsrConfig | null {
   let raw: string;

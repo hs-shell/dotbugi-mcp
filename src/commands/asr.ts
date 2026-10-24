@@ -1,14 +1,14 @@
 import { existsSync } from 'node:fs';
-import { lstat, readdir, rm } from 'node:fs/promises';
+import { lstat, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileSha256 } from '../asr/download.js';
 import { installAsr, parseInstallOptions, type InstallReport } from '../asr/install.js';
 import { FFMPEG, MODELS, QWEN_ASR_BINARY, type AsrModel, type AsrPlatform } from '../asr/pins.js';
-import { ASR_ROOT, asrPaths, modelFilePath, readAsrConfig, type AsrConfig } from '../asr/runtime.js';
+import { ASR_ROOT, asrPaths, INSTALL_HINT, modelFilePath, readAsrConfig, type AsrConfig } from '../asr/runtime.js';
 import { ASR_INSTALL_BUSY, ASR_INSTALL_LOCK_FILE, writeAsrInstallState, type AsrInstallState } from '../asr/state.js';
 import { log } from '../log.js';
-import { acquireLock, adoptLock } from '../player/lock.js';
+import { acquireLock, adoptLock, isAlive } from '../player/lock.js';
 import { redact } from '../redact.js';
 
 export const ASR_USAGE = `사용법:
@@ -84,21 +84,22 @@ async function sizeOf(path: string): Promise<number> {
 
 const mb = (bytes: number) => `${(bytes / 1e6).toFixed(0)}MB`;
 
-async function verify(path: string, sha256: string): Promise<string> {
-  const actual = await fileSha256(path);
-  if (actual === null) return '없음';
-  return actual === sha256 ? '검증 OK' : '해시 불일치 — asr install 로 다시 받으세요';
-}
-
-// asr status 와 asr_status 도구가 같이 쓴다
-export async function statusText(root = ASR_ROOT): Promise<string> {
-  if (!existsSync(root)) return `설치된 ASR 런타임이 없습니다. \`dotbugi-mcp asr install\` 로 설치하세요.`;
+// asr status 와 asr_status 도구가 같이 쓴다. 해시는 수 GB 를 읽으므로 도구는 요청할 때만 (CLI 는 항상)
+export async function statusText(root = ASR_ROOT, opts = { verify: true }): Promise<string> {
+  if (!existsSync(root)) return `설치된 ASR 런타임이 없습니다. ${INSTALL_HINT}`;
+  const ok = opts.verify ? '검증 OK' : '있음 (해시 검증 생략)';
+  const verify = async (path: string, sha256: string): Promise<string> => {
+    if (!opts.verify) return existsSync(path) ? ok : '없음';
+    const actual = await fileSha256(path);
+    if (actual === null) return '없음';
+    return actual === sha256 ? ok : `해시 불일치 — 다시 설치하세요 (${INSTALL_HINT})`;
+  };
   const lines: string[] = [];
   const paths = asrPaths(root);
   let config: string;
   try {
     const c = readAsrConfig(root);
-    config = c ? `${c.runtime} · ${c.model}` : '설치 미완료 (asr install 을 다시 실행하세요)';
+    config = c ? `${c.runtime} · ${c.model}` : `설치 미완료 — ${INSTALL_HINT}`;
   } catch (err) {
     config = (err as Error).message;
   }
@@ -126,10 +127,8 @@ export async function statusText(root = ASR_ROOT): Promise<string> {
         async ([f, pin]) => `${f}: ${await verify(modelFilePath(root, model, f), pin.sha256)}`
       )
     );
-    const bad = results.filter((r) => !r.endsWith('검증 OK'));
-    lines.push(
-      `- 모델 ${model}: ${mb(await sizeOf(join(paths.models, model)))} ${bad.length ? bad.join(', ') : '검증 OK'}`
-    );
+    const bad = results.filter((r) => !r.endsWith(ok));
+    lines.push(`- 모델 ${model}: ${mb(await sizeOf(join(paths.models, model)))} ${bad.length ? bad.join(', ') : ok}`);
   }
   if (existsSync(paths.venv)) lines.push(`- GPU venv: ${mb(await sizeOf(paths.venv))} (패키지는 설치 때 해시 검증)`);
   lines.push(`합계: ${mb(await sizeOf(root))}`);
@@ -138,6 +137,9 @@ export async function statusText(root = ASR_ROOT): Promise<string> {
 
 async function remove(root: string, yes: boolean): Promise<void> {
   if (!existsSync(root)) return log('설치된 ASR 런타임이 없습니다.');
+  // 설치 중에 지우면 작업 프로세스가 반쯤 지워진 폴더에 이어 쓴다
+  const installer = Number((await readFile(ASR_INSTALL_LOCK_FILE, 'utf8').catch(() => '')).trim());
+  if (Number.isInteger(installer) && installer > 0 && isAlive(installer)) throw new Error(ASR_INSTALL_BUSY);
   if (!yes) {
     if (!process.stdin.isTTY) throw new Error('터미널이 아니면 확인할 수 없습니다. 지우려면 --yes 를 붙이세요.');
     const rl = createInterface({ input: process.stdin, output: process.stderr });

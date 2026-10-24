@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { checkInstallable, estimateBytes, parseInstallOptions } from '../asr/install.js';
-import { ASR_ROOT, readAsrConfig, resolveAsrRuntime, type AsrConfig } from '../asr/runtime.js';
+import { ASR_ROOT } from '../asr/runtime.js';
 import {
   ASR_INSTALL_BUSY,
   ASR_INSTALL_LOCK_FILE,
@@ -27,27 +27,14 @@ const PHASES: Record<NonNullable<AsrInstallState['phase']>, string> = {
 };
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)}GB`;
 
-// 이미 같은 구성으로 쓸 수 있게 설치돼 있는지. 설정이 깨졌거나 파일이 빠졌으면 다시 설치한다
-async function installed(config: AsrConfig, root: string): Promise<boolean> {
-  try {
-    const c = readAsrConfig(root);
-    if (c?.runtime !== config.runtime || c.model !== config.model) return false;
-    await resolveAsrRuntime(root);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const INSTALL_DEPS = { spawn, check: checkInstallable, root: ASR_ROOT };
+const INSTALL_DEPS = { spawn, check: checkInstallable };
 
 // 수 GB 를 받는다 — transcribe_vod 처럼 따로 떠 있는 작업 프로세스(셸 없이 인자 배열)로 넘기고 바로 돌아온다.
-// 미지원 플랫폼·고정값 없음은 띄우기 전에 오류로, 이미 설치됨·설치 중은 안내로 돌려준다
+// 미지원 플랫폼·고정값 없음은 띄우기 전에 오류로, 설치 중은 안내로 돌려준다.
+// 이미 설치돼 있어도 띄운다 — 작업 프로세스가 해시로 검증해 맞는 파일은 건너뛰고 손상된 것만 다시 받는다
 export async function startInstall(opts: { gpu: boolean; model?: string }, deps = INSTALL_DEPS): Promise<string> {
   const config = parseInstallOptions(opts);
   const platform = deps.check(config);
-  if (await installed(config, deps.root))
-    return `이미 설치돼 있습니다 (${config.runtime} · ${config.model}). 상태는 asr_status 로 확인하세요.`;
   let release;
   try {
     release = await acquireLock(ASR_INSTALL_LOCK_FILE, ASR_INSTALL_BUSY);
@@ -65,12 +52,8 @@ export async function startInstall(opts: { gpu: boolean; model?: string }, deps 
       child.once('spawn', resolve);
       child.once('error', reject);
     });
-    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_vod 와 같은 이유)
-    const tmp = `${ASR_INSTALL_LOCK_FILE}.${process.pid}.tmp`;
-    await writeFile(tmp, String(child.pid), { mode: 0o600 });
-    await rename(tmp, ASR_INSTALL_LOCK_FILE);
-    child.unref();
-    // 시작 직후 asr_status 가 이전 설치 결과를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신)
+    // 시작 직후 asr_status 가 이전 설치 결과를 보여주지 않게 바로 기록한다. 잠금을 넘기기 전에 써야
+    // 잠금을 받자마자 쓰는 작업 프로세스의 첫 기록을 덮지 않는다
     await writeAsrInstallState({
       version: 1,
       status: 'running',
@@ -81,6 +64,11 @@ export async function startInstall(opts: { gpu: boolean; model?: string }, deps 
       updatedAt: new Date().toISOString(),
       message: null,
     }).catch(() => {});
+    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_vod 와 같은 이유)
+    const tmp = `${ASR_INSTALL_LOCK_FILE}.${process.pid}.tmp`;
+    await writeFile(tmp, String(child.pid), { mode: 0o600 });
+    await rename(tmp, ASR_INSTALL_LOCK_FILE);
+    child.unref();
   } catch (err) {
     await release();
     throw err;
@@ -107,10 +95,16 @@ function jobText(job: AsrInstallState & { stale: boolean }): string {
 }
 
 // 설치된 구성요소(asr status 와 같은 내용) + 설치 작업 상태 파일
-export async function asrStatus(root = ASR_ROOT) {
+export async function asrStatus(root = ASR_ROOT, verify = false) {
   const s = readAsrInstallState();
   const job = s && { ...s, stale: s.status === 'running' && !isAlive(s.pid) };
-  const text = [await statusText(root).catch((err: Error) => err.message), job && jobText(job)]
+  // 설치 중에는 파일이 바뀌는 중이라 해시를 읽어 봐야 의미가 없다
+  const running = job?.status === 'running' && !job.stale;
+  const text = [
+    await statusText(root, { verify: verify && !running }).catch((err: Error) => err.message),
+    running && verify && '설치 중이라 해시 검증은 건너뛰었습니다.',
+    job && jobText(job),
+  ]
     .filter(Boolean)
     .join('\n\n');
   return { text: redact(text), job };
@@ -147,8 +141,11 @@ export function registerAsrTools(server: McpServer): void {
     {
       title: '로컬 음성 인식(ASR) 설치 상태',
       description:
-        '설치된 ASR 구성요소(ffmpeg·qwen_asr·모델·GPU venv)의 용량·해시 검증 결과와, 진행 중이거나 마지막 asr_install 작업의 진행률·오류를 보여준다.',
-      inputSchema: z.object({}),
+        '설치된 ASR 구성요소(ffmpeg·qwen_asr·모델·GPU venv)의 존재·용량과, 진행 중이거나 마지막 asr_install 작업의 진행률·오류를 보여준다. ' +
+        'verify 면 sha256 도 검증한다 (수 GB 를 읽어 몇 초 걸린다, 설치 중엔 건너뜀).',
+      inputSchema: z.object({
+        verify: z.boolean().default(false).describe('설치된 파일의 sha256 을 고정값과 대조'),
+      }),
       outputSchema: z.object({
         job: asrInstallStateSchema
           .extend({ stale: z.boolean().describe('실행 중으로 남았지만 프로세스가 없음 (강제 종료 등)') })
@@ -156,8 +153,8 @@ export function registerAsrTools(server: McpServer): void {
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => {
-      const { text, job } = await asrStatus();
+    async ({ verify }) => {
+      const { text, job } = await asrStatus(ASR_ROOT, verify);
       return { content: [{ type: 'text', text }], structuredContent: { job } };
     }
   );

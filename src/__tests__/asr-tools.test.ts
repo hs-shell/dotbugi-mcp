@@ -35,8 +35,22 @@ const deps = (over: Partial<Parameters<typeof startInstall>[1]> = {}) => {
     setImmediate(() => c.emit('spawn'));
     return c;
   });
-  return { spawn: spawnImpl as unknown as typeof spawn, check: vi.fn(() => 'linux-x64' as const), root, ...over };
+  return { spawn: spawnImpl as unknown as typeof spawn, check: vi.fn(() => 'linux-x64' as const), ...over };
 };
+
+// 파일은 있지만 내용이 비어 해시가 틀린(손상된) CPU 설치
+async function fakeInstall(dir: string): Promise<void> {
+  const paths = asrPaths(dir);
+  await mkdir(join(paths.models, '0.6b'), { recursive: true });
+  await mkdir(paths.bin);
+  await writeFile(paths.config, JSON.stringify({ runtime: 'cpu', model: '0.6b' }));
+  for (const p of [
+    paths.ffmpeg,
+    paths.qwenAsr,
+    ...Object.keys(MODELS['0.6b'].files).map((f) => modelFilePath(dir, '0.6b', f)),
+  ])
+    await writeFile(p, '');
+}
 
 const supported =
   (process.platform === 'linux' && process.arch === 'x64') ||
@@ -69,22 +83,11 @@ describe('asr_install', () => {
     expect(d.spawn).not.toHaveBeenCalled();
   });
 
-  it('같은 구성이 이미 설치돼 있으면 안내만 하고 띄우지 않는다', async () => {
-    const paths = asrPaths(root);
-    await mkdir(join(paths.models, '0.6b'), { recursive: true });
-    await mkdir(paths.bin);
-    await writeFile(paths.config, JSON.stringify({ runtime: 'cpu', model: '0.6b' }));
-    for (const p of [
-      paths.ffmpeg,
-      paths.qwenAsr,
-      ...Object.keys(MODELS['0.6b'].files).map((f) => modelFilePath(root, '0.6b', f)),
-    ])
-      await writeFile(p, '');
+  it('이미 설치돼 있어도(손상 포함) 띄운다 — 해시 검증은 작업 프로세스가 한다', async () => {
+    await fakeInstall(root);
     const d = deps();
-    expect(await startInstall({ gpu: false }, d)).toContain('이미 설치돼 있습니다');
-    expect(d.spawn).not.toHaveBeenCalled();
-    // 다른 구성(GPU)은 설치한다
-    expect(await startInstall({ gpu: true, model: '1.7b' }, d)).toContain('시작했습니다');
+    expect(await startInstall({ gpu: false }, d)).toContain('시작했습니다');
+    expect(d.spawn).toHaveBeenCalledTimes(1);
   });
 
   it('동시에 불러도 하나만 띄우고, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
@@ -143,6 +146,26 @@ describe('asr_status', () => {
     expect(job).toMatchObject({ stale: true, phase: 'model' });
   });
 
+  it.skipIf(!supported)('해시는 verify 일 때만, 설치 중엔 건너뛴다', async () => {
+    await fakeInstall(root);
+    expect((await asrStatus(root)).text).toContain('있음 (해시 검증 생략)');
+    expect((await asrStatus(root, true)).text).toContain('해시 불일치');
+    await writeAsrInstallState({
+      version: 1,
+      status: 'running',
+      runtime: 'cpu',
+      model: '0.6b',
+      phase: 'model',
+      file: null,
+      pid: process.pid,
+      updatedAt: new Date().toISOString(),
+      message: null,
+    });
+    const { text } = await asrStatus(root, true);
+    expect(text).not.toContain('해시 불일치');
+    expect(text).toContain('해시 검증은 건너뛰었습니다');
+  });
+
   it('상태 파일 메시지의 주소(토큰)는 지우고 쓴다', async () => {
     await writeAsrInstallState({
       version: 1,
@@ -177,6 +200,13 @@ describe.skipIf(!supported)('asr install (CLI·작업 프로세스)', () => {
       message: expect.stringContaining('고정'),
     });
     await expect(stat(ASR_INSTALL_LOCK_FILE)).rejects.toThrow();
+  });
+
+  it('설치 중이면 asr remove 를 거부한다', async () => {
+    await fakeInstall(root);
+    await writeFile(ASR_INSTALL_LOCK_FILE, String(process.pid));
+    await expect(asr(['remove'], { yes: true }, root)).rejects.toThrow('이미 ASR 설치가 실행 중');
+    expect((await stat(root)).isDirectory()).toBe(true);
   });
 
   it('--worker 는 install 에서만', async () => {
