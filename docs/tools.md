@@ -264,4 +264,4 @@ dotbugi-mcp asr remove                     # 폴더 삭제 (터미널이 아니�
   - 모델: Hugging Face `Qwen/Qwen3-ASR-0.6B`·`1.7B` 고정 리비전
   - GPU venv: `src/asr/gpu-requirements.txt` (해시 고정, 휠만) — `uv pip install --require-hashes --only-binary :all:`
 - uv 캐시와 uv 가 받는 Python 도 같은 폴더(`uv-cache/`, `python/`)에 두므로 `asr remove` 로 모두 지워집니다.
-- 내려받기는 https 로 github.com·huggingface.co·files.pythonhosted.org 와 그 CDN 만 허용합니다.
+- 내려받기는 https 로 github.com·huggingface.co·files.pythonhosted.org 와 그 CDN 만 허용합니다. `--gpu` 는 uv 가 pypi.org 인덱스와 Python 배포본을 직접 받습니다 (패키지는 해시 고정).

@@ -1,6 +1,6 @@
 # dotbugi-mcp
 
-한성대 LMS(learn.hansung.ac.kr)의 강의 영상(VOD)·과제·퀴즈·강의자료를 Claude Code / Claude Desktop 대화에서 다루는 MCP 서버입니다. 마감 임박 할 일 조회, 과제 본문·첨부 받기, 강의자료 동기화, 주차별 요약, VOD 연속 재생, 강의 받아쓰기를 Claude 에게 말로 요청하면 됩니다. LMS 에 제출하거나 글을 쓰지는 않습니다.
+한성대 LMS(learn.hansung.ac.kr)의 강의 영상(VOD)·과제·퀴즈·강의자료를 Claude Code / Claude Desktop 대화에서 다루게 해 주는 연결 기능(MCP 서버)입니다. 마감 임박 할 일 조회, 과제 본문·첨부 받기, 강의자료 동기화, 주차별 요약, VOD 연속 재생, 강의 받아쓰기를 Claude 에게 말로 요청하면 됩니다. LMS 에 제출하거나 글을 쓰지는 않습니다.
 
 ## 요구사항
 
@@ -72,25 +72,25 @@ Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구�
 
 인자·출력·상한·파일 위치는 [docs/tools.md](docs/tools.md) 에 있습니다.
 
-| 이름                                                                   | 하는 일                                   | 읽기 전용          |
-| ---------------------------------------------------------------------- | ----------------------------------------- | ------------------ |
-| [`login`](docs/tools.md#login)                                         | dotbugi 확장 연결로 LMS 로그인            | -                  |
-| [`list_tasks`](docs/tools.md#list_tasks)                               | VOD·과제·퀴즈를 마감 임박 순으로 조회     | O                  |
-| [`vod_status`](docs/tools.md#vod_status)                               | 남은 VOD 와 연속 재생 진행 상황           | O                  |
-| [`play_vods`](docs/tools.md#play_vods--stop_vods)                      | 미출석 VOD 를 공식 플레이어로 차례로 재생 | -                  |
-| [`stop_vods`](docs/tools.md#play_vods--stop_vods)                      | 연속 재생 중지                            | -                  |
-| [`get_assignment`](docs/tools.md#get_assignment)                       | 과제 본문·마감·제출 상황, 첨부파일 받기   | LMS 만 (로컬 저장) |
-| [`sync_materials`](docs/tools.md#sync_materials)                       | 강의자료를 과목·주차 폴더로 동기화        | LMS 만 (로컬 저장) |
-| [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status)    | VOD 하나를 로컬 음성 인식으로 받아쓰기    | LMS 만 (로컬 저장) |
-| [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status) | 받아쓰기 진행 상황                        | O                  |
-| [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)            | 주차 강의자료를 `요약.md` 로 정리         | -                  |
+| 이름                                                                   | 하는 일                                   |
+| ---------------------------------------------------------------------- | ----------------------------------------- |
+| [`login`](docs/tools.md#login)                                         | dotbugi 확장 연결로 LMS 로그인            |
+| [`list_tasks`](docs/tools.md#list_tasks)                               | VOD·과제·퀴즈를 마감 임박 순으로 조회     |
+| [`vod_status`](docs/tools.md#vod_status)                               | 남은 VOD 와 연속 재생 진행 상황           |
+| [`play_vods`](docs/tools.md#play_vods--stop_vods)                      | 미출석 VOD 를 공식 플레이어로 차례로 재생 |
+| [`stop_vods`](docs/tools.md#play_vods--stop_vods)                      | 연속 재생 중지                            |
+| [`get_assignment`](docs/tools.md#get_assignment)                       | 과제 본문·마감·제출 상황, 첨부파일 받기   |
+| [`sync_materials`](docs/tools.md#sync_materials)                       | 강의자료를 과목·주차 폴더로 동기화        |
+| [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status)    | VOD 하나를 로컬 음성 인식으로 받아쓰기    |
+| [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status) | 받아쓰기 진행 상황                        |
+| [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)            | 주차 강의자료를 `요약.md` 로 정리         |
 
-**터미널에서만 되는 것** (대응하는 도구 없음): 로그아웃(`logout`), 임시 브라우저 로그인(`login --browser`), 추적 강좌 켜기/끄기(`courses`), LMS 에서 사라진 강의자료 삭제(`sync`), 받아쓰기 중지(`transcribe` 를 터미널에서 실행한 경우 Ctrl+C), 음성 인식 런타임 설치·제거(`asr`), Claude Code 상태 표시줄(`statusline`). 사용법은 [docs/tools.md](docs/tools.md#터미널-명령) 참고.
+로그아웃·강좌 켜기/끄기·받아쓰기 런타임 설치 등 일부는 아직 터미널 명령입니다 → [docs/tools.md](docs/tools.md#터미널-명령)
 
 ## 개인정보·보안
 
 - LMS 세션은 **OS 키체인에만** 저장합니다 (파일 저장 없음). 같은 사용자 권한의 프로세스는 키체인을 읽을 수 있으니 필요 없을 때는 `npx -y @dotbugi/mcp logout` 하세요.
-- 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 텔레메트리는 없습니다.
+- 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 그 밖의 외부 접속은 받아쓰기용 영상 서버(`*.edge.naverncp.com`, 쿠키 없음)와 음성 인식 런타임 설치 때의 github.com·huggingface.co·PyPI 뿐이며, 텔레메트리는 없습니다.
 - 도구 출력·로그에는 세션 값·연결 코드·영상 주소를 넣지 않습니다.
 - LMS 에 제출·작성·수정하지 않습니다. 과제 제출은 직접 하세요.
 - 출석은 LMS **공식 플레이어**를 평소 브라우저 창에서 재생해서만 인정받습니다 (헤드리스·음소거·배속 강제 없음).
