@@ -1,6 +1,29 @@
 {
-  "name": "dotbugi-mcp",
+  "name": "@dotbugi/mcp",
   "version": "0.1.0",
+  "description": "한성대학교 LMS(learn.hansung.ac.kr) VOD·과제·퀴즈를 Claude Code / Claude Desktop에서 다루는 MCP 서버",
+  "license": "Apache-2.0",
+  "author": "6-keem",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hs-shell/dotbugi-mcp.git"
+  },
+  "bugs": "https://github.com/hs-shell/dotbugi-mcp/issues",
+  "homepage": "https://github.com/hs-shell/dotbugi-mcp#readme",
+  "type": "module",
+  "bin": {
+    "dotbugi-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.22.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "rm -rf dist && tsc --noEmit && tsc -p tsconfig.build.json && cp src/asr/gpu_transcribe.py src/asr/gpu-requirements.txt dist/asr/",
     "start": "node dist/index.js",
@@ -9,10 +32,9 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prepublishOnly": "npm run build"
   },
-  "license": "UNLICENSED",
-  "type": "module",
   "dependencies": {
     "@dotbugi/lms-parser": "^0.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
@@ -33,13 +55,6 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.0",
     "vitest": "^5.0.5"
-  },
-  "private": true,
-  "bin": {
-    "dotbugi-mcp": "dist/index.js"
-  },
-  "engines": {
-    "node": ">=22.22.1"
   },
   "lint-staged": {
     "*.{ts,js}": [
