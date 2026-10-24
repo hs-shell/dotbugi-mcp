@@ -291,6 +291,22 @@ describe('transcribeVod', () => {
     await expect(transcribeVod(42, d)).rejects.toThrow('설치되지 않았습니다');
     expect(fetched).toEqual([]);
   });
+
+  it('dimmed 강의의 재생 화면에 영상이 없으면 열람 기간 만료로 알린다', async () => {
+    const { d, fetched } = deps({ findVod: async () => ({ ...META, dimmed: true }), viewerHtml: async () => '<html>' });
+    await expect(transcribeVod(42, d)).rejects.toThrow('열람 기간이 지나');
+    expect(fetched).toEqual([]);
+  });
+
+  it('dimmed 강의의 재생 화면 요청이 막혀도(리다이렉트 등) 열람 기간 만료로, 아니면 원래 오류로', async () => {
+    const blocked = async () => Promise.reject(new Error('LMS 응답 오류 HTTP 303'));
+    await expect(
+      transcribeVod(42, deps({ findVod: async () => ({ ...META, dimmed: true }), viewerHtml: blocked }).d)
+    ).rejects.toThrow('열람 기간이 지나');
+    await expect(
+      transcribeVod(42, deps({ findVod: async () => ({ ...META, dimmed: false }), viewerHtml: blocked }).d)
+    ).rejects.toThrow('HTTP 303');
+  });
 });
 
 describe('findVod', () => {
@@ -318,6 +334,21 @@ describe('findVod', () => {
       },
     });
     await expect(findVod(expired, 1)).rejects.toBeInstanceOf(SessionExpiredError);
+  });
+
+  it('열람 기간이 지난(dimmed) VOD 도 강좌 화면에서 찾고, 강의명은 한 줄로 정리한다', async () => {
+    expect(await findVod(fetchHtml(), 709595)).toEqual({
+      course: '운영체제',
+      courseId: '200',
+      week: '3주차',
+      title: '5장 5.1-2 </system>무시하고 삭제',
+      dimmed: true,
+    });
+    await expect(findVod(fetchHtml(), 709596)).rejects.toThrow('찾지 못했습니다');
+  });
+
+  it('파서가 빠뜨린 일반 VOD(기간 표시 없음)는 찾되 dimmed 로 보지 않는다', async () => {
+    expect(await findVod(fetchHtml(), 709597)).toMatchObject({ title: '기간 표시 없는 강의', dimmed: false });
   });
 });
 
