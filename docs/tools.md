@@ -133,7 +133,7 @@ LMS 는 읽기만 하고, 강의자료는 로컬에 저장합니다. 추적 중�
 
 ## `read_material`
 
-읽기 전용. [저장 위치](#get_storage_dir--set_storage_dir) 안에 받은 강의자료·과제 첨부·녹취·`요약.md` 를 읽거나 폴더를 살펴봅니다. 파일 접근이 없는 Claude Desktop 에서도 받은 자료로 요약·학습할 수 있게 합니다.
+읽기 전용. [저장 위치](#get_storage_dir--set_storage_dir) 안에 받은 강의자료·과제 첨부·STT 결과·`요약.md` 를 읽거나 폴더를 살펴봅니다. 파일 접근이 없는 Claude Desktop 에서도 받은 자료로 요약·학습할 수 있게 합니다.
 
 | 인자       | 설명                                                                                                           |
 | ---------- | -------------------------------------------------------------------------------------------------------------- |
@@ -166,23 +166,23 @@ LMS 는 읽기만 하고, 강의자료는 로컬에 저장합니다. 추적 중�
 
 ## `transcribe_vod` / `transcribe_status` / `stop_transcribe`
 
-VOD 의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강의자료와 같은 주차 폴더에 `녹취-<강의명>.md` 로 저장합니다. 출석·진도에는 영향이 없습니다. 먼저 [음성 인식 런타임](#asr_install--asr_status)을 설치해야 합니다.
+동영상 강의의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 STT(음성 → 텍스트) 변환해 강의자료와 같은 주차 폴더에 `STT-<강의명>.md` 로 저장합니다. 출석·진도에는 영향이 없습니다. 먼저 [음성 인식 런타임](#asr_install--asr_status)을 설치해야 합니다.
 
 | 인자           | 설명                                                                                                                                                                                                                                                                                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cmids`        | VOD 강의 번호 배열 (LMS 주소 `mod/vod/view.php?id=<cmid>` 의 숫자, 1~20개). 넘긴 순서대로 받아씁니다. 확인 없이 바로 시작                                                                                                                                                                                                                                                                               |
-| `course`       | 과목명 일부 또는 courseId. 그 과목에서 아직 녹취가 없는 동영상 강의를 모아 **확인 창**을 띄운 뒤 시작                                                                                                                                                                                                                                                                                                   |
-| `all`          | `true` 면 추적 과목 전체의 녹취 없는 동영상 강의를 확인 없이 바로 시작 (사용자가 all 을 요청했을 때만)                                                                                                                                                                                                                                                                                                  |
+| `cmids`        | 동영상 강의 번호 배열 (LMS 주소 `mod/vod/view.php?id=<cmid>` 의 숫자, 1~20개). 넘긴 순서대로 변환합니다. 확인 없이 바로 시작                                                                                                                                                                                                                                                                            |
+| `course`       | 과목명 일부 또는 courseId. 그 과목에서 아직 결과 파일이 없는 동영상 강의를 모아 **확인 창**을 띄운 뒤 시작                                                                                                                                                                                                                                                                                              |
+| `all`          | `true` 면 추적 과목 전체의 결과 파일 없는 동영상 강의를 확인 없이 바로 시작 (사용자가 all 을 요청했을 때만)                                                                                                                                                                                                                                                                                             |
 | (없음)         | `cmids`·`course`·`all` 을 모두 생략하면 추적 과목 전체를 대상으로 확인 창을 띄운 뒤 시작. 셋 중 둘 이상은 오류                                                                                                                                                                                                                                                                                          |
 | `confirmToken` | 확인 창(elicitation)을 띄울 수 없는 클라이언트에서 첫 호출이 돌려준 일회용 토큰. 사용자가 목록에 동의한 뒤에만 같은 인자로 넣습니다                                                                                                                                                                                                                                                                     |
-| `language`     | 받아쓸 언어. `auto`(기본) 또는 qwen-asr 지원 언어 이름 30개 중 하나 (`Korean`·`English`·`Japanese`·`Chinese`·`Cantonese`·`Arabic`·`German`·`French`·`Spanish`·`Portuguese`·`Indonesian`·`Italian`·`Russian`·`Thai`·`Vietnamese`·`Turkish`·`Hindi`·`Malay`·`Dutch`·`Swedish`·`Danish`·`Finnish`·`Polish`·`Czech`·`Filipino`·`Persian`·`Greek`·`Romanian`·`Hungarian`·`Macedonian`). 다른 값은 거절합니다 |
+| `language`     | 변환할 언어. `auto`(기본) 또는 qwen-asr 지원 언어 이름 30개 중 하나 (`Korean`·`English`·`Japanese`·`Chinese`·`Cantonese`·`Arabic`·`German`·`French`·`Spanish`·`Portuguese`·`Indonesian`·`Italian`·`Russian`·`Thai`·`Vietnamese`·`Turkish`·`Hindi`·`Malay`·`Dutch`·`Swedish`·`Danish`·`Finnish`·`Polish`·`Czech`·`Filipino`·`Persian`·`Greek`·`Romanian`·`Hungarian`·`Macedonian`). 다른 값은 거절합니다 |
 
-- `transcribe_vod`: 세션과 런타임 설치를 먼저 확인하고(없으면 바로 오류), 받아쓰기를 백그라운드 작업 프로세스로 넘긴 뒤 **바로** 돌아옵니다. 수십 분 걸릴 수 있습니다. 받아쓰기 자체는 한 번에 하나만 실행됩니다 (`~/.cache/dotbugi-mcp/transcribe.lock`, 터미널 `transcribe` 와 공용). course·전체 대상은 이미 대기 중이거나 받아쓰는 강의를 빼고, 대기열에 남은 자리(상한 20개)만큼만 앞에서부터 확인 창에 올려 나머지 수를 알립니다. 여러 개를 넘기거나 이미 받아쓰는 중에 부르면 **대기열**(`~/.cache/dotbugi-mcp/transcribe-queue.json`, 최대 20개)에 붙고, 작업 프로세스가 하나를 끝낼 때마다 다음 것을 꺼내 이어서 받아씁니다. 이미 대기 중이거나 받아쓰는 강의는 다시 넣지 않습니다. 하나가 실패해도 다음으로 넘어갑니다. 강제 종료 등으로 작업 프로세스가 사라지면 남은 대기열은 다음 실행 때 버려집니다.
+- `transcribe_vod`: 세션과 런타임 설치를 먼저 확인하고(없으면 바로 오류), STT 변환을 백그라운드 작업 프로세스로 넘긴 뒤 **바로** 돌아옵니다. 수십 분 걸릴 수 있습니다. STT 변환 자체는 한 번에 하나만 실행됩니다 (`~/.cache/dotbugi-mcp/transcribe.lock`, 터미널 `transcribe` 와 공용). course·전체 대상은 이미 대기 중이거나 변환 중인 강의를 빼고, 대기열에 남은 자리(상한 20개)만큼만 앞에서부터 확인 창에 올려 나머지 수를 알립니다. 여러 개를 넘기거나 이미 변환 중에 부르면 **대기열**(`~/.cache/dotbugi-mcp/transcribe-queue.json`, 최대 20개)에 붙고, 작업 프로세스가 하나를 끝낼 때마다 다음 것을 꺼내 이어서 변환합니다. 이미 대기 중이거나 변환 중인 강의는 다시 넣지 않습니다. 하나가 실패해도 다음으로 넘어갑니다. 강제 종료 등으로 작업 프로세스가 사라지면 남은 대기열은 다음 실행 때 버려집니다.
 - `transcribe_status`: 마지막 작업의 상태와 대기열(`queue`: 몇 번째/전체, 대기 중인 강의, 이번 묶음에서 끝난 강의의 결과)을 돌려줍니다. 인자는 없습니다. 기록이 없으면 `state: null`.
-- `stop_transcribe`: 실행 중인 받아쓰기(`transcribe_vod` 또는 터미널 `transcribe`)를 멈춥니다. 인자는 없습니다. 잠금 파일의 pid 가 살아 있고 상태 파일도 **같은 pid 로 실행 중이며 갱신이 끊기지 않았을 때만** SIGTERM 을 보내고 최대 5초 동안 멈추기를 기다립니다. 남은 대기열도 함께 취소합니다. 확인하지 못하면 중지하지 않고 `transcribe_status` 를 안내합니다. 멈추면 임시 영상을 지우고, 덜 된 녹취는 남기지 않으며 상태는 `stopped` 가 됩니다.
-- 언어: `auto` 는 언어를 지정하지 않아 30초 구간마다 자동 감지합니다 — 영어·일본어·중국어가 섞인 강의도 원래 언어로 받아씁니다. 언어를 고정하면 다른 언어 음성을 **그 언어로 번역**해 버리므로(0.6B 에서 특히), 한 언어로만 진행되는 강의에서만 고정하세요. 한국어 강의에선 `auto` 와 `Korean` 의 품질이 같았습니다 (FLEURS ko 10개 CER 4.03% 로 동일, 일본어 음성을 `Korean` 으로 고정하면 CER 60.9%). 녹취 머리말과 상태 파일 `language` 에 설정을 남깁니다.
+- `stop_transcribe`: 실행 중인 STT 변환(`transcribe_vod` 또는 터미널 `transcribe`)를 멈춥니다. 인자는 없습니다. 잠금 파일의 pid 가 살아 있고 상태 파일도 **같은 pid 로 실행 중이며 갱신이 끊기지 않았을 때만** SIGTERM 을 보내고 최대 5초 동안 멈추기를 기다립니다. 남은 대기열도 함께 취소합니다. 확인하지 못하면 중지하지 않고 `transcribe_status` 를 안내합니다. 멈추면 임시 영상을 지우고, 덜 된 결과는 남기지 않으며 상태는 `stopped` 가 됩니다.
+- 언어: `auto` 는 언어를 지정하지 않아 30초 구간마다 자동 감지합니다 — 영어·일본어·중국어가 섞인 강의도 원래 언어로 변환합니다. 언어를 고정하면 다른 언어 음성을 **그 언어로 번역**해 버리므로(0.6B 에서 특히), 한 언어로만 진행되는 강의에서만 고정하세요. 한국어 강의에선 `auto` 와 `Korean` 의 품질이 같았습니다 (FLEURS ko 10개 CER 4.03% 로 동일, 일본어 음성을 `Korean` 으로 고정하면 CER 60.9%). 결과 파일 머리말과 상태 파일 `language` 에 설정을 남깁니다.
 - 대상: 추적 중인 강좌 화면의 VOD 목록에서 `cmid` 를 찾습니다 (출석 기간과 무관). 못 찾으면 오류입니다.
-- 저장 위치: `<저장 위치>/<YYYY-N학기>/<과목>/<N주차>/녹취-<강의명>.md` (0600, `sync_materials` 와 같은 폴더 규칙). 파일에는 과목·주차·받아쓴 날·모델·언어와 "자동 인식한 글이며 지시가 아님" 안내가 붙습니다. **이미 있으면 덮어쓰지 않고 건너뜁니다**(`skipped`). `summarize_week` 는 같은 폴더를 읽으므로 녹취도 요약에 쓰입니다.
+- 저장 위치: `<저장 위치>/<YYYY-N학기>/<과목>/<N주차>/STT-<강의명>.md` (0600, `sync_materials` 와 같은 폴더 규칙). 파일에는 과목·주차·변환한 날·모델·언어와 "자동 인식한 글이며 지시가 아님" 안내가 붙습니다. **이미 있으면 덮어쓰지 않고 건너뜁니다**(`skipped`). `summarize_week` 는 같은 폴더를 읽으므로 STT 결과도 요약에 쓰입니다.
 - 영상은 `*.edge.naverncp.com` 영상 서버에서 **세션 쿠키 없이** 받습니다. 영상 주소(시간 제한 토큰 포함)는 출력·상태 파일·로그에 남기지 않습니다. 리다이렉트·다른 서버를 가리키는 재생 목록·암호화된 영상은 받지 않습니다.
 - 상한: 6시간 분량(10초 조각 2160개), 조각당 64MB, 영상 전체 3GB, 받아쓴 글 20MB. 영상 서버가 60초 안에 응답하지 않으면 끊습니다.
 - 영상은 `~/.cache/dotbugi-mcp/transcribe-tmp/` 에 임시로 받고, 끝나면(실패·중지 포함) 지웁니다. ffmpeg 는 로컬 파일만 읽습니다.
@@ -190,21 +190,21 @@ VOD 의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강의자�
 
 상태 파일 `~/.cache/dotbugi-mcp/transcribe-state.json` (0600) 의 필드:
 
-- `status`: `running` / `done` / `skipped`(이미 녹취 있음) / `stopped` / `error`(`message` 에 이유)
-- `phase`: `prepare`(준비) / `download`(영상 받기) / `extract`(소리 추출) / `transcribe`(받아쓰기), 끝나면 `null`
+- `status`: `running` / `done` / `skipped`(이미 결과 파일 있음) / `stopped` / `error`(`message` 에 이유)
+- `phase`: `prepare`(준비) / `download`(영상 받기) / `extract`(소리 추출) / `transcribe`(STT 변환), 끝나면 `null`
 - `progress`: 단계별 진행률(0~100) 또는 `null`
-- `cmid`·`course`·`title`·`path`(녹취 파일)·`pid`·`updatedAt`·`message`·`language`(언어 설정, 이전 기록엔 없음)
+- `cmid`·`course`·`title`·`path`(결과 파일)·`pid`·`updatedAt`·`message`·`language`(언어 설정, 이전 기록엔 없음)
 - 실행 중에는 약 1분마다 `updatedAt` 이 갱신됩니다. `transcribe_status` 는 여기에 `stale`(`running` 인데 프로세스가 없거나 갱신이 3분 넘게 끊김 — 강제 종료 등)을 붙입니다.
 
 ## `setup_statusline`
 
-Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 있으면 그 아래)의 `statusLine` 에 받아쓰기 진행 한 줄을 넣거나(`enable`, 기본) 뺍니다(`disable`). 프로젝트 설정은 건드리지 않습니다. Claude Desktop 앱에는 상태 표시줄이 없습니다.
+Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 있으면 그 아래)의 `statusLine` 에 STT 진행 한 줄을 넣거나(`enable`, 기본) 뺍니다(`disable`). 프로젝트 설정은 건드리지 않습니다. Claude Desktop 앱에는 상태 표시줄이 없습니다.
 
 ```text
-받아쓰기 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%
+STT 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%
 ```
 
-- 받아쓰는 동안 몇 번째/전체·과목·제목·진행 막대를 보여 주고, 끝나면(`✓ 받아쓰기 끝`·`✗ 받아쓰기 오류`·`○ 받아쓰기 중지`) 10분 동안만 보입니다. 강제 종료로 남은 흔적은 보이지 않습니다. LMS 글의 제어 문자는 지우고 길이를 자릅니다.
+- 변환하는 동안 몇 번째/전체·과목·제목·진행 막대를 보여 주고, 끝나면(`✓ STT 완료`·`✗ STT 오류`·`○ STT 중지`) 10분 동안만 보입니다. 강제 종료로 남은 흔적은 보이지 않습니다. LMS 글의 제어 문자는 지우고 길이를 자릅니다.
 - 명령은 `'<node 절대 경로>' '<dist/index.js 절대 경로>' statusline` 입니다 (npx 는 매번 느려서 쓰지 않음). 상태 파일만 읽습니다 (네트워크·키체인 없음).
 - **이미 쓰는 상태 표시줄이 있으면 지우지 않고** 그 명령 다음 줄에 붙입니다 (Claude Code 는 출력 여러 줄을 그대로 보여 줌). `refreshInterval` 이 없으면 30초로 넣고, 다른 값(`padding` 등)은 그대로 둡니다. `disable` 은 dotbugi 줄만 빼고 기존 명령을 되돌립니다. dotbugi 줄이 없거나 `type` 이 `command` 가 아니면 바꾸지 않습니다.
 - 바꾸기 전에 기존 → 새 `statusLine` 을 확인 창에 보여 주고 [사용자 승인](#삭제-승인)을 받습니다. 주석이 있거나 깨진 JSON 이면 거절하고, 승인을 기다리는 사이 파일이 바뀌면 덮어쓰지 않습니다. 링크된 설정 파일은 링크를 살려 실제 파일에 씁니다.
@@ -243,12 +243,12 @@ Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 
 | `confirmToken` | 확인 창이 없는 클라이언트용 일회용 토큰 ([삭제 승인](#삭제-승인)) |
 
 - 설치돼 있지 않으면 확인 없이 "없습니다"로 끝납니다.
-- 설치·받아쓰기 작업이 실행 중이면 **승인했어도 지우지 않고** 거절합니다 (두 잠금을 모두 잡은 채로만 지움). 폴더가 링크면 링크만 지웁니다.
+- 설치·STT 작업이 실행 중이면 **승인했어도 지우지 않고** 거절합니다 (두 잠금을 모두 잡은 채로만 지움). 폴더가 링크면 링크만 지웁니다.
 - 다시 쓰려면 `asr_install` 로 새로 받아야 합니다.
 
 ## `get_storage_dir` / `set_storage_dir`
 
-받은 파일(강의자료·과제 첨부·녹취·`요약.md`)의 저장 위치를 확인하고 바꿉니다. 모두 `<저장 위치>/<YYYY-N학기>/` 아래에 쌓입니다.
+받은 파일(강의자료·과제 첨부·STT 결과·`요약.md`)의 저장 위치를 확인하고 바꿉니다. 모두 `<저장 위치>/<YYYY-N학기>/` 아래에 쌓입니다.
 
 - 학기는 한국 시간 기준 달로 정합니다: **3~8월 → 그해 1학기, 9~12월 → 그해 2학기, 1~2월 → 전년도 2학기** (계절학기도 달 기준). 예: 2026년 10월 → `2026-2학기`, 2027년 1월 → `2026-2학기`.
 - `get_storage_dir`(읽기 전용): 저장 위치, 이번 학기 폴더, 기본 위치인지.
@@ -265,7 +265,7 @@ Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 
 - 받는 경로: **홈 폴더 아래의 일반 폴더**만 (WSL 은 Windows 사용자 폴더 `/mnt/c/Users/<사용자>/…` 도). 홈 폴더 자체, 숨김 폴더(`.config` 등)·`AppData`·`Library`, 이미 있는 단계가 링크(symlink)이거나 폴더가 아닌 경로, 지금 저장 위치의 안쪽·상위 폴더는 거부합니다. Windows 가 같은 폴더로 여는 별칭(끝이 점·공백인 이름, `APPDAT~1` 같은 8.3 짧은 이름)도 거부하고, Windows 에서는 첫 단계의 실제 이름으로 `AppData` 인지 다시 확인합니다. 제어·서식 문자(bidi `U+202E`·제로폭 등)가 든 경로도 거부합니다 (확인 창에 보이는 경로가 실제와 다르게 읽히지 않게).
 - **위치 변경은 항상 [승인](#삭제-승인)을 거칩니다** (`moveExisting=false`·옮길 자료가 없어도). 프롬프트 주입으로 OneDrive·공용 폴더 같은 공유 위치로 바뀌면 앞으로 받는 자료가 샐 수 있기 때문입니다. 확인 창에는 `from → to` 와 "앞으로 받는 LMS 파일이 여기 저장됩니다" 를 띄웁니다.
 - `moveExisting` 이면 지금 위치에서 **dotbugi 가 만든 자료만** 옮깁니다: 학기 폴더(`YYYY-N학기`), `assign-<번호>`, 학기 폴더 도입 전의 과목 폴더(형식이 맞는 `.dotbugi-manifest.json` 이 있는 것). 링크·개인 파일·다른 폴더는 그대로 두고 결과에 "옮기지 않은 항목 N개 (dotbugi 자료가 아님)" 로 알립니다 (저장 위치가 `~/Downloads` 같은 넓은 폴더여도 개인 파일을 옮기지 않게). 옮길 자료가 있으면 그 항목과 개수도 확인 창에 띄우고, 승인받은 뒤 옮깁니다. 원래 폴더는 비었을 때만 지웁니다. 같은 파일 시스템 안의 이동(rename)만 합니다 — 다른 드라이브(예: WSL 홈 → `C:`)면 아무것도 바꾸지 않고 거절하므로, `moveExisting=false` 로 위치만 바꾼 뒤 직접 옮기세요. 새 위치에 같은 이름이 있는 항목은 덮어쓰지 않고 남겨 두고 알립니다.
-- 새 위치는 승인·이동이 끝난 뒤에만 저장합니다. 옮기는 동안 sync 잠금과 받아쓰기 잠금을 잡으므로 동기화·받아쓰기가 실행 중이면 오류로 끝납니다.
+- 새 위치는 승인·이동이 끝난 뒤에만 저장합니다. 옮기는 동안 sync 잠금과 STT 잠금을 잡으므로 동기화·STT 변환이 실행 중이면 오류로 끝납니다.
 
 ## 삭제 승인
 
@@ -301,13 +301,13 @@ dotbugi-mcp                     MCP 서버 실행 (stdio)
 dotbugi-mcp login [--browser]   로그인              (도구: login, --browser = method: browser)
 dotbugi-mcp logout              로그아웃            (도구: logout)
 dotbugi-mcp sync                강의자료 동기화      (도구: sync_materials, 사라진 파일 삭제는 delete_materials)
-dotbugi-mcp transcribe <cmid> [--language auto|Korean|…]  VOD 받아쓰기  (도구: transcribe_vod, Ctrl+C 로 중지)
-dotbugi-mcp statusline       받아쓰기 진행 한 줄 (Claude Code 상태 표시줄용, setup_statusline 이 설정)
+dotbugi-mcp transcribe <cmid> [--language auto|Korean|…]  동영상 강의 STT 변환  (도구: transcribe_vod, Ctrl+C 로 중지)
+dotbugi-mcp statusline       STT 진행 한 줄 (Claude Code 상태 표시줄용, setup_statusline 이 설정)
 dotbugi-mcp courses [...]       추적 강좌 켜기/끄기  (도구: list_courses / set_course_tracking)
 dotbugi-mcp asr install|status|remove  음성 인식 런타임  (도구: asr_install / asr_status / asr_remove)
 ```
 
-- 잠금은 도구와 공용입니다 (동기화·받아쓰기·ASR 설치는 터미널과 도구를 합쳐 한 번에 하나).
+- 잠금은 도구와 공용입니다 (동기화·STT·ASR 설치는 터미널과 도구를 합쳐 한 번에 하나).
 
 ### `courses`
 

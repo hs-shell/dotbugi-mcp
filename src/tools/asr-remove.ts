@@ -34,7 +34,7 @@ export function registerAsrRemove(server: McpServer): void {
       title: 'ASR 런타임 삭제',
       description:
         `로컬 음성 인식 런타임(${ASR_ROOT})을 삭제한다. 사용자가 클라이언트 확인 창에서 직접 승인해야 지운다. ` +
-        '설치·받아쓰기 작업이 실행 중이면 거절한다. 확인 창이 없는 클라이언트면 confirmToken 을 돌려준다 — 사용자 동의를 받은 뒤에만 그 토큰으로 다시 호출한다.',
+        '설치·STT 작업이 실행 중이면 거절한다. 확인 창이 없는 클라이언트면 confirmToken 을 돌려준다 — 사용자 동의를 받은 뒤에만 그 토큰으로 다시 호출한다.',
       inputSchema: z.object({ confirmToken: confirmTokenInput }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },

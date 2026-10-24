@@ -70,6 +70,6 @@ export async function findVod(fetchHtml: FetchHtml, cmid: number): Promise<VodMe
     };
   }
   throw new Error(
-    `추적 중인 강좌(dotbugi-mcp courses)에서 이 강의(VOD)를 찾지 못했습니다.${failures > 0 ? ` (과목 ${failures}개의 목록을 읽지 못했습니다)` : ''}`
+    `추적 중인 강좌(dotbugi-mcp courses)에서 이 동영상 강의를 찾지 못했습니다.${failures > 0 ? ` (과목 ${failures}개의 목록을 읽지 못했습니다)` : ''}`
   );
 }

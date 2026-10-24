@@ -50,9 +50,14 @@ describe('transcribe 명령', () => {
       progress: 100,
       path,
       cmid: 42,
-      message: '녹취를 저장했습니다.',
+      message: 'STT 결과를 저장했습니다.',
     });
-    expect(logs).toEqual(['[영상 받는 중]', '[받아쓰는 중] 1%', '[받아쓰는 중] 10%', `녹취를 저장했습니다. ${path}`]);
+    expect(logs).toEqual([
+      '[영상 받는 중]',
+      '[STT 변환 중] 1%',
+      '[STT 변환 중] 10%',
+      `STT 결과를 저장했습니다. ${path}`,
+    ]);
   });
 
   it('이미 녹취가 있으면 skipped, 진행률 없음', async () => {

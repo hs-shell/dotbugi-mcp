@@ -42,7 +42,7 @@ export async function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
   for (const end = Date.now() + QUEUE_LOCK_WAIT_MS; ; await sleep(50)) {
     let release: () => Promise<void>;
     try {
-      release = await acquireLock(QUEUE_LOCK_FILE, '받아쓰기 대기열을 잠그지 못했습니다. 잠시 뒤 다시 시도하세요.');
+      release = await acquireLock(QUEUE_LOCK_FILE, 'STT 대기열을 잠그지 못했습니다. 잠시 뒤 다시 시도하세요.');
     } catch (err) {
       if (Date.now() > end) throw err;
       continue;

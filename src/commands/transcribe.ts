@@ -150,7 +150,7 @@ async function transcribeOne({ cmid, language }: Item, worker: boolean, signal: 
       report,
       signal,
     });
-    const message = result.status === 'done' ? '녹취를 저장했습니다.' : '이미 녹취가 있어 건너뛰었습니다.';
+    const message = result.status === 'done' ? 'STT 결과를 저장했습니다.' : '이미 STT 결과가 있어 건너뛰었습니다.';
     save({
       status: result.status,
       phase: null,

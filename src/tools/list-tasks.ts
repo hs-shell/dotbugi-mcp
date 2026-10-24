@@ -12,20 +12,29 @@ import {
   type TaskType,
 } from '../tasks/schema.js';
 import { selectTasks } from '../tasks/select.js';
+import { cell } from '../tasks/text.js';
 
-const TYPE_LABELS: Record<TaskType, string> = { vod: '강의', assign: '과제', quiz: '퀴즈' };
+const TYPE_LABELS: Record<TaskType, string> = { vod: '동영상 강의', assign: '과제', quiz: '퀴즈' };
 
-// 표 구분자와 헷갈리지 않게 LMS 텍스트 안의 | 는 이스케이프한다
-const cell = (value: string) => value.replaceAll('|', '\\|');
+// ✗ 마감 지남 · ✓ 완료 · ● 남음
+const mark = (t: Task) => (t.overdue ? '✗' : t.done ? '✓' : '●');
 
-// 구조화 결과를 못 읽는 클라이언트용 한 줄 요약 (경고가 있으면 맨 앞에)
+// 구조화 결과를 못 읽는 클라이언트용 마크다운 표 (경고가 있으면 맨 앞에)
 export function toText(tasks: Task[], warnings: string[]): string {
-  const lines = tasks.map(
+  const notes = warnings.map((w) => `※ ${w}`);
+  if (tasks.length === 0) return [...notes, '조건에 맞는 항목이 없습니다.'].join('\n');
+  const rows = tasks.map(
     (t) =>
-      `[${TYPE_LABELS[t.type]}] ${cell(t.course)} | ${cell(t.title)} | ${t.status} | ${t.remaining} | ${cell(t.deadline ?? '-')}${t.cmid === null ? '' : ` | cmid ${t.cmid}`}`
+      `| ${mark(t)} | ${TYPE_LABELS[t.type]} | ${cell(t.course)} | ${cell(t.title)} | ${cell(t.status)} | ${t.remaining} | ${cell(t.deadline ?? '-')} | ${t.cmid ?? '-'} |`
   );
-  if (lines.length === 0) lines.push('조건에 맞는 항목이 없습니다.');
-  return [...warnings, ...lines].join('\n');
+  return [
+    ...notes,
+    `**항목 ${tasks.length}개**`,
+    '',
+    '| | 종류 | 과목 | 제목 | 상태 | 남은 시간 | 마감 | cmid |',
+    '|---|---|---|---|---|---|---|---|',
+    ...rows,
+  ].join('\n');
 }
 
 // 세션 → 캐시된 수집 결과 → 필터·정렬. 세션 없음·만료면 login 안내 오류를 던진다
