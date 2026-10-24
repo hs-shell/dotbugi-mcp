@@ -31,8 +31,8 @@ interface CdpTarget {
   url: string;
 }
 
-// 대체 방식: 임시 프로필 브라우저 창에서 사용자가 직접 로그인 → CDP 로 LMS 세션 쿠키만 꺼낸다
-export async function loginWithBrowser(): Promise<string> {
+// 임시 프로필 로그인을 쓸 수 있는지 먼저 확인한다 (login 도구는 창을 띄우기 전에 바로 거절하려고 따로 부른다)
+export function findLoginBrowser(): string {
   // CDP 파이프(fd 3·4)는 WSL interop 을 넘어 Windows 프로세스로 전달되지 않는다 (stdin/stdout/stderr 만 중계).
   // PowerShell 로 CDP 를 한 벌 더 구현하는 대신 지원하지 않는다 (WSL 은 확장 방식 사용)
   if (isWsl()) {
@@ -42,7 +42,12 @@ export async function loginWithBrowser(): Promise<string> {
   }
   const browserPath = findBrowser();
   if (!browserPath) throw new Error('Chrome·Edge·Brave·Whale 중 설치된 브라우저를 찾지 못했습니다.');
+  return browserPath;
+}
 
+// 대체 방식: 임시 프로필 브라우저 창에서 사용자가 직접 로그인 → CDP 로 LMS 세션 쿠키만 꺼낸다
+export async function loginWithBrowser(): Promise<string> {
+  const browserPath = findLoginBrowser();
   log(NOTICE);
   const profileDir = await mkdtemp(join(tmpdir(), 'dotbugi-login-'));
   // 디버깅은 TCP 포트 대신 파이프로 연다 — 로그인 대기 중 같은 기기의 다른 사용자·프로세스가 붙을 수 없다.
