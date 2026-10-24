@@ -130,6 +130,8 @@ export async function stopTranscribe(deps = STOP_DEPS): Promise<string> {
   const state = readTranscribeState();
   if (pid === process.pid || state?.status !== 'running' || state.pid !== pid || isTranscribeStale(state, Date.now()))
     return '받아쓰기 작업을 확인하지 못해 중지하지 않았습니다. transcribe_status 로 상태를 확인하세요 (터미널에서 직접 실행한 transcribe 는 그 터미널에서 Ctrl+C).';
+  // 남은 대기열은 신호 전에 비운다 — Windows 의 process.kill 은 신호 처리기 없이 바로 끝내 작업 프로세스가 비우지 못한다
+  await withQueueLock(async () => writeTranscribeQueue({ ...readTranscribeQueue(), pending: [] })).catch(() => {});
   deps.kill(pid, 'SIGTERM');
   for (const end = Date.now() + deps.timeoutMs; Date.now() < end; await sleep(100))
     // 신호 처리기를 달기 전(시작 직후)에 받으면 잠금을 못 풀고 바로 끝난다 — 프로세스가 사라진 것도 중지로 본다

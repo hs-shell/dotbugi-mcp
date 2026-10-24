@@ -22,7 +22,7 @@ import {
   type TranscribeState,
 } from '../transcribe/state.js';
 import { startWorker, stopTranscribe, transcribeStatusState } from '../tools/transcribe-vod.js';
-import { queuePosition, readTranscribeQueue } from '../transcribe/queue.js';
+import { queuePosition, readTranscribeQueue, writeTranscribeQueue } from '../transcribe/queue.js';
 import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
 import { PAGES } from './fixtures/lms-pages.js';
 
@@ -563,6 +563,22 @@ describe('stopTranscribe', () => {
     await lockWith(OTHER);
     await expect(stopTranscribe(d)).resolves.toContain('중지했습니다');
     expect(d.kill).toHaveBeenCalledExactlyOnceWith(OTHER, 'SIGTERM');
+  });
+
+  it('작업 프로세스가 신호 처리 없이 끝나도(Windows) 남은 대기열을 비운다', async () => {
+    const d = deps();
+    await lockWith(OTHER);
+    await writeTranscribeQueue({
+      version: 1,
+      pending: [{ cmid: 43, language: 'auto' }],
+      finished: [{ cmid: 41, status: 'done', title: null }],
+    });
+    await expect(stopTranscribe(d)).resolves.toContain('중지했습니다');
+    expect(readTranscribeQueue()).toEqual({
+      version: 1,
+      pending: [],
+      finished: [{ cmid: 41, status: 'done', title: null }],
+    });
   });
 
   it.each([
