@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { spawn } from 'node:child_process';
@@ -17,6 +18,14 @@ afterEach(async () => {
   await rm(PLAYER_STATE_FILE, { force: true });
 });
 afterAll(() => rm(state.home, { recursive: true, force: true }));
+
+const lockPid = (file: string) => {
+  try {
+    return readFileSync(file, 'utf8').trim();
+  } catch {
+    return '';
+  }
+};
 
 describe('startPlayer', () => {
   // 작업 프로세스 pid 로는 살아 있는 이 테스트 프로세스를 쓴다
@@ -53,6 +62,24 @@ describe('startPlayer', () => {
     expect(readPlayerState(PLAYER_STATE_FILE)).toMatchObject({ status: 'playing', pid: process.pid });
     const release = await adoptLock(PLAYER_LOCK_FILE, 100);
     await release();
+  });
+
+  it('잠금을 작업 프로세스에 넘기기 전에 playing 상태를 써 둔다 (작업 프로세스의 첫 기록을 덮지 않게)', async () => {
+    const WORKER = 424242;
+    const spawnImpl = vi.fn(() => {
+      const c = Object.assign(new EventEmitter(), { unref: vi.fn(), pid: WORKER });
+      setImmediate(() => c.emit('spawn'));
+      return c;
+    });
+    // 잠금이 작업 프로세스 pid 로 바뀌는 첫 순간의 상태 파일을 잡는다
+    let atHandoff: unknown = 'not seen';
+    const poll = () => {
+      if (lockPid(PLAYER_LOCK_FILE) === String(WORKER)) atHandoff = readPlayerState(PLAYER_STATE_FILE);
+      else setImmediate(poll);
+    };
+    poll();
+    await startPlayer({ ...deps(), spawn: spawnImpl as unknown as typeof spawn });
+    expect(atHandoff).toMatchObject({ status: 'playing', pid: WORKER });
   });
 });
 

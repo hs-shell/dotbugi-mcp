@@ -49,13 +49,8 @@ export async function startWorker(
       child.once('spawn', resolve);
       child.once('error', reject);
     });
-    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 (작업 프로세스는 자기 pid 가 들어올 때까지 기다렸다 이어받는다).
-    // 임시 파일 + rename — 덮어쓰는 순간 빈 pid 를 읽은 다른 호출이 잠금을 낡은 것으로 보고 가져가지 않게
-    const tmp = `${TRANSCRIBE_LOCK_FILE}.${process.pid}.tmp`;
-    await writeFile(tmp, String(child.pid), { mode: 0o600 });
-    await replaceFile(tmp, TRANSCRIBE_LOCK_FILE);
-    child.unref();
-    // 시작 직후 transcribe_status 가 이전 작업 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신)
+    // 시작 직후 transcribe_status 가 이전 작업 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신).
+    // 잠금을 넘기기 전에 써야 잠금을 받자마자 쓰는 작업 프로세스의 첫 기록(과목·제목)을 덮지 않는다 (asr 와 같다)
     await writeTranscribeState({
       version: 1,
       status: 'running',
@@ -70,6 +65,12 @@ export async function startWorker(
       message: null,
       language,
     }).catch(() => {});
+    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 (작업 프로세스는 자기 pid 가 들어올 때까지 기다렸다 이어받는다).
+    // 임시 파일 + rename — 덮어쓰는 순간 빈 pid 를 읽은 다른 호출이 잠금을 낡은 것으로 보고 가져가지 않게
+    const tmp = `${TRANSCRIBE_LOCK_FILE}.${process.pid}.tmp`;
+    await writeFile(tmp, String(child.pid), { mode: 0o600 });
+    await replaceFile(tmp, TRANSCRIBE_LOCK_FILE);
+    child.unref();
   } catch (err) {
     await release();
     throw err;

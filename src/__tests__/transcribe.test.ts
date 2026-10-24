@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -440,6 +441,34 @@ describe('상태 파일·작업 잠금', () => {
     const release = await adoptLock(TRANSCRIBE_LOCK_FILE, 100);
     await release();
     await expect(stat(TRANSCRIBE_LOCK_FILE)).rejects.toThrow();
+  });
+
+  it('잠금을 작업 프로세스에 넘기기 전에 running 상태를 써 둔다 (작업 프로세스의 첫 기록을 덮지 않게)', async () => {
+    const WORKER = 424242;
+    const d = workerDeps({
+      spawn: vi.fn(() => {
+        const c = Object.assign(new EventEmitter(), { unref: vi.fn(), pid: WORKER });
+        setImmediate(() => c.emit('spawn'));
+        return c;
+      }) as unknown as typeof spawn,
+    });
+    await rm(TRANSCRIBE_STATE_FILE, { force: true });
+    // 잠금이 작업 프로세스 pid 로 바뀌는 첫 순간의 상태 파일을 잡는다
+    let atHandoff: unknown = 'not seen';
+    const poll = () => {
+      let pid = '';
+      try {
+        pid = readFileSync(TRANSCRIBE_LOCK_FILE, 'utf8').trim();
+      } catch {
+        // 아직 잠금 없음
+      }
+      if (pid === String(WORKER)) atHandoff = readTranscribeState();
+      else setImmediate(poll);
+    };
+    poll();
+    await startWorker(42, 'auto', d);
+    await rm(TRANSCRIBE_LOCK_FILE, { force: true });
+    expect(atHandoff).toMatchObject({ status: 'running', cmid: 42, pid: WORKER });
   });
 
   it('넘겨받을 잠금이 없거나 다른 프로세스 것이면 이어받지 않는다', async () => {

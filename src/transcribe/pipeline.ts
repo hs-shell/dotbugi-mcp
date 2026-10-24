@@ -5,8 +5,14 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { safeFileName } from '../assign/download.js';
 import type { AsrRuntime } from '../asr/runtime.js';
-import { LMS_NUMERIC_ID, TRANSCRIPT_MAX_BYTES, VOD_MEDIA_MAX_BYTES, VOD_SEGMENT_MAX_BYTES } from '../constants.js';
-import { childDir, ensureRealDir, openCourseDir } from '../materials/sync.js';
+import {
+  LMS_NUMERIC_ID,
+  SYNC_LOCK_WAIT_MS,
+  TRANSCRIPT_MAX_BYTES,
+  VOD_MEDIA_MAX_BYTES,
+  VOD_SEGMENT_MAX_BYTES,
+} from '../constants.js';
+import { childDir, ensureRealDir, migrateCourseDir, openCourseDir, withSyncLock } from '../materials/sync.js';
 import { ensurePrivateDir } from '../player/state.js';
 import { stripUrls } from '../redact.js';
 import type { VodMeta } from './find-vod.js';
@@ -136,7 +142,15 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     deps.report('prepare', null);
     const meta = await deps.findVod(cmid);
     if (!LMS_NUMERIC_ID.test(meta.courseId)) throw new Error('과목 번호 형식이 올바르지 않습니다.');
-    const { dir: courseDir } = await openCourseDir(deps.root, meta.course, meta.courseId, deps.now());
+    // 첫 sync 전에 받아쓰면 새 학기 과목 폴더가 먼저 생겨 예전 구조 폴더 이전이 막히고 전부 다시 받게 된다 —
+    // sync 와 같은 잠금 안에서 이전부터 하고 폴더를 고른다 (이전 경고는 다음 sync 가 다시 알린다)
+    const { dir: courseDir } = await withSyncLock(
+      async () => {
+        await migrateCourseDir(deps.root, meta.course, meta.courseId, deps.now());
+        return openCourseDir(deps.root, meta.course, meta.courseId, deps.now());
+      },
+      { ms: SYNC_LOCK_WAIT_MS, busy: '강의자료 동기화가 실행 중입니다. 강의자료 동기화가 끝난 뒤 다시 시도하세요.' }
+    );
     const weekDir = childDir(courseDir, meta.week);
     const path = join(weekDir, safeFileName(`녹취-${meta.title}.md`));
     if (await lstat(path).catch(() => null)) return { status: 'skipped', path, meta };

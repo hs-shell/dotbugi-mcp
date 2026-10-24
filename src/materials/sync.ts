@@ -12,6 +12,7 @@ import {
   MATERIAL_MCP_MAX_FILES,
   MATERIAL_REQUEST_TIMEOUT_MS,
   MATERIALS_LOCK_NAME,
+  SYNC_LOCK_POLL_MS,
   MCP_CALL_TIME_BUDGET_MS,
 } from '../constants.js';
 import { createFetchHtml, limit } from '../lms-html.js';
@@ -78,11 +79,22 @@ const sizeLabel = (bytes: number) => (bytes >= 1024 ** 3 ? `${bytes / 1024 ** 3}
 
 // MCP 도구와 CLI 가 같은 manifest 를 번갈아 덮지 않게 한 번에 하나만 돌린다.
 // 잠금은 저장 위치가 아니라 캐시 폴더에 둔다 — set_storage_dir 가 저장 위치를 옮기는 동안에도 모두 같은 잠금을 보게
-export async function withSyncLock<T>(task: () => Promise<T>): Promise<T> {
-  const release = await acquireLock(
-    join(homedir(), '.cache', 'dotbugi-mcp', MATERIALS_LOCK_NAME),
-    '다른 강의자료 동기화(sync_materials 또는 dotbugi-mcp sync)가 실행 중입니다. 끝난 뒤 다시 실행하세요.'
-  );
+const SYNC_BUSY =
+  '다른 강의자료 동기화(sync_materials 또는 dotbugi-mcp sync)가 실행 중입니다. 끝난 뒤 다시 실행하세요.';
+// wait 를 주면 잠금이 풀리기를 그만큼 기다리고, 끝내 잡지 못하면 그 안내로 실패한다 — 동기화와 겹친 짧은 작업(과제 첨부 등)이 바로 실패하지 않게
+export async function withSyncLock<T>(task: () => Promise<T>, wait?: { ms: number; busy: string }): Promise<T> {
+  const file = join(homedir(), '.cache', 'dotbugi-mcp', MATERIALS_LOCK_NAME);
+  let release: () => Promise<void>;
+  for (const end = Date.now() + (wait?.ms ?? 0); ;) {
+    try {
+      release = await acquireLock(file, SYNC_BUSY);
+      break;
+    } catch (err) {
+      if (!wait || !(err instanceof Error) || err.message !== SYNC_BUSY) throw err;
+      if (Date.now() >= end) throw new Error(wait.busy);
+      await new Promise((r) => setTimeout(r, SYNC_LOCK_POLL_MS));
+    }
+  }
   try {
     return await task();
   } finally {
@@ -228,7 +240,7 @@ const courseDirNames = (title: string, courseId: string) => [title, `${title} ($
 
 // 학기 폴더 도입 전의 <저장 위치>/<과목>/ 중 이 과목의 manifest 가 있는 것만 이번 학기 폴더로 옮긴다 (sync 잠금 안에서만 부른다).
 // 다른 학기·다른 과목의 폴더는 건드리지 않는다. manifest 경로는 과목 폴더 기준 상대 경로라 옮겨도 그대로 맞는다
-async function migrateCourseDir(root: string, title: string, courseId: string, now: Date): Promise<string[]> {
+export async function migrateCourseDir(root: string, title: string, courseId: string, now: Date): Promise<string[]> {
   const warnings: string[] = [];
   for (const name of courseDirNames(title, courseId)) {
     const legacy = childDir(root, name);

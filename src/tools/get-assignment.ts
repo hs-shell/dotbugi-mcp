@@ -12,6 +12,7 @@ import {
   LMS_DATA_NOTICE,
   LMS_ORIGIN,
   MCP_CALL_TIME_BUDGET_MS,
+  SYNC_LOCK_WAIT_MS,
 } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
 import { withSyncLock } from '../materials/sync.js';
@@ -124,13 +125,23 @@ export function registerGetAssignment(server: McpServer): void {
         const page = parseAssignPage(
           await createFetchHtml(session, ctx.mcpReq.signal)(`${ASSIGN_VIEW_PATH}?id=${cmid}`)
         );
-        const dir = downloadDir(cmid);
         // 학기 폴더 도입 전에 받아 둔 <저장 위치>/assign-<cmid> 가 있으면 이번 학기 폴더로 옮긴다 (덮어쓰지 않음)
-        // sync 잠금 안에서 — set_storage_dir 가 저장 위치를 옮기는 도중에 옛 위치에 쓰지 않게
-        const { moved, attachments, warnings } = await withSyncLock(async () => ({
-          moved: await moveLegacyDir(join(storageRoot(), assignDirName(cmid)), dir),
-          ...(await downloadAll(page.attachmentUrls, dir, session, progressOf(ctx), ctx.mcpReq.signal)),
-        }));
+        // sync 잠금 안에서 저장 위치를 읽고 쓴다 — set_storage_dir 가 옮기기 전 위치를 잡아 두고 옛 위치에 쓰지 않게.
+        // 동기화가 잠깐 잡고 있으면 바로 실패하지 않고 조금 기다린다
+        const { dir, moved, attachments, warnings } = await withSyncLock(
+          async () => {
+            const dir = downloadDir(cmid);
+            return {
+              dir,
+              moved: await moveLegacyDir(join(storageRoot(), assignDirName(cmid)), dir),
+              ...(await downloadAll(page.attachmentUrls, dir, session, progressOf(ctx), ctx.mcpReq.signal)),
+            };
+          },
+          {
+            ms: SYNC_LOCK_WAIT_MS,
+            busy: '강의자료 동기화(또는 저장 위치 이동)가 실행 중입니다. 강의자료 동기화가 끝난 뒤 다시 시도하세요.',
+          }
+        );
         if (moved) warnings.unshift(moved);
         const result: GetAssignmentOutput = {
           title: redact(page.title, [session]),

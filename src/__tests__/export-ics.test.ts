@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withSyncLock } from '../materials/sync.js';
 import { createServer } from '../server.js';
 import { buildIcs, escapeText, foldLine, uidOf } from '../tasks/ics.js';
 import type { Task } from '../tasks/schema.js';
@@ -137,6 +138,19 @@ describe('export_ics', () => {
     await send('tools/call', { name: 'export_ics', arguments: {} });
     expect(readdirSync(dirname(path))).toEqual([ICS_FILE_NAME]);
     expect(readFileSync(path, 'utf8').replace(/DTSTAMP:\S+/g, '')).toBe(ics.replace(/DTSTAMP:\S+/g, ''));
+  });
+
+  it('동기화·저장 위치 이동(sync 잠금)이 끝난 뒤에 쓴다', async () => {
+    const order: string[] = [];
+    let started!: () => void;
+    const ready = new Promise<void>((r) => (started = r));
+    const held = withSyncLock(
+      () => new Promise<void>((r) => (started(), setTimeout(() => (order.push('sync'), r()), 300)))
+    );
+    await ready;
+    await writeIcs('x', NOW).then(() => order.push('ics'));
+    await held;
+    expect(order).toEqual(['sync', 'ics']);
   });
 
   it('쓰기에 실패하면 임시 파일을 남기지 않고 오류를 알린다', async () => {

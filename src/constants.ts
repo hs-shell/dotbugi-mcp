@@ -113,6 +113,9 @@ export const MCP_CALL_TIME_BUDGET_MS = 4 * 60_000;
 export const PROGRESS_INTERVAL_MS = 1000;
 // sync_materials·sync 를 한 번에 하나만 (같은 manifest 를 번갈아 덮지 않게)
 export const MATERIALS_LOCK_NAME = '.dotbugi-sync.lock';
+// 동기화와 겹친 짧은 작업(get_assignment·받아쓰기 폴더 확인)이 잠금을 기다리는 시간과 확인 간격
+export const SYNC_LOCK_WAIT_MS = 10_000;
+export const SYNC_LOCK_POLL_MS = 200;
 
 // VOD 받아쓰기(transcribe_vod). 영상 주소(m3u8)는 view.php 가 아니라 viewer.php 의 JW Player 설정에만 있다
 export const VOD_VIEWER_PATH = '/mod/vod/viewer.php';

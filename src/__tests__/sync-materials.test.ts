@@ -9,6 +9,7 @@ import { fileKey, weekName } from '../materials/course-page.js';
 import { cliCaps, resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
 import { createServer } from '../server.js';
 import { previousSemester, semesterOf } from '../storage.js';
+import { transcribeVod } from '../transcribe/pipeline.js';
 
 const SESSION = 'abcdefghij0123456789';
 const L = 'https://learn.hansung.ac.kr';
@@ -548,6 +549,34 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     expect(await readdir(course('3주차'))).toEqual(['a.txt', 'b.txt']);
     expect((await readdir(root())).sort()).toEqual([semesterOf(new Date()), '_.._evil'].sort());
     expect(r.warnings.filter((w) => w.includes('예전 폴더'))).toEqual([]);
+  });
+
+  it('첫 sync 전에 받아쓰기부터 해도 예전 구조 폴더를 먼저 옮기고, 이어지는 sync 는 다시 받지 않는다', async () => {
+    await sync();
+    await rename(course(), join(root(), '자료구조'));
+    await writeFile(join(root(), '자료구조', '3주차', '녹취-1강 소개.md'), '받아 둔 녹취');
+    const meta = { course: '자료구조', courseId: '100', week: '3주차', title: '1강 소개' };
+    const r = await transcribeVod(42, {
+      findVod: async () => meta,
+      viewerHtml: () => Promise.reject(new Error('요청하면 안 됨')),
+      runtime: () => Promise.reject(new Error('요청하면 안 됨')),
+      fetch: () => Promise.reject(new Error('요청하면 안 됨')),
+      spawn: (() => {
+        throw new Error('실행하면 안 됨');
+      }) as never,
+      root: root(),
+      tmpDir: join(state.home, 'transcribe-tmp'),
+      now: () => new Date(),
+      report: () => {},
+      signal: new AbortController().signal,
+    });
+    // 옮긴 폴더의 녹취를 보고 건너뛴다
+    expect(r).toMatchObject({ status: 'skipped', path: course('3주차', '녹취-1강 소개.md') });
+    await expect(readdir(join(root(), '자료구조'))).rejects.toThrow();
+    fetchMock.mockClear();
+    const s = await sync();
+    expect(fileFetches().filter((u) => !u.includes('/60/'))).toEqual([]);
+    expect(s.warnings.filter((w) => w.includes('예전 폴더'))).toEqual([]);
   });
 
   it('새 학기 폴더에 같은 과목 폴더가 이미 있으면 옮기지도 합치지도 않고 경고한다', async () => {

@@ -19,12 +19,17 @@ vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
 // 한 번 호출 시간 상한은 테스트에서만 줄인다
-const budget = vi.hoisted(() => ({ ms: 4 * 60_000 }));
+const budget = vi.hoisted(() => ({ ms: 4 * 60_000, lockWait: 300 }));
 vi.mock('../constants.js', async (orig) => ({
   ...(await orig<typeof import('../constants.js')>()),
   get MCP_CALL_TIME_BUDGET_MS() {
     return budget.ms;
   },
+  // sync 잠금 기다림도 테스트에서만 줄인다
+  get SYNC_LOCK_WAIT_MS() {
+    return budget.lockWait;
+  },
+  SYNC_LOCK_POLL_MS: 20,
 }));
 
 // 익명화한 Moodle 3.2 과제 화면 (본문·첨부는 #intro, 제출 상황 표)
@@ -202,7 +207,7 @@ describe('get_assignment', () => {
     await expect(readdir(legacy)).rejects.toThrow();
   });
 
-  it('동기화·저장 위치 이동 중(sync 잠금)이면 아무것도 받지 않는다', async () => {
+  it('동기화·저장 위치 이동이 기다림 동안 끝나지 않으면(sync 잠금) 아무것도 받지 않고 다시 시도를 안내한다', async () => {
     let started!: () => void;
     let finish!: () => void;
     const ready = new Promise<void>((r) => (started = r));
@@ -212,7 +217,24 @@ describe('get_assignment', () => {
     finish();
     await held;
     expect(result).toMatchObject({ isError: true });
+    expect(JSON.stringify(result)).toContain('강의자료 동기화가 끝난 뒤 다시 시도');
     await expect(readdir(dir())).rejects.toThrow();
+  });
+
+  it('동기화가 잠깐 잡고 있던 잠금은 풀릴 때까지 기다렸다가 받는다', async () => {
+    budget.lockWait = 5000;
+    try {
+      let started!: () => void;
+      const ready = new Promise<void>((r) => (started = r));
+      const held = withSyncLock(() => new Promise<void>((r) => (started(), setTimeout(r, 200))));
+      await ready;
+      const result = await call({ cmid: 5 });
+      await held;
+      expect(result).not.toMatchObject({ isError: true });
+      expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('%PDF-1.4');
+    } finally {
+      budget.lockWait = 300;
+    }
   });
 
   it('같은 이름의 파일이 이미 있으면 덮어쓰지 않고 번호를 붙여 받는다', async () => {
