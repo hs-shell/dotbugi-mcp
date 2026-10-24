@@ -43,9 +43,9 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 /plugin install dotbugi@dotbugi
 ```
 
-위 `claude mcp add` 로 이미 등록했다면 서버가 두 개 뜨지 않게 `claude mcp remove -s user dotbugi` 로 지우세요. 플러그인은 늘 최신 버전(`@dotbugi/mcp@latest`)을 실행합니다. 입력창 위 표시는 대화형 세션(터미널·Desktop 앱)에서만 보이고(`-p`·SDK 제외), 상태 표시줄(`setup_statusline`)은 선택 사항입니다.
+위 `claude mcp add` 와 플러그인을 함께 설치하지 마세요. 이미 등록했다면 서버와 명령이 두 벌 뜨지 않게 `claude mcp remove -s user dotbugi` 로 지우세요. 플러그인은 늘 최신 버전(`@dotbugi/mcp@latest`)을 실행합니다. 명령·입력창 위 표시 같은 플러그인 파일은 릴리즈로 버전이 오를 때 갱신되는데, 이 마켓플레이스는 자동 업데이트가 기본으로 꺼져 있으니 `/plugin` 의 **Marketplaces** 에서 **Enable auto-update** 를 켜 두세요. 입력창 위 표시는 대화형 세션(터미널·Desktop 앱)에서만 보이고(`-p`·SDK 제외), 상태 표시줄(`setup_statusline`)은 선택 사항입니다.
 
-플러그인으로 설치하면 Claude Code 가 서버 이름을 `plugin:dotbugi:dotbugi` 로 붙여, 아래 [슬래시 명령](#슬래시-명령)은 `/dotbugi:status` 대신 `/mcp__plugin_dotbugi_dotbugi__status` 처럼 입력합니다 (`/` 를 누르면 목록에 보입니다). 권한 규칙 등에 쓰는 도구 이름도 `mcp__plugin_dotbugi_dotbugi__get_status` 형태가 됩니다.
+아래 [슬래시 명령](#슬래시-명령)은 두 방식 모두 `/dotbugi:status` 처럼 입력합니다 — `claude mcp add` 는 MCP 프롬프트(`/` 목록에 `(MCP)` 표시)로, 플러그인은 같은 내용의 플러그인 명령으로 제공합니다. 플러그인 명령은 `/` 로 직접 실행할 때만 동작합니다(Claude 가 스스로 부르지 않음). 플러그인으로 설치하면 권한 규칙 등에 쓰는 도구 이름은 `mcp__plugin_dotbugi_dotbugi__get_status` 형태가 됩니다.
 
 **Claude Desktop** — `claude_desktop_config.json` 의 `mcpServers` 에 추가하고 Claude Desktop 을 다시 시작합니다.
 
@@ -103,7 +103,7 @@ Claude Code 에서는 `/dotbugi:notes 자료구조 5주차 시험 대비로`, `/
 
 ### 슬래시 명령
 
-자주 쓰는 작업은 Claude Code 에서 슬래시 명령으로 바로 부를 수 있습니다 (서버 이름이 `dotbugi` 일 때). `/status` 처럼 뒷부분만 쳐도 자동 완성됩니다. `[ ]` 안 인자는 생략할 수 있고, 생략하면 추적 과목 전체가 대상입니다:
+자주 쓰는 작업은 Claude Code 에서 슬래시 명령으로 바로 부를 수 있습니다 (`claude mcp add` 는 서버 이름이 `dotbugi` 일 때, 플러그인은 그대로). `/status` 처럼 뒷부분만 쳐도 자동 완성됩니다. `[ ]` 안 인자는 생략할 수 있고, 생략하면 추적 과목 전체가 대상입니다:
 
 | 명령                                                              | 설명                                                                                          |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
