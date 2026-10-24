@@ -20,7 +20,7 @@ const freeText = (describe: string) =>
     .describe(describe);
 const CMID_LIST = new RegExp(`^\\d{1,10}([\\s,]+\\d{1,10}){0,${TRANSCRIBE_QUEUE_MAX - 1}}$`);
 const course = freeText('과목명 일부 또는 courseId (생략하면 추적 과목 전체)');
-const assignment = freeText('과제 cmid 또는 과제명 일부 (생략하면 미완료 과제 목록에서 선택)');
+const work = freeText('과제 cmid 또는 과제명 일부 (생략하면 미완료 과제 목록에서 선택)');
 // STT 대상: 숫자만이면 강의 번호 목록(대기열 상한까지)으로 본다 — 숫자 courseId 는 강의 번호와 구분되지 않아 과목은 이름으로
 const target = z
   .string()
@@ -115,20 +115,22 @@ const shortcuts: Shortcut[] = [
       '`set_course_tracking` 을 인자 없이 불러 현재 추적 상태가 체크된 선택 창에서 켜기·끄기를 고르게 하고, 바뀐 과목(● 켜짐 / ○ 꺼짐)만 알려 줘. 선택 창이 안 뜨면 돌려받은 표를 보여 주고 바꿀 과목을 물어봐.',
   },
   {
-    name: 'assignment',
-    title: '과제 지시사항 정리',
-    description: '과제 지시사항 정리 (고른 과제를 함께 수행)',
-    usage: 'assignment [cmid|과제명]',
-    example: '/dotbugi:assignment',
-    args: { assignment },
-    text: ({ assignment: a }) =>
+    name: 'work',
+    title: '과제 함께 수행',
+    description: '과제 함께 수행 (생략하면 미완료 과제 목록에서 선택)',
+    usage: 'work [cmid|과제명]',
+    example: '/dotbugi:work',
+    args: { work },
+    text: ({ work: w }) =>
       [
-        !a
-          ? '`list_tasks` 를 type: "assign" 로 불러 미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.'
-          : isId(a)
-            ? `과제 cmid 는 ${a} 이다.`
-            : `\`list_tasks\` 를 type: "assign", incompleteOnly: false, includePast: true 로 불러 제목에 "${a}" 가 들어간 과제를 찾아. 없으면 그렇다고 알리고, 여럿이면 사용자에게 골라 달라고 해.`,
-        '고른 과제로 `get_assignment` 를 불러 마감·제출 상황·받은 첨부·제출 주소를 보여 주고, instructionsPath 의 지시사항 md 를 읽어 해야 할 일·제출 형식·파일명 규칙을 정리해 줘. 그다음 과제를 함께 진행하자고 제안해 줘. 제출은 사용자가 제출 주소에서 직접 한다.',
+        !w
+          ? '1. `list_tasks` 를 type: "assign" 로 불러 미완료 과제를 번호 매긴 표(과목, 제목, 남은 시간)로 보여 주고 어느 과제를 할지 사용자에게 골라 달라고 해 (선택 질문 도구가 있으면 그것으로, 없으면 번호로). 고르기 전에는 다음 단계로 가지 마.'
+          : isId(w)
+            ? `1. 과제 cmid 는 ${w} 이다.`
+            : `1. \`list_tasks\` 를 type: "assign", incompleteOnly: false, includePast: true 로 불러 제목에 "${w}" 가 들어간 과제를 찾아. 없으면 그렇다고 알리고, 여럿이면 사용자에게 골라 달라고 해.`,
+        '2. 고른 과제로 `get_assignment` 를 불러 instructionsPath 의 지시사항 md(본문·첨부 글자)를 끝까지 읽고, 요구사항·제출 형식·파일명 규칙·마감을 짧게 짚어 줘.',
+        '3. 바로 과제를 함께 시작해: 진행 계획을 세우고, 필요하면 작업 폴더를 만들고, 사용자와 초안을 함께 작성해. 정리만 하고 멈추지 마.',
+        '4. 제출은 하지 않는다. 작업을 마칠 때 제출 주소(submitUrl)와 파일명 규칙을 다시 안내해 줘.',
       ].join('\n'),
   },
   {

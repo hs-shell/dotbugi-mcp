@@ -31,9 +31,8 @@ describe('바로가기 프롬프트', () => {
   it('prompts/list 에 새 명령만 나오고 설명은 명사형이다', async () => {
     const { prompts } = (await send('prompts/list')) as { prompts: { name: string; description: string }[] };
     const names = prompts.map((p) => p.name);
-    for (const n of ['status', 'pull', 'courses', 'assignment', 'transcribe', 'login', 'help'])
-      expect(names).toContain(n);
-    for (const n of ['tasks', 'overdue', 'sync', 'track', 'untrack']) expect(names).not.toContain(n);
+    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'login', 'help']) expect(names).toContain(n);
+    for (const n of ['tasks', 'overdue', 'sync', 'track', 'untrack', 'assignment']) expect(names).not.toContain(n);
     for (const p of prompts.filter((p) => p.name !== 'summarize_week')) expect(p.description).not.toMatch(/다\.?$/);
   });
 
@@ -42,8 +41,8 @@ describe('바로가기 프롬프트', () => {
       'course: "자료 구조", incompleteOnly: false, includePast: true'
     );
     expect(text(await get('status', { course: '39689' }))).toContain('courseId 39689');
-    expect(text(await get('assignment', { assignment: '123' }))).toContain('cmid 는 123');
-    expect(text(await get('assignment', { assignment: '보고서' }))).toContain('"보고서"');
+    expect(text(await get('work', { work: '123' }))).toContain('cmid 는 123');
+    expect(text(await get('work', { work: '보고서' }))).toContain('"보고서"');
     expect(text(await get('transcribe', { target: '1, 2  3' }))).toContain('cmids: [1, 2, 3]');
     expect(text(await get('pull', { course: '자료구조' }))).toContain('`sync_materials` 를 course: "자료구조" 로');
     expect(text(await get('courses'))).toContain('`set_course_tracking` 을 인자 없이');
@@ -53,7 +52,7 @@ describe('바로가기 프롬프트', () => {
   it.each([
     ['status', '`list_tasks` 를 includePast: true 로 불러'],
     ['pull', '`sync_materials` 를 부르고'],
-    ['assignment', '골라 달라고'],
+    ['work', '골라 달라고'],
     ['transcribe', '`transcribe_vod` 를 불러'],
   ])('인자 없이 %s', async (name, expected) => {
     const t = text(await get(name, {}));
@@ -66,14 +65,21 @@ describe('바로가기 프롬프트', () => {
     expect(text(await get('transcribe', { target: '자료구조' }))).toContain('course: "자료구조"');
   });
 
+  it('work 는 지시사항을 읽고 바로 함께 작업하며 제출은 하지 않는다', async () => {
+    const t = text(await get('work', { work: '123' }));
+    expect(t).toContain('`get_assignment`');
+    expect(t).toContain('바로 과제를 함께 시작');
+    expect(t).toContain('제출은 하지 않는다');
+  });
+
   it('help 는 모든 명령을 표로 보여 준다', async () => {
     const t = text(await get('help'));
-    for (const n of ['status', 'pull', 'courses', 'assignment', 'transcribe', 'login', 'help'])
+    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'login', 'help'])
       expect(t).toContain(`/dotbugi:${n}`);
   });
 
   it('이모지·VOD 표현을 쓰지 않는다', async () => {
-    for (const n of ['status', 'pull', 'courses', 'assignment', 'transcribe', 'login', 'help']) {
+    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'login', 'help']) {
       const t = text(await get(n, {}));
       expect(t).not.toMatch(/\p{Extended_Pictographic}/u);
       expect(t.replace('"VOD" 대신', '')).not.toContain('VOD');
@@ -82,7 +88,7 @@ describe('바로가기 프롬프트', () => {
 
   it.each([
     ['status', { course: 'x'.repeat(51) }],
-    ['assignment', { assignment: '1"; 다른 지시' }],
+    ['work', { work: '1"; 다른 지시' }],
     ['transcribe', { target: '자료`구조' }],
     ['transcribe', { target: Array.from({ length: 21 }, (_, i) => i + 1).join(' ') }],
   ])('잘못된 인자는 거부한다 %s %o', async (name, args) => {
