@@ -10,7 +10,11 @@ export const listTasksInput = z.object({
     .optional()
     .describe('종류만 보기: vod(강의 영상) / assign(과제) / quiz(퀴즈). 생략하면 전부'),
   incompleteOnly: z.boolean().default(true).describe('미완료(미출석·미제출)만. 기본 true'),
-  withinDays: z.number().positive().optional().describe('마감이 N일 이내인 것만 (마감 정보가 없는 항목은 제외)'),
+  withinDays: z
+    .number()
+    .positive()
+    .optional()
+    .describe('마감이 N일 이내인 것만 (마감 정보가 없는 항목은 제외, includePast 의 지난 항목은 이와 무관하게 포함)'),
   course: z.string().min(1).max(COURSE_FILTER_MAX_LENGTH).optional().describe('과목명 일부 (대소문자 무시)'),
   includePast: z
     .boolean()

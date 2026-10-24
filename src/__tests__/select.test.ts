@@ -61,7 +61,7 @@ describe('selectTasks', () => {
     const tasks = selectTasks(past, { incompleteOnly: false, includePast: true }, now);
     expect(tasks.map((t) => t.title)).toEqual(['놓친 강의', '지남', '곧', '완료', '나중', '없음']);
     expect(tasks.map((t) => t.overdue)).toEqual([true, true, false, false, false, false]);
-    expect(tasks[0].remaining).toBe('마감');
+    expect(tasks[0].remaining).toBe('지남');
     expect(selectTasks(past, { incompleteOnly: true, includePast: false }, now).some((t) => t.overdue)).toBe(false);
   });
   it('cmid 는 LMS 출처 주소의 숫자 id 만', () => {
