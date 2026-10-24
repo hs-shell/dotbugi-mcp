@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { registerSummarizeWeek } from './prompts/summarize-week.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
+import { registerLogin } from './tools/login.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
 import { registerTranscribeVod } from './tools/transcribe-vod.js';
 import { registerVodStatus } from './tools/vod-status.js';
@@ -13,6 +14,7 @@ const { version } = createRequire(import.meta.url)('../package.json') as { versi
 // 서버 인스턴스 생성 — stdio 연결과 분리해 테스트에서 직접 쓸 수 있게 한다
 export function createServer(): McpServer {
   const server = new McpServer({ name: 'dotbugi-mcp', version });
+  registerLogin(server);
   registerListTasks(server);
   registerVodStatus(server);
   registerGetAssignment(server);

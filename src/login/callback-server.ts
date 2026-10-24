@@ -31,7 +31,7 @@ export function startCallbackServer(allowedOrigins: readonly string[], timeoutMs
     done = true;
     const reject = (status: number) => {
       res.writeHead(status).end('', close);
-      fail(new Error('잘못된 연결 요청을 받아 중단했습니다. dotbugi-mcp login 을 다시 실행하세요.'));
+      fail(new Error('잘못된 연결 요청을 받아 중단했습니다. login 도구나 dotbugi-mcp login 으로 다시 시도하세요.'));
     };
     readBody(req, res, reject, (body) => {
       const msg = parseJson(body);
@@ -46,7 +46,7 @@ export function startCallbackServer(allowedOrigins: readonly string[], timeoutMs
 
   const timer = setTimeout(() => {
     close();
-    fail(new Error('시간이 초과되었습니다. dotbugi-mcp login 을 다시 실행하세요.'));
+    fail(new Error('시간이 초과되었습니다. login 도구나 dotbugi-mcp login 으로 다시 시도하세요.'));
   }, timeoutMs);
   function close() {
     clearTimeout(timer);
