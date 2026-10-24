@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { MATERIALS_LOCK_NAME } from '../constants.js';
+import { LMS_DATA_NOTICE, MATERIALS_LOCK_NAME } from '../constants.js';
 import { ensureRealDir, withSyncLock } from '../materials/sync.js';
 import { acquireLock } from '../player/lock.js';
 import { isWsl } from '../platform.js';
@@ -203,7 +203,9 @@ export function registerStorageDirTools(server: McpServer): void {
     },
     async (args, ctx) => {
       try {
-        return { content: [{ type: 'text', text: await setStorageDir(args, askerOf(server, ctx)) }] };
+        return {
+          content: [{ type: 'text', text: `${LMS_DATA_NOTICE}\n${await setStorageDir(args, askerOf(server, ctx))}` }],
+        };
       } catch (err) {
         return { content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }], isError: true };
       }

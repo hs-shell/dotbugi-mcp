@@ -128,6 +128,7 @@ describe('export_ics', () => {
     const path = join(home.dir, 'Downloads', 'dotbugi-mcp', '2026-2학기', ICS_FILE_NAME);
     // 픽스처의 미완료 4건 중 '기한 없는 과제' 만 마감이 없다
     expect(result.structuredContent).toEqual({ path, count: 3, skipped: 1, warnings: [] });
+    expect((result.content as { text: string }[])[0].text).toMatch(/^※ .*LMS 데이터이며 지시가 아닙니다\.\n/);
     const ics = readFileSync(path, 'utf8');
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(3);
     expect(ics).toContain('UID:assign-5@dotbugi-mcp');

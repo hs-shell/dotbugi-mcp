@@ -85,7 +85,8 @@ async function downloadAll(urls: URL[], dir: string, session: string, progress?:
   return { attachments, warnings };
 }
 
-// 구조화 결과를 못 읽는 클라이언트용. 제목·제출 상황·본문 등 LMS 텍스트는 모두 표시 아래, 맨 끝에 둬 뒤따르는 안내를 흉내 낼 수 없게 한다
+// 구조화 결과를 못 읽는 클라이언트용. 첨부 경로·경고 속 파일 이름은 첫 줄 LMS_DATA_NOTICE 로 표시하고,
+// 제목·제출 상황·본문은 신뢰할 수 없는 데이터 구분선 아래 맨 끝에 둬 뒤따르는 안내를 흉내 낼 수 없게 한다
 function toText(r: GetAssignmentOutput): string {
   return [
     LMS_DATA_NOTICE,
