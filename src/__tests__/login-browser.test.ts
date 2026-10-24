@@ -98,11 +98,14 @@ beforeEach(() => {
   isWsl.mockReturnValue(false);
   findBrowser.mockReturnValue('/fake/chrome');
   verifySession.mockReset().mockResolvedValue(true);
-  signalListeners = process.listenerCount('SIGINT') + process.listenerCount('SIGTERM');
+  signalListeners =
+    process.listenerCount('SIGINT') + process.listenerCount('SIGTERM') + process.listenerCount('SIGHUP');
 });
 afterEach(() => {
   // 어느 경로로 끝나도 신호 처리기를 남기지 않는다
-  expect(process.listenerCount('SIGINT') + process.listenerCount('SIGTERM')).toBe(signalListeners);
+  expect(process.listenerCount('SIGINT') + process.listenerCount('SIGTERM') + process.listenerCount('SIGHUP')).toBe(
+    signalListeners
+  );
   vi.mocked(spawn).mockClear();
 });
 
