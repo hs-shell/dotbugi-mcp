@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/server';
@@ -7,6 +7,7 @@ import * as z from 'zod/v4';
 import { asrLanguageSchema, DEFAULT_ASR_LANGUAGE, resolveAsrRuntime, type AsrLanguage } from '../asr/runtime.js';
 import { LMS_DATA_NOTICE } from '../constants.js';
 import { acquireLock, isAlive } from '../player/lock.js';
+import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import {
@@ -52,7 +53,7 @@ export async function startWorker(
     // 임시 파일 + rename — 덮어쓰는 순간 빈 pid 를 읽은 다른 호출이 잠금을 낡은 것으로 보고 가져가지 않게
     const tmp = `${TRANSCRIBE_LOCK_FILE}.${process.pid}.tmp`;
     await writeFile(tmp, String(child.pid), { mode: 0o600 });
-    await rename(tmp, TRANSCRIBE_LOCK_FILE);
+    await replaceFile(tmp, TRANSCRIBE_LOCK_FILE);
     child.unref();
     // 시작 직후 transcribe_status 가 이전 작업 상태를 보여주지 않게 바로 기록한다 (작업 프로세스가 이어서 갱신)
     await writeTranscribeState({
