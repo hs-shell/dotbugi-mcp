@@ -49,4 +49,11 @@ describe('출력 문구 규칙', () => {
     });
     expect(found).toEqual([]);
   });
+
+  it('README·docs 는 받아쓰기·녹취·VOD 대신 STT·동영상 강의를 쓴다', () => {
+    const scanned = [...files(join(ROOT, 'docs'), /\.md$/), join(ROOT, 'README.md')];
+    // 인자 값 `vod`·주소 `mod/vod` 는 소문자라 걸리지 않는다
+    const found = lines(scanned).filter(([, text]) => /받아쓰|받아써|녹취|VOD/.test(text));
+    expect(found).toEqual([]);
+  });
 });
