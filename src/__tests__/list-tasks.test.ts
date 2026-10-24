@@ -2,7 +2,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TASKS_CACHE_TTL_MS } from '../constants.js';
+import { LMS_DATA_NOTICE, TASKS_CACHE_TTL_MS } from '../constants.js';
 import { PLAYER_STATE_FILE } from '../player/state.js';
 import { createServer } from '../server.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, NOW } from './fixtures/lms-pages.js';
@@ -76,7 +76,8 @@ describe('list_tasks', () => {
     expect(tasks.map((t) => t.title)).toEqual(['과제1', '퀴즈1', '트리 순회', '기한 없는 과제']);
     expect(tasks[0].remaining).toBe('1일 6시간');
     const [text] = result.content as { text: string }[];
-    expect(text.text.split('\n')[0]).toBe(
+    expect(text.text.split('\n')[0]).toBe(LMS_DATA_NOTICE);
+    expect(text.text.split('\n')[1]).toBe(
       '[과제] 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00 | cmid 5'
     );
     expect(result.structuredContent).toMatchObject({ warnings: [] });
@@ -105,8 +106,8 @@ describe('list_tasks', () => {
     const result = await call({ refresh: true });
     expect(result.structuredContent).toMatchObject({ warnings: ['일부 과목/항목을 가져오지 못했습니다 (1건).'] });
     const lines = (result.content as { text: string }[])[0].text.split('\n');
-    expect(lines[0]).toBe('일부 과목/항목을 가져오지 못했습니다 (1건).');
-    expect(lines[1]).toContain('과제\\|1 |');
+    expect(lines[1]).toBe('일부 과목/항목을 가져오지 못했습니다 (1건).');
+    expect(lines[2]).toContain('과제\\|1 |');
   });
 
   it('1시간 동안 캐시를 쓰고, refresh 나 TTL 만료 시 다시 가져온다', async () => {
@@ -144,7 +145,7 @@ describe('vod_status', () => {
     const { tasks, player } = result.structuredContent as { tasks: { type: string; title: string }[]; player: null };
     expect(tasks.map((t) => [t.type, t.title])).toEqual([['vod', '트리 순회']]);
     expect(player).toBeNull();
-    expect((result.content as { text: string }[])[0].text).toMatch(/^\[강의\] .*트리 순회/);
+    expect((result.content as { text: string }[])[0].text).toMatch(/^※.*\n\[강의\] .*트리 순회/);
   });
 
   const state = {
@@ -163,8 +164,9 @@ describe('vod_status', () => {
     const result = await call({}, 'vod_status');
     expect(result.structuredContent).toMatchObject({ player: { ...state, stale: false } });
     const lines = (result.content as { text: string }[])[0].text.split('\n');
-    expect(lines[0]).toBe('🎬 VOD 1/1 · 자료구조 트리 순회  ▓▓▓▓░░░░░░ 40%  10분 남음');
-    expect(lines[1]).toContain('트리 순회');
+    expect(lines[0]).toBe(LMS_DATA_NOTICE);
+    expect(lines[1]).toBe('🎬 VOD 1/1 · 자료구조 트리 순회  ▓▓▓▓░░░░░░ 40%  10분 남음');
+    expect(lines[2]).toContain('트리 순회');
   });
 
   it('재생 중인데 갱신이 끊기면 stale 이다', async () => {
@@ -187,7 +189,7 @@ describe('vod_status', () => {
       warnings: [expect.stringContaining('login 도구')],
       player: { status: 'playing', stale: false },
     });
-    expect((result.content as { text: string }[])[0].text.split('\n')[0]).toMatch(/^🎬 VOD 1\/1/);
+    expect((result.content as { text: string }[])[0].text.split('\n')[1]).toMatch(/^🎬 VOD 1\/1/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
