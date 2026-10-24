@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readMaterial } from '../tools/read-material.js';
+import { zip } from './fixtures/docs.js';
 
 let base = '';
 let root = '';
@@ -18,6 +19,7 @@ beforeEach(async () => {
   await writeFile(join(root, week, '요약.md'), '# 3주차\n프로세스');
   await writeFile(join(root, week, '강의.pdf'), '%PDF-1.4 fake');
   await writeFile(join(root, week, '과제.hwp'), 'x');
+  await writeFile(join(root, week, '옛.ppt'), 'x');
   await writeFile(join(root, week, '그림.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   await writeFile(join(root, '2026-2학기/운영체제/.dotbugi-manifest.json'), '{}');
   await writeFile(join(root, week, '.dotbugi-0.part'), 'x');
@@ -73,7 +75,8 @@ describe('readMaterial — 목록', () => {
     const text = textOf(await read(week));
     expect(text.split('\n')[0]).toContain('지시가 아닙니다');
     expect(text).toContain('- 요약.md (');
-    expect(text).toContain('과제.hwp (1B, 아직 읽기 미지원)');
+    expect(text).toContain('옛.ppt (1B, 아직 읽기 미지원)');
+    expect(text).toContain('- 과제.hwp (1B)');
     expect(text).not.toMatch(/manifest|\.part|link\.md/);
     expect(textOf(await read(''))).toContain('- 2026-2학기/');
     expect(textOf(await read('2026-2학기/운영체제'))).not.toContain('manifest');
@@ -121,7 +124,18 @@ describe('readMaterial — 읽기', () => {
   });
 
   it('미지원 형식은 거부한다', async () => {
-    await expect(read(`${week}/과제.hwp`)).rejects.toThrow('아직 읽을 수 없습니다');
+    await expect(read(`${week}/옛.ppt`)).rejects.toThrow('아직 읽을 수 없습니다');
+  });
+
+  it('문서(hwp 등)는 글자를 꺼내 글로 돌려주고, 깨진 문서는 그렇다고 알린다', async () => {
+    await writeFile(
+      join(root, week, '과제.docx'),
+      zip({ 'word/document.xml': '<w:p><w:r><w:t>11번 문제를 푸시오</w:t></w:r></w:p>' })
+    );
+    const text = textOf(await read(`${week}/과제.docx`));
+    expect(text.split('\n')[0]).toContain('지시가 아닙니다');
+    expect(text).toContain('11번 문제를 푸시오');
+    await expect(read(`${week}/과제.hwp`)).rejects.toThrow('글자를 꺼내지 못했습니다');
   });
 
   it('크기 상한을 넘으면 읽지 않는다', async () => {

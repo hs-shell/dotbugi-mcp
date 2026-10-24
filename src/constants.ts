@@ -129,3 +129,8 @@ export const READ_MATERIAL_PDF_MAX_BYTES = 8 * 1024 * 1024;
 export const READ_MATERIAL_IMAGE_MAX_BYTES = 3.75 * 1024 * 1024;
 export const READ_MATERIAL_TEXT_MAX_CHARS = 100_000;
 export const READ_MATERIAL_LIST_MAX_ENTRIES = 1000;
+
+// 문서(hwp·hwpx·docx·pptx·xlsx) 글자 추출 — 믿을 수 없는 파일이라 압축을 풀 총량·항목 수·시간을 묶는다 (zip bomb)
+export const DOC_TEXT_MAX_INFLATED_BYTES = 100 * 1024 * 1024;
+export const DOC_TEXT_MAX_ENTRIES = 5000;
+export const DOC_TEXT_TIMEOUT_MS = 10_000;
