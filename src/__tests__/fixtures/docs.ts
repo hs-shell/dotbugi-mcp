@@ -40,9 +40,9 @@ export function zip(files: Record<string, string | Buffer>, flags = 0): Buffer {
 }
 
 // HWP 레코드 하나: 태그 10비트 · 레벨 10비트 · 크기 12비트
-function record(tag: number, data: Buffer): Buffer {
+export function record(tag: number, data: Buffer, level = 0): Buffer {
   const head = Buffer.alloc(4);
-  head.writeUInt32LE(tag | (data.length << 20));
+  head.writeUInt32LE((tag | (level << 10) | (data.length << 20)) >>> 0);
   return Buffer.concat([head, data]);
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { extractDocText } from '../doctext/extract.js';
-import { hwp, paraText, zip } from './fixtures/docs.js';
+import { hwp, paraText, record, zip } from './fixtures/docs.js';
 
 vi.mock('../constants.js', async (orig) => ({
   ...(await orig<object>()),
@@ -62,6 +62,68 @@ describe('extractDocText — 오피스·hwpx (zip+XML)', () => {
     expect(() => extractDocText('a.docx', zip(many))).toThrow('항목이 너무 많아');
     expect(() => extractDocText('a.docx', zip({ 'word/document.xml': '<w:t>x</w:t>' }, 1))).toThrow('암호');
     expect(() => extractDocText('a.docx', Buffer.from('not a zip'))).toThrow('zip 형식이 아닙니다');
+  });
+});
+
+describe('extractDocText — 숨김 글자는 버린다 (지시 숨김 통로)', () => {
+  it('docx: w:vanish 런은 빼고, w:val="0" 은 보인다', () => {
+    const run = (t: string, rpr = '') => `<w:r>${rpr ? `<w:rPr>${rpr}</w:rPr>` : ''}<w:t>${t}</w:t></w:r>`;
+    const xml = `<w:body><w:p>${run('보임')}${run('숨김', '<w:vanish/>')}${run('해제', '<w:vanish w:val="0"/>')}</w:p></w:body>`;
+    expect(extractDocText('a.docx', zip({ 'word/document.xml': xml }))).toBe('보임해제');
+  });
+
+  it('pptx: 숨긴 슬라이드·숨긴 도형의 글은 빼고 번호는 유지', () => {
+    const sp = (t: string, hidden = '') =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="2" name="x"${hidden}/></p:nvSpPr><p:txBody><a:p><a:r><a:t>${t}</a:t></a:r></a:p></p:txBody></p:sp>`;
+    const text = extractDocText(
+      'a.pptx',
+      zip({
+        'ppt/slides/slide1.xml': `<p:sld>${sp('보임')}${sp('숨김', ' hidden="1"')}</p:sld>`,
+        'ppt/slides/slide2.xml': `<p:sld show="0">${sp('숨긴 슬라이드 글')}</p:sld>`,
+      })
+    );
+    expect(text).toBe('## 슬라이드 1\n보임\n\n## 슬라이드 2\n(숨긴 슬라이드)');
+  });
+
+  it('xlsx: 숨긴 행은 뺀다', () => {
+    const sheet =
+      '<sheetData><row r="1"><c t="inlineStr"><is><t>보임</t></is></c></row>' +
+      '<row r="2" hidden="1"><c t="inlineStr"><is><t>숨김</t></is></c></row></sheetData>';
+    expect(extractDocText('a.xlsx', zip({ 'xl/worksheets/sheet1.xml': sheet }))).toBe('## 시트 1\n보임');
+  });
+
+  it('hwpx: 숨은 설명은 뺀다', () => {
+    const sec =
+      '<hs:sec><hp:p><hp:run><hp:t>보임</hp:t><hp:ctrl><hp:hiddenComment><hp:subList><hp:p><hp:run><hp:t>숨김</hp:t></hp:run></hp:p></hp:subList></hp:hiddenComment></hp:ctrl></hp:run></hp:p></hs:sec>';
+    expect(extractDocText('a.hwpx', zip({ 'Contents/section0.xml': sec }))).toBe('보임');
+  });
+
+  it('hwp: 숨은 설명(tcmt) 컨트롤 아래 문단은 뺀다', () => {
+    const tcmt = Buffer.alloc(4);
+    tcmt.writeUInt32LE(0x74636d74);
+    const hidden = paraText('숨김', { ctrl: 13 }).subarray(4);
+    const doc = hwp([
+      [paraText('보임', { ctrl: 13 }), record(71, tcmt, 1), record(67, hidden, 2), paraText('끝', { ctrl: 13 })],
+    ]);
+    expect(extractDocText('a.hwp', doc)).toBe('보임\n끝');
+  });
+});
+
+describe('extractDocText — 악성 입력', () => {
+  it('닫히지 않은 태그가 이어져도 선형 시간 (ReDoS)', () => {
+    const t = Date.now();
+    extractDocText('a.docx', zip({ 'word/document.xml': '<w:t<'.repeat(150_000) + 'a'.repeat(100_000) }));
+    extractDocText(
+      'a.xlsx',
+      zip({ 'xl/sharedStrings.xml': '<si>'.repeat(100_000), 'xl/worksheets/sheet1.xml': '<row<c'.repeat(80_000) })
+    );
+    expect(Date.now() - t).toBeLessThan(2000);
+  });
+
+  it('hwp: FAT 섹터 수를 부풀려 채우기 크기를 키우면 할당 전에 멈춘다', () => {
+    const doc = hwp([[paraText('x')]]);
+    doc.writeUInt32LE(0x7fffffff, 44);
+    expect(() => extractDocText('a.hwp', doc)).toThrow('너무 커서');
   });
 });
 

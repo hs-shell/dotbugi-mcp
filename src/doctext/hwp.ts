@@ -10,6 +10,10 @@ const PASSWORD = 2;
 const DISTRIBUTION = 4;
 // HWPTAG_BEGIN(0x10) + 51 — 문단의 글자
 const PARA_TEXT = 67;
+// HWPTAG_BEGIN + 55 — 컨트롤 머리. 첫 4바이트가 컨트롤 ID
+const CTRL_HEADER = 71;
+// 숨은 설명('tcmt') — 화면에 안 보이는 글이라 지시 숨김 통로가 된다
+const HIDDEN_COMMENT = 0x74636d74;
 // 1 글자짜리 제어 문자. 나머지 0~31 은 8 글자(16바이트)를 차지하는 인라인·확장 제어(표·그림 자리 등)라 건너뛴다
 const CHAR_CONTROLS = new Set([0, 10, 13, 24, 25, 26, 27, 28, 29, 30, 31]);
 
@@ -37,6 +41,8 @@ function paraText(data: Buffer): string {
 // 레코드 머리: 태그 10비트 · 레벨 10비트 · 크기 12비트 (0xfff 면 뒤 4바이트가 크기)
 function sectionText(data: Buffer, budget: Budget): string {
   const parts: string[] = [];
+  // 숨은 설명 컨트롤의 레벨. 그보다 깊은 레코드(그 안의 문단)는 버린다
+  let skipLevel = -1;
   for (let p = 0; p + 4 <= data.length;) {
     const head = data.readUInt32LE(p);
     let size = head >>> 20;
@@ -46,7 +52,14 @@ function sectionText(data: Buffer, budget: Budget): string {
       size = data.readUInt32LE(p);
       p += 4;
     }
-    if ((head & 0x3ff) === PARA_TEXT) parts.push(paraText(data.subarray(p, p + size)));
+    const tag = head & 0x3ff;
+    const level = (head >>> 10) & 0x3ff;
+    if (skipLevel >= 0 && level <= skipLevel) skipLevel = -1;
+    if (skipLevel < 0) {
+      if (tag === CTRL_HEADER && size >= 4 && p + 4 <= data.length && data.readUInt32LE(p) === HIDDEN_COMMENT)
+        skipLevel = level;
+      else if (tag === PARA_TEXT) parts.push(paraText(data.subarray(p, p + size)));
+    }
     p += size;
     if (parts.length % 1000 === 0) budget.check();
   }
