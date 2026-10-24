@@ -34,4 +34,24 @@ describe('acquireLock', () => {
     expect(await readFile(file, 'utf8')).toBe(String(process.pid));
     await release();
   });
+
+  it('죽은 잠금을 여럿이 동시에 넘겨받아도 하나만 잡는다', async () => {
+    // 시작을 조금씩 어긋나게 해 "죽은 pid 를 읽음 → 남이 넘겨받음 → 내가 지움" 순서가 생기게 한다
+    await acquireLock(file);
+    for (let round = 0; round < 30; round++) {
+      await writeFile(file, '999999999');
+      const results = await Promise.allSettled(
+        Array.from({ length: 8 }, (_, i) => new Promise((r) => setTimeout(r, i % 3)).then(() => acquireLock(file)))
+      );
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(await readFile(file, 'utf8')).toBe(String(process.pid));
+    }
+  });
+
+  it('해제는 잠금이 아직 내 것일 때만 지운다', async () => {
+    const release = await acquireLock(file);
+    await writeFile(file, '1');
+    await release();
+    expect(await readFile(file, 'utf8')).toBe('1');
+  });
 });
