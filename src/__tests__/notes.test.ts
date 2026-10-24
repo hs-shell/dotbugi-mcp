@@ -87,6 +87,20 @@ describe('scanNotesTargets + saveNotes', () => {
     });
   });
 
+  it('과제 폴더(과제-<이름>)는 노트 자료·지문·대상에 넣지 않는다', async () => {
+    await saveNotes({ dir: weekDir('3주차'), content: '# 노트' });
+    const assign = join(weekDir('3주차'), '과제-보고서');
+    await mkdir(assign);
+    await writeFile(join(assign, '과제-보고서.md'), '지시사항');
+    // 주차를 모르는 과제는 과목 폴더 바로 아래에 있다 — 주차로 보지 않는다
+    await mkdir(join(weekDir('과제-공지 과제')), { recursive: true });
+    await writeFile(join(weekDir('과제-공지 과제'), '과제-공지 과제.md'), '지시사항');
+    const r = await scan();
+    expect(r).toMatchObject({ targets: [], upToDate: 1 });
+    await writeFile(join(assign, '과제-보고서.md'), '바뀐 지시사항');
+    expect((await scan()).targets).toEqual([]);
+  });
+
   it('노트 파일은 자료 지문에서 빠지고, 다시 쓰려면 replace 가 필요하다', async () => {
     const path = await saveNotes({ dir: weekDir('3주차'), content: '# 노트' });
     expect((await scan()).targets).toEqual([]);

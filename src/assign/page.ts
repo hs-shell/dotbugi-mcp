@@ -15,6 +15,16 @@ export interface AssignPage {
   attachmentUrls: URL[];
   // 교수자(채점) 화면 — 이 과목에서 교수자 권한이라 내 제출 상황 대신 채점 요약이 나온다
   gradingView: boolean;
+  // 과제가 속한 과목 번호 (못 찾으면 null)
+  courseId: string | null;
+}
+
+// Moodle 이 body 에 다는 course-<id> 클래스, 없으면 이동 경로(breadcrumb)의 강좌 링크
+function courseIdOf(doc: Document): string | null {
+  const fromBody = /(?:^|\s)course-(\d{1,10})(?:\s|$)/.exec(doc.body?.className ?? '')?.[1];
+  if (fromBody) return fromBody;
+  const link = doc.querySelector('.breadcrumb a[href*="/course/view.php?id="]')?.getAttribute('href') ?? '';
+  return /[?&]id=(\d{1,10})(?:&|$)/.exec(link)?.[1] ?? null;
 }
 
 // 세션 쿠키를 붙여 받을 수 있는 건 LMS 출처의 pluginfile 뿐이다 (다른 주소는 본문 링크로만 남는다)
@@ -57,5 +67,6 @@ export function parseAssignPage(doc: Document): AssignPage {
     body: intro ? htmlToMarkdown(intro) : '',
     attachmentUrls: intro ? attachmentUrls(intro) : [],
     gradingView: !status.length && grading.length > 0,
+    courseId: courseIdOf(doc),
   };
 }

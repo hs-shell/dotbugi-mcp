@@ -12,7 +12,7 @@ import {
 import { lmsFetch } from '../lms.js';
 import { semesterDir } from '../storage.js';
 
-// 과제마다 전용 폴더 (<저장 위치>/<학기>/assign-<cmid>). 이 폴더 밖에는 쓰지 않는다
+// 예전 과제 폴더 (<저장 위치>/<학기>/assign-<cmid>). 지금은 과목을 모를 때만 여기 받고, 있으면 과목 폴더로 옮긴다 (assign/folder.ts)
 export const assignDirName = (cmid: number) => `assign-${cmid}`;
 export const downloadDir = (cmid: number, now = new Date()) => join(semesterDir(now), assignDirName(cmid));
 
