@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.2](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.1...v0.4.2) (2026-10-24)
+
+
+### Bug Fixes
+
+* Google Drive(drvfs)로 옮기기 EPERM 실패와 마운트 안내 개선 ([#145](https://github.com/hs-shell/dotbugi-mcp/issues/145)) ([c253f3a](https://github.com/hs-shell/dotbugi-mcp/commit/c253f3adfc03a845896f3542af428a1aa99330fb))
+* 교수자 화면 과목의 과제를 제출로 잘못 잡지 않고 알림 ([#139](https://github.com/hs-shell/dotbugi-mcp/issues/139)) ([77005ee](https://github.com/hs-shell/dotbugi-mcp/commit/77005ee8b223e7262220cbe984a4fca03eaecc45))
+* 사용자가 실행한 명령은 할 일 캐시를 무시하고, pull 이 오래됐으면 먼저 최신화 ([#146](https://github.com/hs-shell/dotbugi-mcp/issues/146)) ([dd56e2c](https://github.com/hs-shell/dotbugi-mcp/commit/dd56e2c6a9eef1de7d61177388a2509ba6fe2b25))
+* 확인 창 조작 안내와 취소 이유 구분, 삭제 외 확인은 엔터만으로 승인 ([#142](https://github.com/hs-shell/dotbugi-mcp/issues/142)) ([e4db1b7](https://github.com/hs-shell/dotbugi-mcp/commit/e4db1b7fa6f8ac01c16c8ed449fc47b564960e9d))
+
 ## [0.4.1](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.0...v0.4.1) (2026-10-24)
 
 
