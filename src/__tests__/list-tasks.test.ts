@@ -70,7 +70,7 @@ describe('list_tasks', () => {
       '',
       '| | 종류 | 과목 | 제목 | 상태 | 남은 시간 | 마감 | cmid |',
       '|---|---|---|---|---|---|---|---|',
-      '| ● | 과제 | 자료구조 | 과제1 | 미제출 | 1일 6시간 | 2026-10-25T18:00:00+09:00 | 5 |',
+      '| ● | 과제 | 자료구조 | 과제1 | 미제출 | `1일 6시간` | `2026-10-25T18:00:00+09:00` | `5` |',
     ]);
     expect(result.structuredContent).toMatchObject({ warnings: [] });
     expect(JSON.stringify(result)).not.toContain(SESSION);
@@ -147,5 +147,38 @@ describe('list_tasks', () => {
     const result = await call({ refresh: true });
     expect(result).toMatchObject({ isError: true });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('채팅 강조 규칙', () => {
+  const base = { type: 'assign', course: 'C', status: '-', remaining: '1일', cmid: 7, done: false, overdue: false };
+  const at = (ms: number) => new Date(ms).toISOString();
+
+  it('마감 지남 → 곧 마감 → 남음 → 완료 순으로, 앞의 둘은 제목을 굵게, 핵심 값은 인라인 코드로', () => {
+    const now = Date.parse('2026-10-24T00:00:00Z');
+    const tasks = [
+      { ...base, title: '완료', done: true, deadline: at(now + 3_600_000) },
+      { ...base, title: '남음', deadline: at(now + 3 * 86_400_000) },
+      { ...base, title: '곧', deadline: at(now + 3_600_000) },
+      { ...base, title: '지남', overdue: true, deadline: at(now - 3_600_000) },
+    ];
+    const rows = toText(tasks as never, [], now)
+      .split('\n')
+      .slice(-4);
+    expect(rows.map((r) => r.split(' | ')[0])).toEqual(['| ✗', '| ▸', '| ●', '| ✓']);
+    expect(rows[0]).toContain('| **지남** |');
+    expect(rows[1]).toContain('| **곧** |');
+    expect(rows[2]).toContain('| 남음 |');
+    expect(rows[2]).toContain('| `1일` |');
+    expect(rows[2]).toContain('| `7` |');
+  });
+});
+
+describe('code', () => {
+  it('백틱이 든 값도 스팬이 깨지지 않게 더 긴 펜스로 감싼다', async () => {
+    const { code } = await import('../tasks/text.js');
+    expect(code('3일')).toBe('`3일`');
+    expect(code('a`b')).toBe('``a`b``');
+    expect(code('`a')).toBe('`` `a ``');
   });
 });

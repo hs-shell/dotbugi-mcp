@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import { LMS_DATA_NOTICE } from '../constants.js';
+import { LMS_DATA_NOTICE, SOON_MS } from '../constants.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { getTaskItems } from '../tasks/cache.js';
@@ -12,21 +12,31 @@ import {
   type TaskType,
 } from '../tasks/schema.js';
 import { selectTasks } from '../tasks/select.js';
-import { cell } from '../tasks/text.js';
+import { cell, code } from '../tasks/text.js';
 
 const TYPE_LABELS: Record<TaskType, string> = { vod: '동영상 강의', assign: '과제', quiz: '퀴즈' };
 
-// ✗ 마감 지남 · ✓ 완료 · ● 남음
-const mark = (t: Task) => (t.overdue ? '✗' : t.done ? '✓' : '●');
+// 0 마감 지남 ✗ · 1 곧 마감 ▸ · 2 남음 ● · 3 완료 ✓ — 이 순서로 보여 준다
+const MARKS = ['✗', '▸', '●', '✓'] as const;
+function rank(t: Task, now: number): number {
+  if (t.overdue) return 0;
+  if (t.done) return 3;
+  const left = t.deadline ? Date.parse(t.deadline) - now : NaN;
+  return left >= 0 && left <= SOON_MS ? 1 : 2;
+}
 
-// 구조화 결과를 못 읽는 클라이언트용 마크다운 표 (경고가 있으면 맨 앞에)
-export function toText(tasks: Task[], warnings: string[]): string {
+// 구조화 결과를 못 읽는 클라이언트용 마크다운 표 (경고가 있으면 맨 앞에).
+// 채팅 강조 규칙: 핵심 값(남은 시간·마감·cmid)은 인라인 코드, 마감 지남·곧 마감 제목은 굵게
+export function toText(tasks: Task[], warnings: string[], now = Date.now()): string {
   const notes = warnings.map((w) => `※ ${w}`);
   if (tasks.length === 0) return [...notes, '조건에 맞는 항목이 없습니다.'].join('\n');
-  const rows = tasks.map(
-    (t) =>
-      `| ${mark(t)} | ${TYPE_LABELS[t.type]} | ${cell(t.course)} | ${cell(t.title)} | ${cell(t.status)} | ${t.remaining} | ${cell(t.deadline ?? '-')} | ${t.cmid ?? '-'} |`
-  );
+  const rows = tasks
+    .map((t) => ({ t, r: rank(t, now) }))
+    .sort((a, b) => a.r - b.r)
+    .map(({ t, r }) => {
+      const title = r <= 1 ? `**${cell(t.title)}**` : cell(t.title);
+      return `| ${MARKS[r]} | ${TYPE_LABELS[t.type]} | ${cell(t.course)} | ${title} | ${cell(t.status)} | ${cell(code(t.remaining))} | ${t.deadline ? cell(code(t.deadline)) : '-'} | ${t.cmid ? code(String(t.cmid)) : '-'} |`;
+    });
   return [
     ...notes,
     `**항목 ${tasks.length}개**`,

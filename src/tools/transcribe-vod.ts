@@ -31,6 +31,7 @@ import {
   withQueueLock,
   writeTranscribeQueue,
 } from '../transcribe/queue.js';
+import { code } from '../tasks/text.js';
 
 // 상태 기호 — ● 진행 · ✓ 완료 · ○ 건너뜀·중지 · ✗ 오류 (이모지는 쓰지 않는다)
 const STATUS_MARKS: Record<TranscribeState['status'] | 'stale', string> = {
@@ -341,10 +342,11 @@ export function registerTranscribeVod(server: McpServer): void {
             LMS_DATA_NOTICE,
             `**STT ${state.stale ? STATUS_MARKS.stale : STATUS_MARKS[state.status]}** ${state.course ?? ''} ${state.title ?? ''}`.trim(),
             state.phase &&
-              `- 단계: ${TRANSCRIBE_PHASE_LABELS[state.phase]}${state.progress === null ? '' : ` ${state.progress}%`}`,
+              `- 단계: ${TRANSCRIBE_PHASE_LABELS[state.phase]}${state.progress === null ? '' : ` ${code(`${state.progress}%`)}`}`,
             state.language && `- 언어: ${state.language === 'auto' ? '자동 감지' : state.language}`,
-            queue.total > 1 && `- 대기열: ${queue.position}/${queue.total} (대기 ${pending.length}개)`,
-            state.path && `- 결과 파일: ${state.path}`,
+            queue.total > 1 &&
+              `- 대기열: ${code(`${queue.position}/${queue.total}`)} (대기 ${code(String(pending.length))}개)`,
+            state.path && `- 결과 파일: ${code(state.path)}`,
             state.message && `- ${state.message}`,
             ...(queue.total > 1
               ? finished.map(
