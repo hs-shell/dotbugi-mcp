@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.4.0](https://github.com/hs-shell/dotbugi-mcp/compare/v0.3.0...v0.4.0) (2026-10-24)
+
+
+### Features
+
+* get_assignment 가 본문(DOM)·첨부 글자를 합친 과제 지시사항 md 저장 ([#114](https://github.com/hs-shell/dotbugi-mcp/issues/114)) ([83210b3](https://github.com/hs-shell/dotbugi-mcp/commit/83210b3aa51806f78af713c433a6969440a0cd2a))
+* Google Drive 내 드라이브 감지와 다른 드라이브로 저장 위치 옮기기 ([#121](https://github.com/hs-shell/dotbugi-mcp/issues/121)) ([5d8ed37](https://github.com/hs-shell/dotbugi-mcp/commit/5d8ed37410beb42090e6e2646dc401f204689086))
+* notes — 주차별 강의 노트 대상 확인·변경 감지·저장 ([#126](https://github.com/hs-shell/dotbugi-mcp/issues/126)) ([3a12908](https://github.com/hs-shell/dotbugi-mcp/commit/3a1290870c8ae4a38d141d2b2000a664938d078f))
+* read_material 이 hwp·hwpx·docx·pptx·xlsx 글자를 읽기 ([#106](https://github.com/hs-shell/dotbugi-mcp/issues/106)) ([b09f10d](https://github.com/hs-shell/dotbugi-mcp/commit/b09f10d0b634855bc403a71e536a40cc9d0e8f65))
+* summary — 노트 기반 핵심 요약 (대상 확인·변경 감지·노트 먼저 묻기) ([#128](https://github.com/hs-shell/dotbugi-mcp/issues/128)) ([6098ac0](https://github.com/hs-shell/dotbugi-mcp/commit/6098ac093f8e0b94d536ae733ce9da264b86632a))
+* transcribe_vod 대상을 과목·전체로 지정하고 실행 전 확인 ([#117](https://github.com/hs-shell/dotbugi-mcp/issues/117)) ([8446335](https://github.com/hs-shell/dotbugi-mcp/commit/84463355f4c0fb8d3716e201fff3c78d86e34855))
+* transcribe_vod 에 cmid 여러 개를 넘겨 대기열로 차례로 받아쓰기 ([#105](https://github.com/hs-shell/dotbugi-mcp/issues/105)) ([ffd2ca2](https://github.com/hs-shell/dotbugi-mcp/commit/ffd2ca20372b23cf45b9dd662e232f8be4020add))
+* 과제 지시사항 변경을 diff 로 추적 ([#119](https://github.com/hs-shell/dotbugi-mcp/issues/119)) ([69f1ec2](https://github.com/hs-shell/dotbugi-mcp/commit/69f1ec2fdac080bbaf7d67b6d9324a7b10fa5f7d))
+* 받아쓰기 진행률을 Claude Code 상태 표시줄에 표시 ([#111](https://github.com/hs-shell/dotbugi-mcp/issues/111)) ([228ea32](https://github.com/hs-shell/dotbugi-mcp/commit/228ea320f26938ac593b57586937bafd1e503d6d))
+* 슬래시 명령 체계 개편 — status·pull·courses·assignment·transcribe·login·help ([#118](https://github.com/hs-shell/dotbugi-mcp/issues/118)) ([cb7bd4a](https://github.com/hs-shell/dotbugi-mcp/commit/cb7bd4adf062097075539f9b50c60ca2fa657900))
+* 추적 과목을 체크박스 선택 창으로 켜기·끄기 ([#113](https://github.com/hs-shell/dotbugi-mcp/issues/113)) ([904a69d](https://github.com/hs-shell/dotbugi-mcp/commit/904a69d4f3d1e806bb029f1df9c1b719ef5ae433))
+
+
+### Bug Fixes
+
+* STT 대상 목록에서 dimmed·기간 표시 없는 동영상 강의가 빠지는 문제 ([#127](https://github.com/hs-shell/dotbugi-mcp/issues/127)) ([d2c4378](https://github.com/hs-shell/dotbugi-mcp/commit/d2c4378bb9085fbe1e1e8e1d1f3975e3e5f08449))
+* 번호만 있는 주차 이름을 N주차 폴더로 정한다 ([#103](https://github.com/hs-shell/dotbugi-mcp/issues/103)) ([f7df42b](https://github.com/hs-shell/dotbugi-mcp/commit/f7df42bb08a03b677b67d233ecb5dbf33f8dc895))
+* 슬래시 명령 선택 인자를 비우면 안내 문구가 깨지던 문제 ([#104](https://github.com/hs-shell/dotbugi-mcp/issues/104)) ([b7cfb8b](https://github.com/hs-shell/dotbugi-mcp/commit/b7cfb8b0f8198065a374346bbe3ee701b5f9be25))
+
 ## [0.3.0](https://github.com/hs-shell/dotbugi-mcp/compare/v0.2.0...v0.3.0) (2026-10-24)
 
 
