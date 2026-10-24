@@ -88,7 +88,7 @@ const shortcuts: {
     description: '동영상 강의를 받아쓴다 (여러 개면 차례로).',
     args: { cmids },
     text: ({ cmids: ids }) =>
-      `\`transcribe_vod\` 를 cmids: [${ids!.split(/[\s,]+/).join(', ')}] 로 불러 결과를 알려 줘.`,
+      `\`transcribe_vod\` 를 cmids: [${ids!.split(/[\s,]+/).join(', ')}] 로 불러 결과를 알려 줘. 진행은 Claude Code 아래쪽 상태 표시줄에서 볼 수 있고, 아직 켜지 않았다면 setup_statusline 으로 켤 수 있다고 덧붙여 줘.`,
   },
   {
     name: 'courses',

@@ -121,6 +121,8 @@ export const VOD_MEDIA_TIMEOUT_MS = 60_000;
 export const TRANSCRIPT_MAX_BYTES = 20 * 1024 * 1024;
 // 받아쓰기 대기열에 쌓아 둘 수 있는 강의 수 (한 번에 넘기는 cmid 수도 같다)
 export const TRANSCRIBE_QUEUE_MAX = 20;
+// 상태 표시줄은 끝난(완료·오류·중지) 받아쓰기를 이 시간 동안만 보여 준다
+export const STATUSLINE_HIDE_AFTER_MS = 10 * 60_000;
 
 // 받은 자료 읽기(read_material). 글은 페이징하므로 크게, PDF·이미지는 base64 로 응답에 통째로 실리므로 작게 둔다
 export const READ_MATERIAL_MAX_BYTES = 20 * 1024 * 1024;

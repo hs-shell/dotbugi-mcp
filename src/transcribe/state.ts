@@ -15,6 +15,14 @@ export const TRANSCRIBE_HEARTBEAT_MS = 60_000;
 export const TRANSCRIBE_STATE_STALE_MS = 3 * TRANSCRIBE_HEARTBEAT_MS;
 export const TRANSCRIBE_BUSY = '이미 받아쓰기가 실행 중입니다. transcribe_status 로 확인하고 끝난 뒤 다시 실행하세요.';
 
+// 단계 이름 (터미널 진행 출력·상태 표시줄)
+export const TRANSCRIBE_PHASE_LABELS = {
+  prepare: '준비',
+  download: '영상 받는 중',
+  extract: '소리 추출',
+  transcribe: '받아쓰는 중',
+} as const;
+
 // 표시용 데이터만 — 영상 주소(토큰)·세션은 넣지 않는다. 혹시 메시지에 주소가 섞여도 쓸 때 지운다
 export const transcribeStateSchema = z.object({
   version: z.literal(1),

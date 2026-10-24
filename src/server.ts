@@ -11,6 +11,7 @@ import { registerExportIcs } from './tools/export-ics.js';
 import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerReadMaterial } from './tools/read-material.js';
+import { registerSetupStatusline } from './tools/setup-statusline.js';
 import { registerStorageDirTools } from './tools/storage-dir.js';
 import { registerLogin } from './tools/login.js';
 import { registerLogout } from './tools/logout.js';
@@ -35,6 +36,7 @@ export function createServer(): McpServer {
   registerReadMaterial(server);
   registerStorageDirTools(server);
   registerTranscribeVod(server);
+  registerSetupStatusline(server);
   registerAsrTools(server);
   registerAsrRemove(server);
   registerSummarizeWeek(server);
