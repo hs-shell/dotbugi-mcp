@@ -44,8 +44,8 @@ const sizeText = (n: number) =>
 // 저장 위치 안의 실제 폴더·정규 파일만 찾는다. 문자열 검사(밖·..)에 더해 각 단계를 lstat 으로 보고 링크·숨김(manifest·.part·잠금)은 거부한다.
 // 저장 위치 자신은 사용자가 고른 곳이라 링크여도 따른다 (~/Downloads 가 링크인 환경)
 export async function resolveMaterial(root: string, input: string): Promise<{ abs: string; rel: string; st: Stats }> {
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x1f]/.test(input)) throw new Error('경로에 제어 문자가 있습니다.');
+  // 서식 문자(bidi·제로폭)도 막는다 — set_storage_dir 와 같은 규칙
+  if (/[\p{Cc}\p{Cf}]/u.test(input)) throw new Error('경로에 제어·서식 문자가 있습니다.');
   if (input.split(/[\\/]/).includes('..')) throw new Error('경로에 .. 를 쓸 수 없습니다.');
   const base = resolve(root);
   const abs = isAbsolute(input) ? resolve(input) : resolve(base, input);

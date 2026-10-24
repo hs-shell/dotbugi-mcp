@@ -59,6 +59,7 @@ export type ConfirmOutcome = { ok: true } | { ok: false; text: string };
 const WORDS = {
   delete: {
     label: '위 항목을 삭제합니다',
+    // 경고는 목록 앞에 둔다 — 긴 목록 끝에 묻혀 안 보이지 않게
     warn: '\n\n되돌릴 수 없습니다.',
     none: '아무것도 지우지 않았습니다',
     agree: '삭제',
@@ -86,7 +87,7 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
       .elicit(
         {
           mode: 'form',
-          message: `${req.message}\n\n${list}${w.warn}`,
+          message: `${req.message}${w.warn}\n\n${list}`,
           requestedSchema: {
             type: 'object',
             properties: { confirm: { type: 'boolean', title: w.label, default: false } },

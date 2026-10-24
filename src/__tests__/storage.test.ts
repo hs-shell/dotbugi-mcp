@@ -58,6 +58,12 @@ describe('저장 위치 설정', () => {
     expect(storageRoot()).toBe(join(state.home, 'Downloads', 'dotbugi-mcp'));
     expect(() => readStorageConfig(undefined, true)).toThrow('바꾸지 않았습니다');
   });
+
+  it.each(['\u202E', '\u200B'])('경로에 서식 문자(%j)가 있으면 깨진 설정으로 본다', async (ch) => {
+    await mkdir(join(state.home, '.config', 'dotbugi-mcp'), { recursive: true });
+    await writeFile(storageConfigFile(), JSON.stringify({ version: 1, root: join(state.home, `a${ch}b`) }));
+    expect(() => readStorageConfig(undefined, true)).toThrow('바꾸지 않았습니다');
+  });
 });
 
 describe('moveLegacyDir', () => {
