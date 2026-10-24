@@ -6,6 +6,7 @@ import * as z from 'zod/v4';
 import { LMS_NUMERIC_ID } from '../constants.js';
 import { log } from '../log.js';
 import { readStateFile, writeStateFile } from '../player/state.js';
+import { clean } from './text.js';
 
 // 확장의 강좌 토글과는 별개인 MCP 전용 설정 (확장 storage 는 읽을 수 없다). courseId 별 켜기/끄기만 담는다
 export const COURSES_FILE = join(homedir(), '.config', 'dotbugi-mcp', 'courses.json');
@@ -39,3 +40,24 @@ export const isTracked = (course: CourseBase, config: CoursesConfig) =>
 // 모든 소비자(list_tasks·vod_status·play·sync·transcribe)가 같은 기준으로 강좌를 고르게 하는 단일 지점
 export const selectTrackedCourses = (all: CourseBase[], config: CoursesConfig) =>
   all.filter((c) => isTracked(c, config));
+
+// courseId 정확히 일치 또는 과목명 일부(대소문자 무시). CLI --on/--off 와 set_course_tracking 이 같은 규칙을 쓴다
+export function matchCourses(all: CourseBase[], query: string): CourseBase[] {
+  const byId = all.find((c) => c.courseId === query);
+  if (byId) return [byId];
+  const q = query.toLowerCase();
+  return all.filter((c) => clean(c.courseTitle).toLowerCase().includes(q));
+}
+
+// 같은 프로세스 안의 저장을 차례로 — MCP 클라이언트가 두 강좌 변경을 동시에 보내도 하나를 잃지 않게 (읽기도 차례 안에서)
+let saving: Promise<void> = Promise.resolve();
+
+// 한 강좌만 바꿔 저장. 깨진 설정 파일은 덮어쓰지 않게 strict 로 읽는다
+export function saveCourseTracking(courseId: string, tracked: boolean, file = COURSES_FILE): Promise<void> {
+  const run = saving.then(() => {
+    const config = readCoursesConfig(file, true);
+    return writeCoursesConfig({ ...config, courses: { ...config.courses, [courseId]: tracked } }, file);
+  });
+  saving = run.catch(() => {});
+  return run;
+}

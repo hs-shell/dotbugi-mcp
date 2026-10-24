@@ -1,5 +1,5 @@
 import { parseCoursesFromDOM, scrapeCourseData, type CourseBase, type FetchHtml } from '@dotbugi/lms-parser';
-import { LMS_COURSE_LIST_PATH, LMS_COURSE_LIST_SELECTOR, LMS_ORIGIN } from '../constants.js';
+import { LMS_COURSE_LIST_PATH, LMS_COURSE_LIST_SELECTOR, LMS_NUMERIC_ID, LMS_ORIGIN } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
 import { SessionExpiredError } from '../lms.js';
 import { log } from '../log.js';
@@ -96,6 +96,10 @@ export async function listAllCourses(fetchHtml: FetchHtml): Promise<CourseBase[]
   // 같은 과목이 목록에 여러 번 나와도 한 번만 긁는다
   return uniqueBy(parseCoursesFromDOM(page), (c) => c.courseId);
 }
+
+// 추적 설정 대상 강좌 (CLI courses·MCP 도구 공용). 설정 파일 키는 숫자 courseId 만 받는다
+export const listConfigurableCourses = async (session: string) =>
+  (await listAllCourses(createFetchHtml(session))).filter((c) => LMS_NUMERIC_ID.test(c.courseId));
 
 // 추적 중인 강좌만 (dotbugi-mcp courses 설정, 기본은 비교과 제외). 꺼진 강좌는 이후 LMS 요청도 하지 않는다
 export async function listCourses(fetchHtml: FetchHtml, config = readCoursesConfig()): Promise<CourseBase[]> {
