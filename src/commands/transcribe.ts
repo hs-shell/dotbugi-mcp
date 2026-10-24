@@ -80,7 +80,15 @@ export async function transcribe(arg: string, worker = false, languageArg?: stri
         const finished =
           outcome.status === 'stopped'
             ? queue.finished
-            : [...queue.finished, { cmid: item.cmid, status: outcome.status, title: outcome.title }];
+            : [
+                ...queue.finished,
+                {
+                  cmid: item.cmid,
+                  status: outcome.status,
+                  title: outcome.title,
+                  ...(outcome.error && { message: outcome.error.message }),
+                },
+              ];
         await writeTranscribeQueue({ version: 1, pending: rest, finished }).catch(() => {});
         // 비었으면 대기열 잠금 안에서 작업 잠금을 푼다 — 이후 도구는 실행 중이 아님을 보고 새로 띄운다
         if (!head) await release();

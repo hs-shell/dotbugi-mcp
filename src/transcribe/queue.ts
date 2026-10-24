@@ -5,6 +5,7 @@ import { asrLanguageSchema } from '../asr/runtime.js';
 import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
 import { acquireLock } from '../player/lock.js';
 import { readStateFile, stateText, writeStateFile } from '../player/state.js';
+import { stripUrls } from '../redact.js';
 import { TRANSCRIBE_STATE_FILE, type TranscribeState } from './state.js';
 
 export const TRANSCRIBE_QUEUE_FILE = join(dirname(TRANSCRIBE_STATE_FILE), 'transcribe-queue.json');
@@ -23,6 +24,8 @@ export const transcribeQueueSchema = z.object({
         cmid: z.number().int().positive(),
         status: z.enum(['done', 'skipped', 'error']),
         title: stateText.nullable(),
+        // 실패 사유 (공개 전이라 건너뜀 등). 이 필드가 생기기 전 대기열 파일엔 없다
+        message: stateText.overwrite(stripUrls).optional(),
       })
     )
     .max(TRANSCRIBE_QUEUE_MAX),

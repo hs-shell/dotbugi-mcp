@@ -103,7 +103,7 @@ describe('transcribe 명령', () => {
       pending: [],
       finished: [
         { cmid: 42, status: 'done', title: null },
-        { cmid: 43, status: 'error', title: null },
+        { cmid: 43, status: 'error', title: null, message: 'HTTP 500' },
         { cmid: 44, status: 'skipped', title: null },
       ],
     });

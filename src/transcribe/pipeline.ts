@@ -158,6 +158,8 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     deps.report('prepare', null);
     const meta = await deps.findVod(cmid);
     if (!LMS_NUMERIC_ID.test(meta.courseId)) throw new Error('과목 번호 형식이 올바르지 않습니다.');
+    // 공개 전 강의는 LMS 가 재생 목록을 주더라도 받지 않는다 — 교수가 정한 공개 제한을 우회하지 않는다 (cmid 직접 지정·대기열 모두)
+    if (meta.unavailable?.kind === 'notYet') throw new Error(meta.unavailable.reason);
     // 첫 sync 전에 받아쓰면 새 학기 과목 폴더가 먼저 생겨 예전 구조 폴더 이전이 막히고 전부 다시 받게 된다 —
     // sync 와 같은 잠금 안에서 이전부터 하고 폴더를 고른다 (이전 경고는 다음 sync 가 다시 알린다)
     const { dir: courseDir } = await withSyncLock(
@@ -181,11 +183,11 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     await ensurePrivateDir(tmp);
     let playlist: URL;
     try {
-      // 기간이 지난 강의는 재생 화면 자체를 리다이렉트로 막을 수도 있어 같은 안내로 묶는다
+      // 재생 화면 자체를 리다이렉트로 막을 수도 있어 같은 안내로 묶는다
       playlist = extractPlaylistUrl(await deps.viewerHtml(cmid));
     } catch (err) {
       // 기간이 지난 강의는 LMS 가 재생 화면에 영상을 싣지 않는다 — 원인을 그대로 알려 준다
-      if (meta.dimmed) throw new Error('열람 기간이 지나 LMS 가 영상을 주지 않습니다.');
+      if (meta.unavailable) throw new Error(meta.unavailable.reason);
       throw err;
     }
     const { segments, seconds } = await loadSegments(playlist, deps.signal, deps.fetch);
