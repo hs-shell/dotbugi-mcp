@@ -16,8 +16,9 @@ export interface CourseModule {
 // "3주차 [9월 15일 - 9월 21일]" / "Week 3" → "3주차". 주차가 없는 섹션은 섹션명, 그것도 없으면 섹션 번호
 export function weekName(sectionNumber: number, sectionName: string): string {
   const name = clean(sectionName);
-  const m = /(\d+)\s*주차|week\s*(\d+)/i.exec(name);
-  if (m) return `${Number(m[1] ?? m[2])}주차`;
+  // 이름 없는 주차는 LMS 가 번호만 보여 준다 ("4")
+  const m = /(\d+)\s*주차|week\s*(\d+)|^(\d+)$/i.exec(name);
+  if (m) return `${Number(m[1] ?? m[2] ?? m[3])}주차`;
   return name || `section-${sectionNumber}`;
 }
 

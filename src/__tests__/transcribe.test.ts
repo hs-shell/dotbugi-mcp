@@ -350,6 +350,21 @@ describe('findVod', () => {
     await expect(findVod(fetchHtml(), 709596)).rejects.toThrow('찾지 못했습니다');
   });
 
+  it('주차 이름이 번호뿐이면 N주차 폴더로 정한다 (section-N 이 아님)', async () => {
+    const pages: Record<string, string> = {
+      'https://learn.hansung.ac.kr/': PAGES['https://learn.hansung.ac.kr/'],
+      'https://learn.hansung.ac.kr/course/view.php?id=100': `<ul><li id="section-4"><h3 class="sectionname"><span><a href="#section-4">4</a></span></h3><ul>
+        <li class="activity vod modtype_vod" id="module-1169968"><div class="activityinstance">
+          <a href="/mod/vod/view.php?id=1169968"><span class="instancename">테스트</span></a></div></li></ul></li></ul>`,
+    };
+    const numbered = (async (url: string) =>
+      new DOMParser().parseFromString(
+        `<html><body>${pages[new URL(url, 'https://learn.hansung.ac.kr').href] ?? ''}</body></html>`,
+        'text/html'
+      ) as unknown as Document) as FetchHtml;
+    expect(await findVod(numbered, 1169968)).toMatchObject({ week: '4주차', title: '테스트' });
+  });
+
   it('파서가 빠뜨린 일반 VOD(기간 표시 없음)는 찾되 dimmed 로 보지 않는다', async () => {
     expect(await findVod(fetchHtml(), 709597)).toMatchObject({ title: '기간 표시 없는 강의', dimmed: false });
   });

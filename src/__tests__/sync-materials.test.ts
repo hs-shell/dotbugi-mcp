@@ -146,6 +146,8 @@ describe('weekName / fileKey', () => {
     [1, 'Week 01', '1주차'],
     [0, '강의 개요', '강의 개요'],
     [5, '  ', 'section-5'],
+    // 이름 없는 주차는 LMS 가 번호만 보여 준다 (hs-shell/dotbugi-mcp#99)
+    [4, '4', '4주차'],
   ])('%i %j → %j', (n, name, week) => expect(weekName(n, name)).toBe(week));
 
   it('리비전을 빼고 모듈 안 경로로 같은 파일을 알아본다', () => {
