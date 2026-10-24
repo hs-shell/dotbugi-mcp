@@ -31,7 +31,8 @@ describe('바로가기 프롬프트', () => {
   it('prompts/list 에 새 명령만 나오고 설명은 명사형이다', async () => {
     const { prompts } = (await send('prompts/list')) as { prompts: { name: string; description: string }[] };
     const names = prompts.map((p) => p.name);
-    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'login', 'help']) expect(names).toContain(n);
+    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'drive', 'login', 'help'])
+      expect(names).toContain(n);
     for (const n of ['tasks', 'overdue', 'sync', 'track', 'untrack', 'assignment']) expect(names).not.toContain(n);
     for (const p of prompts.filter((p) => p.name !== 'summarize_week')) expect(p.description).not.toMatch(/다\.?$/);
   });
@@ -83,14 +84,20 @@ describe('바로가기 프롬프트', () => {
     expect(t).toContain('제출은 하지 않는다');
   });
 
+  it('drive 는 Drive 를 찾아 추천 위치로 저장 위치를 옮긴다', async () => {
+    const t = text(await get('drive'));
+    expect(t).toContain('`find_google_drive`');
+    expect(t).toContain('`set_storage_dir` 를 path: suggested 로');
+  });
+
   it('help 는 모든 명령을 표로 보여 준다', async () => {
     const t = text(await get('help'));
-    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'login', 'help'])
+    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'drive', 'login', 'help'])
       expect(t).toContain(`/dotbugi:${n}`);
   });
 
   it('이모지·VOD 표현을 쓰지 않는다', async () => {
-    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'login', 'help']) {
+    for (const n of ['status', 'pull', 'courses', 'work', 'transcribe', 'drive', 'login', 'help']) {
       const t = text(await get(n, {}));
       expect(t).not.toMatch(/\p{Extended_Pictographic}/u);
       expect(t.replace('"VOD" 대신', '')).not.toContain('VOD');

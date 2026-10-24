@@ -84,6 +84,7 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 | `/dotbugi:courses`                        | 추적 과목 선택 (체크박스 선택 창)                                  |
 | `/dotbugi:work [cmid\|과제명]`            | 과제 함께 수행 (생략하면 미완료 과제 목록에서 선택)                |
 | `/dotbugi:transcribe [cmid…\|과목\|all]`  | 동영상 강의 STT 변환 (all 이 아니면 대상 확인 후 실행)             |
+| `/dotbugi:drive`                          | Google Drive 연동 (저장 위치를 내 드라이브로)                      |
 | `/dotbugi:login`                          | LMS 로그인                                                         |
 | `/dotbugi:help`                           | 명령 안내                                                          |
 

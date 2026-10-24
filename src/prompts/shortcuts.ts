@@ -156,6 +156,15 @@ const shortcuts: Shortcut[] = [
       `\`transcribe_vod\` 를 ${withArgs(targetArg(t))}불러 결과를 알려 줘. 확인 목록이 나오면 사용자에게 그대로 보여 주고 동의를 받은 뒤에만 이어 가 줘. ${STATUSLINE_HINT}`,
   },
   {
+    name: 'drive',
+    title: 'Google Drive 연동',
+    description: 'Google Drive 연동 (저장 위치를 내 드라이브로)',
+    usage: 'drive',
+    example: '/dotbugi:drive',
+    text: () =>
+      '`find_google_drive` 를 불러 결과를 보여 줘. suggested(추천 위치)가 있으면 `set_storage_dir` 를 path: suggested 로 불러 옮겨 (확인 창은 서버가 띄운다). 마운트되지 않았으면 도구가 준 안내를 그대로 보여 줘. 그 밖의 도구는 부르지 않는다.',
+  },
+  {
     name: 'login',
     title: 'LMS 로그인',
     description: 'LMS 로그인',
