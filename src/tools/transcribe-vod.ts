@@ -200,7 +200,7 @@ function skippedNotes(unavailable: VodTarget[]): string[] {
   ];
 }
 
-// cmids 는 그대로. course·전체는 아직 결과 파일이 없는 강의를 모으고, all 이 아니면 사용자 확인을 받는다
+// cmids 는 확인 없이 그대로. course·생략·all 은 아직 결과 파일이 없는 강의를 모으고, course·생략만 사용자 확인을 받는다 (all 은 바로)
 // (STT 변환은 수십 분씩 걸려 무엇이 돌지 먼저 보여 준다). 대상은 대기열에 남은 자리까지만 — 승인한 뒤에 상한 오류가 나지 않게 확인 전에 자른다
 export async function resolveTargets(
   input: TargetInput,
