@@ -17,7 +17,9 @@ function toText(r: SyncMaterialsOutput): string {
     ...r.removed.map(
       (f) => `[LMS 에서 삭제됨 — 로컬 파일 유지${f.locallyModified ? ', 받은 뒤 수정됨' : ''}] ${f.path}`
     ),
-    ...(r.removed.length > 0 ? ['삭제 여부는 사용자가 터미널에서 dotbugi-mcp sync 로 하나씩 확인합니다.'] : []),
+    ...(r.removed.length > 0
+      ? ['삭제하려면 delete_materials 를 쓰세요 (사용자가 확인 창에서 승인한 파일만 지웁니다).']
+      : []),
   ].join('\n');
 }
 

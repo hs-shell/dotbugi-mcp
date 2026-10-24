@@ -1,0 +1,87 @@
+import { SdkError, SdkErrorCode, type ElicitResult } from '@modelcontextprotocol/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { confirmDestructive, type Asker } from '../tools/confirm.js';
+
+const withElicit = (result: ElicitResult) => {
+  const elicit = vi.fn(async () => result);
+  return { asker: { caps: { elicitation: { form: {} } }, elicit } satisfies Asker, elicit };
+};
+const noElicit: Asker = {
+  caps: {},
+  elicit: async () => {
+    throw new Error('호출되면 안 됨');
+  },
+};
+const req = (targets = ['/a', '/b'], token?: string) => ({ action: 'test', message: '지웁니다', targets, token });
+const tokenOf = (text: string) => /confirmToken: "([0-9a-f]+)"/.exec(text)![1];
+const issue = async () => tokenOf(((await confirmDestructive(noElicit, req())) as { text: string }).text);
+
+afterEach(() => vi.useRealTimers());
+
+describe('confirmDestructive — elicitation', () => {
+  it('목록을 보여주고 accept + confirm=true 일 때만 승인한다', async () => {
+    const { asker, elicit } = withElicit({ action: 'accept', content: { confirm: true } });
+    expect(await confirmDestructive(asker, req())).toEqual({ ok: true });
+    const [params] = elicit.mock.calls[0] as unknown as [{ message: string }];
+    expect(params.message).toContain('- /a\n- /b');
+  });
+
+  it.each<ElicitResult>([
+    { action: 'decline' },
+    { action: 'cancel' },
+    { action: 'accept', content: { confirm: false } },
+    { action: 'accept' },
+  ])('%o 는 취소이고 토큰도 주지 않는다', async (result) => {
+    const out = await confirmDestructive(withElicit(result).asker, req());
+    expect(out.ok).toBe(false);
+    expect(JSON.stringify(out)).not.toContain('confirmToken');
+  });
+});
+
+describe('confirmDestructive — 확인 창이 없는 클라이언트', () => {
+  it('첫 호출은 목록과 토큰만 돌려주고, 같은 대상에 한 번만 쓸 수 있다', async () => {
+    const first = await confirmDestructive(noElicit, req());
+    expect(first.ok).toBe(false);
+    const text = (first as { text: string }).text;
+    expect(text).toContain('- /a\n- /b');
+    const token = tokenOf(text);
+    expect(await confirmDestructive(noElicit, req(['/b', '/a'], token))).toEqual({ ok: true });
+    expect((await confirmDestructive(noElicit, req(['/a', '/b'], token))).ok).toBe(false);
+  });
+
+  it('틀린 토큰·다른 대상·다른 동작의 토큰은 거절하고, 거절된 토큰은 버린다', async () => {
+    expect((await confirmDestructive(noElicit, req(['/a'], 'f'.repeat(64)))).ok).toBe(false);
+    const token = await issue();
+    expect((await confirmDestructive(noElicit, req(['/a', '/b', '/c'], token))).ok).toBe(false);
+    expect((await confirmDestructive(noElicit, req(['/a', '/b'], token))).ok).toBe(false);
+    const other = await issue();
+    expect((await confirmDestructive(noElicit, { ...req(['/a', '/b'], other), action: 'other' })).ok).toBe(false);
+  });
+
+  it('만료된 토큰은 거절한다', async () => {
+    vi.useFakeTimers();
+    const token = await issue();
+    vi.advanceTimersByTime(5 * 60_000 + 1);
+    expect((await confirmDestructive(noElicit, req(['/a', '/b'], token))).ok).toBe(false);
+  });
+});
+
+describe('confirmDestructive — 확인 창 요청 실패', () => {
+  const failing = (err: Error): Asker => ({
+    caps: { elicitation: { form: {} } },
+    elicit: async () => {
+      throw err;
+    },
+  });
+
+  it('2026-07-28 세대라 SDK 가 보내기 전에 막으면 토큰 방식으로 넘어간다', async () => {
+    const asker = failing(new SdkError(SdkErrorCode.MethodNotSupportedByProtocolVersion, 'modern era'));
+    const out = (await confirmDestructive(asker, req())) as { ok: false; text: string };
+    expect(out.ok).toBe(false);
+    expect(await confirmDestructive(asker, req(['/a', '/b'], tokenOf(out.text)))).toEqual({ ok: true });
+  });
+
+  it('보낸 뒤의 실패(취소·시간 초과)는 토큰 없이 그대로 던진다', async () => {
+    await expect(confirmDestructive(failing(new Error('cancelled')), req())).rejects.toThrow('cancelled');
+  });
+});

@@ -327,7 +327,7 @@ describe('sync_materials 도구', () => {
     expect(out.files).toHaveLength(2);
     expect(out.removed[0]).toEqual({ course: '자료구조', path: course('3주차', 'a.txt'), locallyModified: false });
     expect(JSON.stringify(result)).not.toContain(SESSION);
-    expect((result.content as { text: string }[])[0].text).toContain('dotbugi-mcp sync 로 하나씩 확인');
+    expect((result.content as { text: string }[])[0].text).toContain('delete_materials');
   });
 });
 
@@ -482,7 +482,7 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     lms.folder = false;
     const [item] = (await sync()).removed;
     await writeFile(item.path, '그사이 필기');
-    expect(await resolveRemoved(item, true)).toBe(false);
+    expect(await resolveRemoved(item, true)).toBe('modified');
     expect(await readFile(item.path, 'utf8')).toBe('그사이 필기');
   });
 
@@ -494,5 +494,130 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     expect(r.removed).toEqual([]);
     caps.files = 300;
     expect((await sync()).files.filter((f) => f.status === 'added')).toHaveLength(3);
+  });
+});
+
+describe('delete_materials 도구', () => {
+  // 확인 창 지원 여부·사용자 응답을 흉내 내는 클라이언트
+  // hold 면 확인 창에 답하지 않고 기다린다 (호출 취소 확인용)
+  const connect = async (elicit?: Record<string, unknown>, hold = false) => {
+    getSession.mockResolvedValue({ session: SESSION, savedAt: '', method: 'extension' });
+    const [client, server] = InMemoryTransport.createLinkedPair();
+    const replies = new Map<number, (r: Record<string, unknown>) => void>();
+    const asked: string[] = [];
+    const ctl: { pendingElicit?: unknown; cancel: () => Promise<void> } = {
+      cancel: () =>
+        client.send({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: id, reason: 't' } }),
+    };
+    client.onmessage = (msg: JSONRPCMessage) => {
+      if ('method' in msg && msg.method === 'elicitation/create' && 'id' in msg) {
+        asked.push((msg.params as { message: string }).message);
+        if (hold) ctl.pendingElicit = msg.id;
+        else void client.send({ jsonrpc: '2.0', id: msg.id, result: elicit! });
+      } else if ('id' in msg)
+        replies.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
+    };
+    await createServer().connect(server);
+    let id = 0;
+    const send = (method: string, params?: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        replies.set(++id, resolve);
+        void client.send({ jsonrpc: '2.0', id, method, params });
+      });
+    await send('initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: elicit ? { elicitation: { form: {} } } : {},
+      clientInfo: { name: 't', version: '0' },
+    });
+    const call = async (args: Record<string, unknown> = {}) => {
+      const r = await send('tools/call', { name: 'delete_materials', arguments: args });
+      return (r.content as { text: string }[])[0].text;
+    };
+    return { send, call, asked, client: ctl };
+  };
+  const setup = async () => {
+    await sync();
+    lms.folder = false;
+  };
+  const left = async () => (await readdir(course('3주차'))).sort();
+
+  it('삭제 도구들은 destructiveHint 로 등록된다', async () => {
+    const { send } = await connect();
+    const { tools } = (await send('tools/list')) as { tools: { name: string; annotations: unknown }[] };
+    for (const name of ['delete_materials', 'asr_remove'])
+      expect(tools.find((t) => t.name === name)?.annotations).toMatchObject({ destructiveHint: true });
+  });
+
+  it('사용자가 승인하면 보고된 파일만 지우고, 받은 뒤 수정한 파일은 묻지도 지우지도 않는다', async () => {
+    await setup();
+    await writeFile(course('3주차', 'b.txt'), '필기');
+    const { call, asked } = await connect({ action: 'accept', content: { confirm: true } });
+    const text = await call();
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain(course('3주차', 'a.txt'));
+    expect(asked[0]).not.toContain('b.txt');
+    expect(await left()).toEqual(['b.txt']);
+    expect(text).toContain('삭제 1개');
+    expect(text).toContain(`${course('3주차', 'b.txt')} — 받은 뒤 수정됐거나`);
+    const m = JSON.parse(await readFile(manifestFile(), 'utf8')) as { files: { path: string }[] };
+    expect(m.files.map((f) => f.path)).not.toContain(join('3주차', 'a.txt'));
+    expect(text).not.toContain(SESSION);
+  });
+
+  it('대상을 정하려고 돌린 동기화가 새로 받은 파일도 알린다', async () => {
+    await setup();
+    Object.assign(lms, { slidesRev: 2, slides: 'slides v2' });
+    const { call } = await connect({ action: 'decline' });
+    const text = await call();
+    expect(text).toContain(`이번 동기화로 받은 파일 1개:\n- ${course('강의 개요', '강의 1.pdf')}`);
+  });
+
+  it('클라이언트가 호출을 취소하면 확인 대기를 끝내고 sync 잠금을 푼다', async () => {
+    await setup();
+    const { send, client } = await connect({ action: 'accept', content: { confirm: true } }, true);
+    void send('tools/call', { name: 'delete_materials', arguments: {} });
+    await vi.waitFor(() => expect(client.pendingElicit).toBeDefined());
+    await client.cancel();
+    await vi.waitFor(() => expect(withSyncLock(async () => 1)).resolves.toBe(1));
+    expect(await left()).toEqual(['a.txt', 'b.txt']);
+  });
+
+  it.each([{ action: 'decline' }, { action: 'cancel' }, { action: 'accept', content: { confirm: false } }])(
+    '%o 면 아무것도 지우지 않는다',
+    async (reply) => {
+      await setup();
+      const { call } = await connect(reply);
+      expect(await call()).toContain('승인하지 않아');
+      expect(await left()).toEqual(['a.txt', 'b.txt']);
+    }
+  );
+
+  it('확인 창이 없으면 토큰을 주고, 같은 목록에 그 토큰으로 다시 불러야만 지운다', async () => {
+    await setup();
+    const { call } = await connect();
+    const first = await call({ paths: ['자료구조/3주차/a.txt'] });
+    expect(await left()).toEqual(['a.txt', 'b.txt']);
+    const token = /confirmToken: "([0-9a-f]+)"/.exec(first)![1];
+    // 다른 목록(전체)에는 쓸 수 없고, 거절된 토큰은 버려진다
+    expect(await call({ confirmToken: token })).toContain('아무것도 지우지 않았습니다');
+    expect(await call({ paths: ['자료구조/3주차/a.txt'], confirmToken: token })).toContain('아무것도');
+    expect(await left()).toEqual(['a.txt', 'b.txt']);
+    const again = /confirmToken: "([0-9a-f]+)"/.exec(await call({ paths: ['자료구조/3주차/a.txt'] }))![1];
+    expect(await call({ paths: ['자료구조/3주차/a.txt'], confirmToken: again })).toContain('삭제 1개');
+    expect(await left()).toEqual(['b.txt']);
+  });
+
+  it('보고되지 않은 경로(폴더 밖 포함)는 지우지 않고, 링크는 따라가지 않는다', async () => {
+    await setup();
+    const outside = join(state.home, 'outside.txt');
+    await writeFile(outside, '중요');
+    await rm(course('3주차', 'a.txt'));
+    await symlink(outside, course('3주차', 'a.txt'));
+    const { call, asked } = await connect({ action: 'accept', content: { confirm: true } });
+    const text = await call({ paths: ['../../outside.txt', course('3주차', 'a.txt')] });
+    expect(asked).toEqual([]);
+    expect(text).toContain(`${outside} — LMS 에서 사라진 파일로 보고되지 않음`);
+    expect(await readFile(outside, 'utf8')).toBe('중요');
+    expect(await left()).toEqual(['a.txt', 'b.txt']);
   });
 });

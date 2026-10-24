@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { lstat, readdir, readFile, rm } from 'node:fs/promises';
+import { lstat, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileSha256 } from '../asr/download.js';
@@ -8,8 +8,9 @@ import { FFMPEG, MODELS, QWEN_ASR_BINARY, type AsrModel, type AsrPlatform } from
 import { ASR_ROOT, asrPaths, INSTALL_HINT, modelFilePath, readAsrConfig, type AsrConfig } from '../asr/runtime.js';
 import { ASR_INSTALL_BUSY, ASR_INSTALL_LOCK_FILE, writeAsrInstallState, type AsrInstallState } from '../asr/state.js';
 import { log } from '../log.js';
-import { acquireLock, adoptLock, isAlive } from '../player/lock.js';
+import { acquireLock, adoptLock } from '../player/lock.js';
 import { redact } from '../redact.js';
+import { TRANSCRIBE_LOCK_FILE } from '../transcribe/state.js';
 
 export const ASR_USAGE = `사용법:
   dotbugi-mcp asr install [--gpu] [--model 0.6b|1.7b]   로컬 음성 인식 런타임 설치 (CPU 는 0.6b 고정, --model 은 --gpu 와 함께)
@@ -137,16 +138,30 @@ export async function statusText(root = ASR_ROOT, opts = { verify: true }): Prom
 
 async function remove(root: string, yes: boolean): Promise<void> {
   if (!existsSync(root)) return log('설치된 ASR 런타임이 없습니다.');
-  // 설치 중에 지우면 작업 프로세스가 반쯤 지워진 폴더에 이어 쓴다
-  const installer = Number((await readFile(ASR_INSTALL_LOCK_FILE, 'utf8').catch(() => '')).trim());
-  if (Number.isInteger(installer) && installer > 0 && isAlive(installer)) throw new Error(ASR_INSTALL_BUSY);
   if (!yes) {
     if (!process.stdin.isTTY) throw new Error('터미널이 아니면 확인할 수 없습니다. 지우려면 --yes 를 붙이세요.');
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     const answer = await rl.question(`${root} 를 삭제할까요? [y/N] `).finally(() => rl.close());
     if (!['y', 'yes'].includes(answer.trim().toLowerCase())) return log('취소했습니다.');
   }
-  // 폴더가 링크여도 rm 은 링크만 지우고 대상은 건드리지 않는다
-  await rm(root, { recursive: true, force: true });
+  await deleteAsrRoot(root);
   log(`삭제했습니다: ${root}`);
+}
+
+const TRANSCRIBE_RUNNING = '받아쓰기가 실행 중이라 지우지 않았습니다. 끝난 뒤 다시 실행하세요.';
+export const ASR_REMOVE_LOCKS: [file: string, busy: string][] = [
+  [ASR_INSTALL_LOCK_FILE, ASR_INSTALL_BUSY],
+  [TRANSCRIBE_LOCK_FILE, TRANSCRIBE_RUNNING],
+];
+
+// CLI·asr_remove 공용. 설치·받아쓰기 중에 지우면 작업 프로세스가 반쯤 지워진 폴더에 이어 쓰므로 잠금을 다 잡은 채로만 지운다.
+// 폴더가 링크여도 rm 은 링크만 지우고 대상은 건드리지 않는다
+export async function deleteAsrRoot(root: string, locks = ASR_REMOVE_LOCKS): Promise<void> {
+  const releases: (() => Promise<void>)[] = [];
+  try {
+    for (const [file, busy] of locks) releases.push(await acquireLock(file, busy));
+    await rm(root, { recursive: true, force: true });
+  } finally {
+    for (const release of releases) await release();
+  }
 }
