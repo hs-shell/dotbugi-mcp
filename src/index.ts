@@ -29,6 +29,8 @@ async function main(): Promise<void> {
       on: { type: 'string' },
       off: { type: 'string' },
       language: { type: 'string' },
+      // setup_statusline 이 원래 refreshInterval 을 남기는 자리 — statusline 은 읽지 않는다
+      'refresh-was': { type: 'string' },
     },
   });
   const [command, ...rest] = positionals;
@@ -41,7 +43,8 @@ async function main(): Promise<void> {
     (values.worker && command !== 'transcribe' && command !== 'asr') ||
     (asrOnly && command !== 'asr') ||
     (coursesOnly && command !== 'courses') ||
-    (values.language !== undefined && command !== 'transcribe')
+    (values.language !== undefined && command !== 'transcribe') ||
+    (values['refresh-was'] !== undefined && command !== 'statusline')
   )
     throw new Error(USAGE);
   // stdout 은 MCP 프로토콜 전용 — 로그는 반드시 stderr 로

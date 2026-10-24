@@ -55,7 +55,9 @@ describe('setup_statusline', () => {
   it('파일이 없으면 승인 후 만든다', async () => {
     const asker = approve();
     expect(await run(asker)).toContain('설정했습니다');
-    expect(await read()).toEqual({ statusLine: { type: 'command', command: CMD, refreshInterval: 30 } });
+    expect(await read()).toEqual({
+      statusLine: { type: 'command', command: `${CMD} --refresh-was=none`, refreshInterval: 2 },
+    });
     // 같은 값이면 다시 묻지 않는다
     expect(await run(asker)).toContain('이미 설정');
     expect(asker.elicit).toHaveBeenCalledTimes(1);
@@ -71,11 +73,15 @@ describe('setup_statusline', () => {
     await run(asker);
     const shown = vi.mocked(asker.elicit).mock.calls[0]![0].message;
     expect(shown).toContain('mine.sh');
-    expect(shown).toContain(JSON.stringify(`mine.sh\n${CMD}`));
+    expect(shown).toContain(JSON.stringify(`mine.sh\n${CMD} --refresh-was=none`));
     const after = await read();
     expect(Object.keys(after)).toEqual(['model', 'statusLine', 'z']);
     // 기존 명령은 지우지 않고 다음 줄에 붙인다
-    expect(after).toMatchObject({ model: 'opus', z: [1], statusLine: { command: `mine.sh\n${CMD}` } });
+    expect(after).toMatchObject({
+      model: 'opus',
+      z: [1],
+      statusLine: { command: `mine.sh\n${CMD} --refresh-was=none`, refreshInterval: 2 },
+    });
     if (process.platform !== 'win32') expect((await stat(file())).mode & 0o777).toBe(0o640);
   });
 
@@ -112,7 +118,7 @@ describe('setup_statusline', () => {
     const first = await run(asker);
     expect(existsSync(file())).toBe(false);
     await run(asker, 'enable', /confirmToken: "([0-9a-f]+)"/.exec(first)![1]);
-    expect(await read()).toMatchObject({ statusLine: { command: CMD } });
+    expect(await read()).toMatchObject({ statusLine: { command: `${CMD} --refresh-was=none` } });
   });
 
   it('심볼릭 링크면 링크를 살리고 실제 파일에 쓴다', async () => {
@@ -120,7 +126,9 @@ describe('setup_statusline', () => {
     await writeFile(real, '{}');
     await symlink(real, file());
     await run(approve());
-    expect(JSON.parse(await readFile(real, 'utf8'))).toMatchObject({ statusLine: { command: CMD } });
+    expect(JSON.parse(await readFile(real, 'utf8'))).toMatchObject({
+      statusLine: { command: `${CMD} --refresh-was=none` },
+    });
   });
 
   it('disable 은 dotbugi 줄만 빼고 사용자 명령·다른 값은 되돌리며, dotbugi 줄이 없으면 거절한다', async () => {
@@ -132,10 +140,8 @@ describe('setup_statusline', () => {
 
     await run(asker);
     expect(await run(asker, 'disable')).toContain('해제했습니다');
-    expect(await read()).toEqual({
-      model: 'opus',
-      statusLine: { type: 'command', command: 'mine.sh', refreshInterval: 30 },
-    });
+    // enable 이 넣은 refreshInterval 까지 빼서 원래 객체 그대로
+    expect(await read()).toEqual({ model: 'opus', statusLine: { type: 'command', command: 'mine.sh' } });
 
     await writeFile(file(), JSON.stringify({ model: 'opus', statusLine: { type: 'command', command: CMD } }));
     expect(await run(asker, 'disable')).toContain('해제했습니다');
@@ -143,7 +149,7 @@ describe('setup_statusline', () => {
     expect(await run(asker, 'disable')).toContain('없습니다');
   });
 
-  it('기존 refreshInterval·padding 은 그대로 두고, 다시 켜면 dotbugi 줄만 바꾼다', async () => {
+  it('padding 은 그대로 두고, 다시 켜면 dotbugi 줄만 바꾼다', async () => {
     const OLD = statusLineCommand('/old/node', '/old/dotbugi-mcp/dist/index.js', 'linux');
     await writeFile(
       file(),
@@ -153,8 +159,38 @@ describe('setup_statusline', () => {
     );
     await run(approve());
     expect(await read()).toEqual({
-      statusLine: { type: 'command', command: `bash a.sh # 주석\n${CMD}`, padding: 0, refreshInterval: 5 },
+      statusLine: {
+        type: 'command',
+        command: `bash a.sh # 주석\n${CMD} --refresh-was=5`,
+        padding: 0,
+        refreshInterval: 2,
+      },
     });
+  });
+
+  it('refreshInterval 이 2초보다 길면 2초로 낮추고 disable 은 원래 값으로 되돌린다', async () => {
+    const orig = { type: 'command', command: 'bash ~/.claude/statusline.sh', padding: 0, refreshInterval: 10 };
+    await writeFile(file(), JSON.stringify({ statusLine: orig }));
+    const asker = approve();
+    await run(asker);
+    expect(await read()).toEqual({
+      statusLine: { ...orig, command: `${orig.command}\n${CMD} --refresh-was=10`, refreshInterval: 2 },
+    });
+    // 다시 켜도 기록한 원래 값을 잃지 않는다
+    expect(await run(asker)).toContain('이미 설정');
+    await run(asker, 'disable');
+    expect(await read()).toEqual({ statusLine: orig });
+  });
+
+  it('지수 표기가 되는 큰 refreshInterval 은 건드리지 않아 다시 켜도 줄이 겹치지 않는다', async () => {
+    await writeFile(
+      file(),
+      JSON.stringify({ statusLine: { type: 'command', command: 'a.sh', refreshInterval: 1e21 } })
+    );
+    const asker = approve();
+    await run(asker);
+    expect(await read()).toEqual({ statusLine: { type: 'command', command: `a.sh\n${CMD}`, refreshInterval: 1e21 } });
+    expect(await run(asker)).toContain('이미 설정');
   });
 
   it('command 형식이 아닌 statusLine 은 묻지도 바꾸지도 않는다', async () => {
