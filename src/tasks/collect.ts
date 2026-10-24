@@ -11,7 +11,6 @@ import { splitRange, toIsoDeadline } from './time.js';
 
 type CourseData = Awaited<ReturnType<typeof scrapeCourseData>>;
 // 이전 조회의 퀴즈 제출 상태. 마감된 퀴즈는 상세 페이지 대신 이 값을 쓴다 (scrapeCourseData cachedQuizzes)
-// TODO(hs-shell/dotbugi-lms-parser#5): 파서가 마감 여부를 실행 환경 시간대로 판정한다 — KST 가 아닌 환경에선 재사용 시점이 어긋난다
 export type CachedQuiz = { url: string; isSubmit: boolean };
 
 export interface CollectResult {
@@ -109,7 +108,7 @@ export async function collectTasks(
   cachedQuizzes?: CachedQuiz[],
   config: CoursesConfig = readCoursesConfig()
 ): Promise<CollectResult> {
-  // 파서는 개별 요청 실패를 빈 값으로 삼킨다(퀴즈 상세 실패는 onError 로도 안 올라오고 '미응시'가 된다).
+  // 파서는 개별 요청 실패를 빈 값으로 삼킨다(퀴즈 상세 실패도 '미응시'가 된다).
   // 그래서 모든 요청이 지나는 여기서 실패 수와 세션 만료를 직접 센다
   let expired = false;
   let failures = 0;
