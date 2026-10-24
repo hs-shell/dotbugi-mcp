@@ -144,7 +144,15 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     const rt = await deps.runtime();
 
     await ensurePrivateDir(tmp);
-    const playlist = extractPlaylistUrl(await deps.viewerHtml(cmid));
+    const html = await deps.viewerHtml(cmid);
+    let playlist: URL;
+    try {
+      playlist = extractPlaylistUrl(html);
+    } catch (err) {
+      // 기간이 지난 강의는 LMS 가 재생 화면에 영상을 싣지 않는다 — 원인을 그대로 알려 준다
+      if (meta.dimmed) throw new Error('열람 기간이 지나 LMS 가 영상을 주지 않습니다.');
+      throw err;
+    }
     const { segments, seconds } = await loadSegments(playlist, deps.signal, deps.fetch);
     // MPEG-TS 는 이어 붙이면 그대로 하나의 스트림이다 — 파일 하나로 모아 ffmpeg 인자에 주소·목록이 들어가지 않게
     const media = join(tmp, 'media.ts');
