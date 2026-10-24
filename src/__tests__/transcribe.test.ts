@@ -508,7 +508,8 @@ describe('stopTranscribe', () => {
     [
       '갱신이 끊김',
       OTHER,
-      running({ updatedAt: new Date(Date.now() - TRANSCRIBE_STATE_STALE_MS - 1000).toISOString() }),
+      // it.each 값은 수집 시점에 만들어진다 — 실행까지의 지연·시계 보정(WSL 등)에 흔들리지 않게 여유를 크게
+      running({ updatedAt: new Date(Date.now() - TRANSCRIBE_STATE_STALE_MS - 60_000).toISOString() }),
     ],
     ['미래 시각', OTHER, running({ updatedAt: new Date(Date.now() + 60_000).toISOString() })],
   ])('%s 면 신호를 보내지 않는다', async (_, lockPid, s) => {
@@ -528,10 +529,12 @@ describe('stopTranscribe', () => {
   it('transcribe_status 의 stale 은 중지와 같은 기준이다 (프로세스 없음 또는 갱신 끊김)', () => {
     const now = Date.now();
     const old = new Date(now - TRANSCRIBE_STATE_STALE_MS - 1000).toISOString();
-    expect(transcribeStatusState(running({ pid: process.pid }), now)?.stale).toBe(false);
+    // running() 기본값(new Date())은 now 보다 1ms 늦을 수 있어 미래 시각=stale 로 보인다 — now 로 고정
+    const fresh = new Date(now).toISOString();
+    expect(transcribeStatusState(running({ pid: process.pid, updatedAt: fresh }), now)?.stale).toBe(false);
     expect(transcribeStatusState(running({ pid: process.pid, updatedAt: old }), now)?.stale).toBe(true);
     // Linux pid 상한(2^22)보다 큰 pid — 살아 있을 수 없다
-    expect(transcribeStatusState(running({ pid: 2 ** 22 + 1 }), now)?.stale).toBe(true);
+    expect(transcribeStatusState(running({ pid: 2 ** 22 + 1, updatedAt: fresh }), now)?.stale).toBe(true);
     expect(transcribeStatusState(running({ pid: process.pid, status: 'done', updatedAt: old }), now)?.stale).toBe(
       false
     );
