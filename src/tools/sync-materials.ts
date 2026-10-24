@@ -6,6 +6,7 @@ import { redact } from '../redact.js';
 import { getSession } from '../session.js';
 import { progressOf } from './progress.js';
 import { code } from '../tasks/text.js';
+import { recordPull } from '../tasks/last-pull.js';
 
 const STATUS_LABELS = { added: '추가', updated: '갱신', unchanged: '변경 없음' } as const;
 
@@ -52,6 +53,8 @@ export function registerSyncMaterials(server: McpServer): void {
         const { root, files, removed, warnings, more } = await withSyncLock(() =>
           syncMaterials(session, course, mcpCaps({ onProgress: progressOf(ctx), signal: ctx.mcpReq.signal }))
         );
+        // 남은 자료 없이 끝났을 때만 pull 완료로 기록한다 (기록 실패는 결과에 영향 없음)
+        if (!more) await recordPull().catch(() => {});
         const result: SyncMaterialsOutput = {
           root,
           files,

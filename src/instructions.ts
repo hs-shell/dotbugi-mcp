@@ -4,6 +4,7 @@ export const SERVER_INSTRUCTIONS = `한성대학교 LMS(learn.hansung.ac.kr, 코
 
 - 마감·남은 할 일(강의 영상 VOD 출석, 과제, 퀴즈) → get_status (남은 VOD 만 → get_status type: vod), 할 일을 캘린더 파일(.ics)로 → export_ics
 - 과제 내용·첨부 → get_assignment, 강의자료 받기 → pull_materials, LMS 에서 사라진 자료 정리 → delete_materials
+- 할 일·현황을 보여 줄 때 get_status 결과의 pullStale 이 true(마지막 pull 이 1시간 넘게 지남·기록 없음)면 먼저 pull_materials(more 가 false 까지)와 미완료 과제 get_assignment 로 최신화하고, 바뀐 것을 짧게 요약한 뒤 현황을 보여 주세요.
 - 받은 자료·첨부·STT 결과·요약 읽기·폴더 살펴보기 → read_material (예: "3주차 강의자료 읽고 요약해줘", 파일 접근이 없는 Claude Desktop 에서도)
 - 저장 위치(기본 ~/Downloads/dotbugi-mcp, 학기별 폴더) 확인·변경 → get_storage_dir / set_storage_dir (예: "자료는 문서/돋부기에 저장해줘")
 - 자료를 Google Drive 에 → find_google_drive 로 내 드라이브를 찾고 set_storage_dir 로 옮기기 (WSL 에서 마운트 안 됐다는 안내는 그대로 사용자에게 전달)
