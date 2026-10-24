@@ -51,10 +51,23 @@ export interface ConfirmRequest {
   // 토큰을 묶을 대상의 정체 (경로+해시 등). 생략하면 targets
   binding?: string[];
   token?: string;
+  // 기본은 삭제. 'change' 는 되돌릴 수 있는 설정 변경 — 확인 창 문구만 다르다
+  kind?: 'delete' | 'change';
 }
 export type ConfirmOutcome = { ok: true } | { ok: false; text: string };
 
+const WORDS = {
+  delete: {
+    label: '위 항목을 삭제합니다',
+    warn: '\n\n되돌릴 수 없습니다.',
+    none: '아무것도 지우지 않았습니다',
+    agree: '삭제',
+  },
+  change: { label: '위와 같이 변경합니다', warn: '', none: '아무것도 바꾸지 않았습니다', agree: '변경' },
+};
+
 export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Promise<ConfirmOutcome> {
+  const w = WORDS[req.kind ?? 'delete'];
   const fingerprint = fingerprintOf(req.action, req.binding ?? req.targets);
   const list = req.targets.map((t) => `- ${t}`).join('\n');
   if (req.token !== undefined) {
@@ -63,7 +76,7 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
     if (saved && saved.expires > Date.now() && saved.fingerprint === fingerprint) return { ok: true };
     return {
       ok: false,
-      text: '확인 토큰이 없거나 만료됐거나 다른 대상의 것입니다. 아무것도 지우지 않았습니다. confirmToken 없이 다시 호출해 새 목록을 받으세요.',
+      text: `확인 토큰이 없거나 만료됐거나 다른 대상의 것입니다. ${w.none}. confirmToken 없이 다시 호출해 새 목록을 받으세요.`,
     };
   }
   if (asker.caps?.elicitation?.form) {
@@ -71,10 +84,10 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
       .elicit(
         {
           mode: 'form',
-          message: `${req.message}\n\n${list}\n\n되돌릴 수 없습니다.`,
+          message: `${req.message}\n\n${list}${w.warn}`,
           requestedSchema: {
             type: 'object',
-            properties: { confirm: { type: 'boolean', title: '위 항목을 삭제합니다', default: false } },
+            properties: { confirm: { type: 'boolean', title: w.label, default: false } },
             required: ['confirm'],
           },
         },
@@ -88,7 +101,7 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
       });
     // 명시적 accept + confirm=true 만 승인. decline·cancel·체크 안 함은 모두 취소
     if (result?.action === 'accept' && result.content?.confirm === true) return { ok: true };
-    if (result) return { ok: false, text: '사용자가 승인하지 않아 아무것도 지우지 않았습니다.' };
+    if (result) return { ok: false, text: `사용자가 승인하지 않아 ${w.none}.` };
   }
   // 확인 창을 못 띄우는 클라이언트 — 목록과 일회용 토큰을 돌려주고 두 번째 호출에서만 지운다
   const now = Date.now();
@@ -98,10 +111,10 @@ export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Pro
   return {
     ok: false,
     text: [
-      `${req.message} (아직 아무것도 지우지 않았습니다)`,
+      `${req.message} (아직 ${w.none})`,
       list,
       '',
-      '이 클라이언트는 확인 창(elicitation)을 지원하지 않습니다. 위 목록을 사용자에게 그대로 보여주고, 사용자가 삭제에 동의한 경우에만',
+      `이 클라이언트는 확인 창(elicitation)을 지원하지 않습니다. 위 목록을 사용자에게 그대로 보여주고, 사용자가 ${w.agree}에 동의한 경우에만`,
       `confirmToken: "${token}" 을 넣어 같은 인자로 다시 호출하세요. 토큰은 ${TOKEN_TTL_MS / 60_000}분 안에 한 번만, 이 목록에만 쓸 수 있습니다.`,
     ].join('\n'),
   };
