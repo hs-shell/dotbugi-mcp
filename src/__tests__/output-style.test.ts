@@ -56,4 +56,15 @@ describe('출력 문구 규칙', () => {
     const found = lines(scanned).filter(([, text]) => /받아쓰|받아써|녹취|VOD/.test(text));
     expect(found).toEqual([]);
   });
+
+  // #134 에서 슬래시 명령에 맞춰 바꾼 도구 이름 — 옛 이름이 다시 들어오면 모델이 없는 도구를 부른다 (CHANGELOG 는 기록이라 제외)
+  it('소스·문서에 옛 도구 이름(sync_materials·list_tasks·transcribe_vod)이 없다', () => {
+    const scanned = [
+      ...files(join(ROOT, 'src'), /\.ts$/).filter((p) => !p.endsWith('output-style.test.ts')),
+      ...files(join(ROOT, 'docs'), /\.md$/),
+      join(ROOT, 'README.md'),
+    ];
+    const found = lines(scanned).filter(([, text]) => /\b(sync_materials|list_tasks|transcribe_vod)\b/.test(text));
+    expect(found).toEqual([]);
+  });
 });

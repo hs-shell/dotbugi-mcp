@@ -37,11 +37,11 @@ const task = z.object({
   cmid: z
     .number()
     .nullable()
-    .describe('LMS 항목 번호 (주소의 id=). get_assignment·transcribe_vod 의 cmid 로 넘긴다. 없으면 null'),
+    .describe('LMS 항목 번호 (주소의 id=). get_assignment·transcribe_lecture 의 cmid 로 넘긴다. 없으면 null'),
   overdue: z.boolean().describe('마감이 지난 미완료 항목 (includePast 일 때만 나온다)'),
 });
 export type Task = z.infer<typeof task>;
-// 캐시에 담는 형태 — 남은 시간·cmid·overdue 는 조회 시점에 계산한다. vod 는 VOD 스케줄러 내부용(list_tasks 로는 내보내지 않음)
+// 캐시에 담는 형태 — 남은 시간·cmid·overdue 는 조회 시점에 계산한다. vod 는 VOD 스케줄러 내부용(get_status 로는 내보내지 않음)
 export type TaskItem = Omit<Task, 'remaining' | 'cmid' | 'overdue'> & { vod?: { courseId: string; week: number } };
 
 export const listTasksOutput = z.object({

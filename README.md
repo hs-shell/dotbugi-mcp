@@ -71,22 +71,22 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 
 ## 이렇게 물어보세요
 
-| 요청 예시                                             | 쓰는 도구                                                  |
-| ----------------------------------------------------- | ---------------------------------------------------------- |
-| "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?"   | `list_tasks`                                               |
-| "할 일을 캘린더 파일로 만들어줘"                      | `export_ics`                                               |
-| "운영체제 과목은 추적 꺼줘"                           | `list_courses` / `set_course_tracking`                     |
-| "자료구조 과제 내용이랑 첨부파일 받아줘"              | `get_assignment`                                           |
-| "운영체제 강의자료 받아줘"                            | `sync_materials`                                           |
-| "3주차 강의자료 읽고 요약해줘"                        | `read_material`                                            |
-| "LMS 에서 지워진 자료 정리해줘"                       | `delete_materials` (승인 화면)                             |
-| "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?" | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
-| "자료를 구글 드라이브에 저장해줘"                     | `find_google_drive` → `set_storage_dir` (승인 화면)        |
-| "자료구조 5주차 노트 만들어줘"                        | `list_notes` → `save_notes` (`notes` 프롬프트)             |
-| "자료구조 1-7주차 핵심만 요약해줘"                    | `list_summary` → `save_summary` (`summary` 프롬프트)       |
-| "STT 준비해줘"                                        | `asr_install`, `asr_status`                                |
-| "이 강의 STT 해줘" / "어디까지 됐어?" / "STT 멈춰"    | `transcribe_vod` / `transcribe_status` / `stop_transcribe` |
-| "LMS 로그아웃해줘"                                    | `logout`                                                   |
+| 요청 예시                                             | 쓰는 도구                                                      |
+| ----------------------------------------------------- | -------------------------------------------------------------- |
+| "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?"   | `get_status`                                                   |
+| "할 일을 캘린더 파일로 만들어줘"                      | `export_ics`                                                   |
+| "운영체제 과목은 추적 꺼줘"                           | `list_courses` / `set_course_tracking`                         |
+| "자료구조 과제 내용이랑 첨부파일 받아줘"              | `get_assignment`                                               |
+| "운영체제 강의자료 받아줘"                            | `pull_materials`                                               |
+| "3주차 강의자료 읽고 요약해줘"                        | `read_material`                                                |
+| "LMS 에서 지워진 자료 정리해줘"                       | `delete_materials` (승인 화면)                                 |
+| "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?" | `set_storage_dir` (승인 화면) / `get_storage_dir`              |
+| "자료를 구글 드라이브에 저장해줘"                     | `find_google_drive` → `set_storage_dir` (승인 화면)            |
+| "자료구조 5주차 노트 만들어줘"                        | `list_notes` → `save_notes` (`notes` 프롬프트)                 |
+| "자료구조 1-7주차 핵심만 요약해줘"                    | `list_summary` → `save_summary` (`summary` 프롬프트)           |
+| "STT 준비해줘"                                        | `asr_install`, `asr_status`                                    |
+| "이 강의 STT 해줘" / "어디까지 됐어?" / "STT 멈춰"    | `transcribe_lecture` / `transcribe_status` / `stop_transcribe` |
+| "LMS 로그아웃해줘"                                    | `logout`                                                       |
 
 Claude Code 에서는 `/dotbugi:notes 자료구조 5주차 시험 대비로`, `/dotbugi:summary 자료구조 1-7주차 개념 위주` 처럼 범위와 작성 지시를 함께 넘길 수 있습니다.
 
@@ -113,24 +113,24 @@ Claude Code 에서는 `/dotbugi:notes 자료구조 5주차 시험 대비로`, `/
 
 인자·출력·상한·파일 위치는 [docs/tools.md](docs/tools.md) 에 있습니다.
 
-| 분류   | 이름                                                                                                                                                                            | 하는 일                                                                     |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| 로그인 | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                               | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃                         |
-| 할 일  | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                        | 동영상 강의·과제·퀴즈를 마감 임박 순으로 조회                               |
-|        | [`export_ics`](docs/tools.md#export_ics)                                                                                                                                        | 할 일 마감을 캘린더 파일(.ics)로 저장                                       |
-|        | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                    | 내 강좌·추적 여부 조회 / 추적 과목 선택(체크박스)·켜기·끄기                 |
-|        | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                                | 과제 본문·마감·제출 상황, 첨부파일 받기                                     |
-| 자료   | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                                | 강의자료를 과목·주차 폴더로 동기화                                          |
-|        | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive) | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동)         |
-|        | [`find_google_drive`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive)                                                                                        | Google Drive 내 드라이브 찾기 → 저장 위치 후보 (옮기기는 `set_storage_dir`) |
-|        | [`read_material`](docs/tools.md#read_material)                                                                                                                                  | 받은 자료·첨부·STT 결과 읽기, 폴더 살펴보기                                 |
-|        | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                            | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                                |
-|        | [`list_notes`](docs/tools.md#list_notes--save_notes-notes) / [`save_notes`](docs/tools.md#list_notes--save_notes-notes) (`notes` 프롬프트)                                      | 주차별 강의 노트 대상 확인(변경 감지) / 노트 저장                           |
-|        | [`list_summary`](docs/tools.md#list_summary--save_summary-summary) / [`save_summary`](docs/tools.md#list_summary--save_summary-summary) (`summary` 프롬프트)                    | 노트 기반 핵심 요약 대상 확인(변경 감지) / 요약 저장                        |
-| STT    | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)  | 동영상 강의를 로컬 음성 인식으로 STT 변환(여러 개는 대기열) / 진행 상황     |
-|        | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                           | STT 변환 중지                                                               |
-|        | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                            | Claude Code 상태 표시줄에 STT 진행 표시 (승인 후, 기존 표시줄과 합침)       |
-|        | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                       | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제                            |
+| 분류   | 이름                                                                                                                                                                                       | 하는 일                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| 로그인 | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                                          | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃                         |
+| 할 일  | [`get_status`](docs/tools.md#get_status)                                                                                                                                                   | 동영상 강의·과제·퀴즈를 마감 임박 순으로 조회                               |
+|        | [`export_ics`](docs/tools.md#export_ics)                                                                                                                                                   | 할 일 마감을 캘린더 파일(.ics)로 저장                                       |
+|        | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                               | 내 강좌·추적 여부 조회 / 추적 과목 선택(체크박스)·켜기·끄기                 |
+|        | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                                           | 과제 본문·마감·제출 상황, 첨부파일 받기                                     |
+| 자료   | [`pull_materials`](docs/tools.md#pull_materials)                                                                                                                                           | 강의자료를 과목·주차 폴더로 동기화                                          |
+|        | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive)            | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동)         |
+|        | [`find_google_drive`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive)                                                                                                   | Google Drive 내 드라이브 찾기 → 저장 위치 후보 (옮기기는 `set_storage_dir`) |
+|        | [`read_material`](docs/tools.md#read_material)                                                                                                                                             | 받은 자료·첨부·STT 결과 읽기, 폴더 살펴보기                                 |
+|        | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                                       | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                                |
+|        | [`list_notes`](docs/tools.md#list_notes--save_notes-notes) / [`save_notes`](docs/tools.md#list_notes--save_notes-notes) (`notes` 프롬프트)                                                 | 주차별 강의 노트 대상 확인(변경 감지) / 노트 저장                           |
+|        | [`list_summary`](docs/tools.md#list_summary--save_summary-summary) / [`save_summary`](docs/tools.md#list_summary--save_summary-summary) (`summary` 프롬프트)                               | 노트 기반 핵심 요약 대상 확인(변경 감지) / 요약 저장                        |
+| STT    | [`transcribe_lecture`](docs/tools.md#transcribe_lecture--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_lecture--transcribe_status--stop_transcribe) | 동영상 강의를 로컬 음성 인식으로 STT 변환(여러 개는 대기열) / 진행 상황     |
+|        | [`stop_transcribe`](docs/tools.md#transcribe_lecture--transcribe_status--stop_transcribe)                                                                                                  | STT 변환 중지                                                               |
+|        | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                                       | Claude Code 상태 표시줄에 STT 진행 표시 (승인 후, 기존 표시줄과 합침)       |
+|        | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                                  | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제                            |
 
 모든 기능을 대화로 쓸 수 있습니다. 같은 일을 터미널 명령으로도 할 수 있습니다 → [docs/tools.md](docs/tools.md#터미널에서도-할-수-있는-것)
 

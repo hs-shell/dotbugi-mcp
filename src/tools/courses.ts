@@ -22,7 +22,7 @@ const courseEntry = z.object({
   courseId: z.string(),
   title: z.string().describe('과목명 (LMS 데이터)'),
   kind: z.enum(['정규', '비교과']),
-  tracked: z.boolean().describe('list_tasks 등 다른 도구의 대상인지 (실제 적용 값)'),
+  tracked: z.boolean().describe('get_status 등 다른 도구의 대상인지 (실제 적용 값)'),
   explicit: z.boolean().describe('사용자가 직접 정한 값이면 true, 기본값(정규 켜짐·비교과 꺼짐)이면 false'),
 });
 type CourseEntry = z.infer<typeof courseEntry>;
@@ -120,7 +120,7 @@ export function registerListCourses(server: McpServer): void {
       title: '내 강좌·추적 설정 조회',
       description:
         'LMS 메인의 내 강좌를 courseId·과목명·종류(정규/비교과)·추적 여부와 함께 보여준다. ' +
-        '추적이 꺼진 강좌는 list_tasks·sync_materials 등에서 빠진다. 바꾸려면 set_course_tracking. ' +
+        '추적이 꺼진 강좌는 get_status·pull_materials 등에서 빠진다. 바꾸려면 set_course_tracking. ' +
         UNTRUSTED,
       outputSchema: listCoursesOutput,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -205,7 +205,7 @@ export function registerSetCourseTracking(server: McpServer): void {
           ];
           return { content: [{ type: 'text', text: text.join('\n') }], structuredContent: { saved: false, courses } };
         }
-        // 설정이 바뀌면 list_tasks 캐시 키(tracking)가 달라져 다음 조회는 LMS 에서 다시 가져온다
+        // 설정이 바뀌면 get_status 캐시 키(tracking)가 달라져 다음 조회는 LMS 에서 다시 가져온다
         await saveCourseTracking(matches[0].courseId, tracked);
         const entry = toEntry(matches[0], readCoursesConfig());
         const text = [LMS_DATA_NOTICE, `**추적 ${tracked ? '켬' : '끔'}**`, '', ...table([entry])].join('\n');

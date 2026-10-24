@@ -38,7 +38,7 @@ beforeAll(async () => {
   await client.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
 });
 
-const call = (args: Record<string, unknown> = {}, name = 'list_tasks') => send('tools/call', { name, arguments: args });
+const call = (args: Record<string, unknown> = {}, name = 'get_status') => send('tools/call', { name, arguments: args });
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
@@ -50,11 +50,11 @@ afterEach(() => {
   fetchMock.mockClear();
 });
 
-describe('list_tasks', () => {
+describe('get_status', () => {
   it('tools/list 에 읽기 전용 도구로 노출된다', async () => {
     const { tools } = (await send('tools/list')) as { tools: Record<string, unknown>[] };
     expect(tools).toContainEqual(
-      expect.objectContaining({ name: 'list_tasks', annotations: expect.objectContaining({ readOnlyHint: true }) })
+      expect.objectContaining({ name: 'get_status', annotations: expect.objectContaining({ readOnlyHint: true }) })
     );
   });
 

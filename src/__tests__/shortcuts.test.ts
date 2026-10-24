@@ -46,7 +46,7 @@ describe('바로가기 프롬프트', () => {
     expect(text(await get('work', { work: '123' }))).toContain('cmid 는 123');
     expect(text(await get('work', { work: '보고서' }))).toContain('"보고서"');
     expect(text(await get('transcribe', { target: '1, 2  3' }))).toContain('cmids: [1, 2, 3]');
-    expect(text(await get('pull', { course: '자료구조' }))).toContain('`sync_materials` 를 course: "자료구조" 로');
+    expect(text(await get('pull', { course: '자료구조' }))).toContain('`pull_materials` 를 course: "자료구조" 로');
     expect(text(await get('pull'))).toContain('changes 의 diff');
     expect(text(await get('courses'))).toContain('`set_course_tracking` 을 인자 없이');
   });
@@ -54,16 +54,16 @@ describe('바로가기 프롬프트', () => {
   // 선택 인자를 비우면 전체 대상이고 문장이 깨지지 않는다 (hs-shell/dotbugi-mcp#100)
   it.each([
     ['status', '마감 지난 항목 N개 — /dotbugi:status past'],
-    ['pull', '`sync_materials` 를 부르고'],
+    ['pull', '`pull_materials` 를 부르고'],
     ['work', '골라 달라고'],
-    ['transcribe', '`transcribe_vod` 를 불러'],
+    ['transcribe', '`transcribe_lecture` 를 불러'],
   ])('인자 없이 %s', async (name, expected) => {
     const t = text(await get(name, {}));
     expect(t).toContain(expected);
     expect(t).not.toContain('없이 로');
   });
 
-  it('transcribe 대상은 transcribe_vod 인자로 넘긴다 (확인은 서버가)', async () => {
+  it('transcribe 대상은 transcribe_lecture 인자로 넘긴다 (확인은 서버가)', async () => {
     expect(text(await get('transcribe', { target: 'ALL' }))).toContain('all: true');
     expect(text(await get('transcribe', { target: '자료구조' }))).toContain('course: "자료구조"');
   });
@@ -73,7 +73,7 @@ describe('바로가기 프롬프트', () => {
     expect(t).toContain('course: "크롬", incompleteOnly: false, includePast: true');
     expect(t).toContain('맨 앞에 따로');
     expect(text(await get('status', { course: 'past' }))).toContain(
-      '`list_tasks` 를 includePast: true 로 불러 과목별로'
+      '`get_status` 를 includePast: true 로 불러 과목별로'
     );
     expect(text(await get('status', { course: '크롬' }))).not.toContain('맨 앞에 따로');
   });

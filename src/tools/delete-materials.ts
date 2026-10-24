@@ -23,7 +23,7 @@ export interface DeleteMaterialsArgs {
 }
 
 // 대상은 지금 다시 동기화해 얻은 "LMS 에서 사라진 파일"뿐 — 예전 보고를 기억해 두면 그사이 LMS 에 다시 올라온 파일까지 지울 수 있다.
-// 확인부터 삭제까지 sync 잠금 안에서 해 CLI·sync_materials 가 그사이 기록을 바꾸지 않게 한다
+// 확인부터 삭제까지 sync 잠금 안에서 해 CLI·pull_materials 가 그사이 기록을 바꾸지 않게 한다
 export async function deleteMaterials(
   session: string,
   args: DeleteMaterialsArgs,
@@ -93,7 +93,7 @@ export function registerDeleteMaterials(server: McpServer): void {
     {
       title: 'LMS 에서 사라진 강의자료 삭제',
       description:
-        'sync_materials 가 removed 로 보고하는 파일(LMS 에서 사라진 강의자료)만 로컬에서 지운다. 실행할 때 다시 동기화해 대상을 정하고, ' +
+        'pull_materials 가 removed 로 보고하는 파일(LMS 에서 사라진 강의자료)만 로컬에서 지운다. 실행할 때 다시 동기화해 대상을 정하고, ' +
         '사용자가 클라이언트 확인 창에서 직접 승인해야 지운다. 받은 뒤 수정된 파일·링크·저장 폴더 밖 경로는 지우지 않는다. ' +
         '확인 창이 없는 클라이언트면 목록과 confirmToken 을 돌려준다 — 사용자에게 목록을 보여주고 동의를 받은 뒤에만 그 토큰으로 다시 호출한다.',
       inputSchema: syncMaterialsInput.extend({
@@ -101,7 +101,7 @@ export function registerDeleteMaterials(server: McpServer): void {
           .array(z.string().min(1).max(4096))
           .max(1000)
           .optional()
-          .describe('sync_materials removed 의 path (또는 저장 위치 기준 상대 경로). 생략하면 보고된 파일 전부'),
+          .describe('pull_materials removed 의 path (또는 저장 위치 기준 상대 경로). 생략하면 보고된 파일 전부'),
         confirmToken: confirmTokenInput,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },

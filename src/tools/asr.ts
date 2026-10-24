@@ -30,7 +30,7 @@ const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)}GB`;
 
 const INSTALL_DEPS = { spawn, check: checkInstallable };
 
-// 수 GB 를 받는다 — transcribe_vod 처럼 따로 떠 있는 작업 프로세스(셸 없이 인자 배열)로 넘기고 바로 돌아온다.
+// 수 GB 를 받는다 — transcribe_lecture 처럼 따로 떠 있는 작업 프로세스(셸 없이 인자 배열)로 넘기고 바로 돌아온다.
 // 미지원 플랫폼·고정값 없음은 띄우기 전에 오류로, 설치 중은 안내로 돌려준다.
 // 이미 설치돼 있어도 띄운다 — 작업 프로세스가 해시로 검증해 맞는 파일은 건너뛰고 손상된 것만 다시 받는다
 export async function startInstall(opts: { gpu: boolean; model?: string }, deps = INSTALL_DEPS): Promise<string> {
@@ -65,7 +65,7 @@ export async function startInstall(opts: { gpu: boolean; model?: string }, deps 
       updatedAt: new Date().toISOString(),
       message: null,
     }).catch(() => {});
-    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_vod 와 같은 이유)
+    // 잠금 파일의 pid 를 작업 프로세스로 바꾼다 — 임시 파일 + rename (transcribe_lecture 와 같은 이유)
     const tmp = `${ASR_INSTALL_LOCK_FILE}.${process.pid}.tmp`;
     await writeFile(tmp, String(child.pid), { mode: 0o600 });
     await replaceFile(tmp, ASR_INSTALL_LOCK_FILE);
@@ -117,7 +117,7 @@ export function registerAsrTools(server: McpServer): void {
     {
       title: '로컬 음성 인식(ASR) 설치 시작',
       description:
-        'transcribe_vod 가 쓰는 로컬 음성 인식(Qwen3-ASR) 런타임을 ~/.cache/dotbugi-mcp/asr 에 설치하는 백그라운드 작업을 시작하고 바로 돌아온다. ' +
+        'transcribe_lecture 가 쓰는 로컬 음성 인식(Qwen3-ASR) 런타임을 ~/.cache/dotbugi-mcp/asr 에 설치하는 백그라운드 작업을 시작하고 바로 돌아온다. ' +
         '수 GB 를 받으며 모든 파일은 코드에 고정된 sha256 으로 검증한다. 진행은 asr_status. 중단돼도 다시 부르면 이어 받는다.',
       inputSchema: z.object({
         gpu: z.boolean().default(false).describe('NVIDIA GPU(Linux·WSL) 런타임. uv 가 필요하다'),

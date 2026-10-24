@@ -359,7 +359,7 @@ describe('findVod', () => {
       return new DOMParser().parseFromString(`<html><body>${html}</body></html>`, 'text/html') as unknown as Document;
     }) as FetchHtml;
 
-  it('출석 정보와 무관하게 강좌 화면의 VOD 를 cmid 로 찾고, 주차 폴더는 sync_materials 규칙을 따른다', async () => {
+  it('출석 정보와 무관하게 강좌 화면의 VOD 를 cmid 로 찾고, 주차 폴더는 pull_materials 규칙을 따른다', async () => {
     expect(await findVod(fetchHtml(), 2)).toEqual({
       course: '자료구조',
       courseId: '100',

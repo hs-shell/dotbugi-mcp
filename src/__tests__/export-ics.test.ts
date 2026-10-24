@@ -124,7 +124,7 @@ describe('export_ics', () => {
     );
   });
 
-  it('list_tasks 기준 항목을 학기 폴더의 .ics 로 0600 저장하고, 마감 없는 항목 수를 알린다', async () => {
+  it('get_status 기준 항목을 학기 폴더의 .ics 로 0600 저장하고, 마감 없는 항목 수를 알린다', async () => {
     const result = await send('tools/call', { name: 'export_ics', arguments: { refresh: true } });
     const path = join(home.dir, 'Downloads', 'dotbugi-mcp', '2026-2학기', ICS_FILE_NAME);
     // 픽스처의 미완료 4건 중 '기한 없는 과제' 만 마감이 없다
