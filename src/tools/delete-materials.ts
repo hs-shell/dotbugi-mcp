@@ -2,9 +2,10 @@ import { resolve } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { syncMaterialsInput } from '../materials/schema.js';
-import { materialsRoot, resolveRemoved, syncMaterials, withSyncLock, type RemoveOutcome } from '../materials/sync.js';
+import { resolveRemoved, syncMaterials, withSyncLock, type RemoveOutcome } from '../materials/sync.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
+import { storageRoot } from '../storage.js';
 import { askerOf, confirmDestructive, confirmTokenInput, type Asker } from './confirm.js';
 
 const REASONS: Record<Exclude<RemoveOutcome, 'deleted' | 'kept'>, string> = {
@@ -24,7 +25,7 @@ export interface DeleteMaterialsArgs {
 export async function deleteMaterials(session: string, args: DeleteMaterialsArgs, asker: Asker): Promise<string> {
   return withSyncLock(async () => {
     const { removed, files, warnings } = await syncMaterials(session, args.course);
-    const root = materialsRoot();
+    const root = storageRoot();
     const want = args.paths && new Set(args.paths.map((p) => resolve(root, p)));
     const picked = want ? removed.filter((f) => want.has(f.path)) : removed;
     const skipped = [
@@ -87,9 +88,7 @@ export function registerDeleteMaterials(server: McpServer): void {
           .array(z.string().min(1).max(4096))
           .max(1000)
           .optional()
-          .describe(
-            'sync_materials removed 의 path (또는 ~/Downloads/dotbugi-mcp 기준 상대 경로). 생략하면 보고된 파일 전부'
-          ),
+          .describe('sync_materials removed 의 path (또는 저장 위치 기준 상대 경로). 생략하면 보고된 파일 전부'),
         confirmToken: confirmTokenInput,
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },

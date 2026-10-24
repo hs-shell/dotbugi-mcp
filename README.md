@@ -64,6 +64,7 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 | "자료구조 과제 내용이랑 첨부파일 받아줘"                | `get_assignment`                                           |
 | "운영체제 강의자료 받아줘"                              | `sync_materials`                                           |
 | "LMS 에서 지워진 자료 정리해줘"                         | `delete_materials` (승인 화면)                             |
+| "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?"   | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
 | "자료구조 5주차 정리해줘"                               | `summarize_week` 프롬프트                                  |
 | "안 들은 강의 차례로 틀어줘" / "재생 멈춰"              | `play_vods` / `stop_vods`, `vod_status`                    |
 | "받아쓰기 준비해줘"                                     | `asr_install`, `asr_status`                                |
@@ -72,27 +73,28 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 
 Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구조 5` 처럼 직접 부를 수도 있습니다.
 
-**삭제는 사용자가 직접 승인합니다.** `delete_materials`·`asr_remove` 는 지울 목록을 Claude 앱의 확인 창에 띄우고, 사용자가 체크하고 승인해야만 지웁니다 (Claude 가 대신 승인할 수 없습니다). 확인 창을 지원하지 않는 앱에서는 Claude 가 목록을 보여 주고 동의를 물은 뒤에만 지웁니다.
+**삭제·저장 위치 변경은 사용자가 직접 승인합니다.** `delete_materials`·`asr_remove`·`set_storage_dir`(위치만 바꿔도 — 공유 폴더로 바뀌면 앞으로 받는 자료가 새기 때문)는 대상 목록을 Claude 앱의 확인 창에 띄우고, 사용자가 체크하고 승인해야만 실행합니다 (Claude 가 대신 승인할 수 없습니다). 확인 창을 지원하지 않는 앱에서는 Claude 가 목록을 보여 주고 동의를 물은 뒤에만 실행합니다.
 
 ## 도구 목록
 
 인자·출력·상한·파일 위치는 [docs/tools.md](docs/tools.md) 에 있습니다.
 
-| 분류     | 이름                                                                                                                                                                           | 하는 일                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| 로그인   | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                              | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃 |
-| 할 일    | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                       | VOD·과제·퀴즈를 마감 임박 순으로 조회               |
-|          | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 강좌 추적 켜기·끄기        |
-|          | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기             |
-| 재생     | [`vod_status`](docs/tools.md#vod_status)                                                                                                                                       | 남은 VOD 와 연속 재생 진행 상황                     |
-|          | [`play_vods`](docs/tools.md#play_vods--stop_vods) / [`stop_vods`](docs/tools.md#play_vods--stop_vods)                                                                          | 미출석 VOD 를 공식 플레이어로 차례로 재생 / 중지    |
-|          | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                           | Claude Code 상태 표시줄 켜기·끄기 (승인 후)         |
-| 자료     | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                  |
-|          | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제        |
-|          | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                   |
-| 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | VOD 하나를 로컬 음성 인식으로 받아쓰기 / 진행 상황  |
-|          | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                          | 받아쓰기 중지                                       |
-|          | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                      | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제    |
+| 분류     | 이름                                                                                                                                                                           | 하는 일                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| 로그인   | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                              | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃                 |
+| 할 일    | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                       | VOD·과제·퀴즈를 마감 임박 순으로 조회                               |
+|          | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 강좌 추적 켜기·끄기                        |
+|          | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기                             |
+| 재생     | [`vod_status`](docs/tools.md#vod_status)                                                                                                                                       | 남은 VOD 와 연속 재생 진행 상황                                     |
+|          | [`play_vods`](docs/tools.md#play_vods--stop_vods) / [`stop_vods`](docs/tools.md#play_vods--stop_vods)                                                                          | 미출석 VOD 를 공식 플레이어로 차례로 재생 / 중지                    |
+|          | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                           | Claude Code 상태 표시줄 켜기·끄기 (승인 후)                         |
+| 자료     | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                                  |
+|          | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir)                                      | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동) |
+|          | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                        |
+|          | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                                   |
+| 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | VOD 하나를 로컬 음성 인식으로 받아쓰기 / 진행 상황                  |
+|          | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                          | 받아쓰기 중지                                                       |
+|          | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                      | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제                    |
 
 모든 기능을 대화로 쓸 수 있습니다. 같은 일을 터미널 명령으로도 할 수 있습니다 → [docs/tools.md](docs/tools.md#터미널에서도-할-수-있는-것)
 
@@ -103,7 +105,7 @@ Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구�
 - 도구 출력·로그에는 세션 값·연결 코드·영상 주소를 넣지 않습니다.
 - LMS 에 제출·작성·수정하지 않습니다. 과제 제출은 직접 하세요.
 - 출석은 LMS **공식 플레이어**를 평소 브라우저 창에서 재생해서만 인정받습니다 (헤드리스·음소거·배속 강제 없음).
-- 받은 파일은 `~/Downloads/dotbugi-mcp/`, 재생·받아쓰기 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
+- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`, 재생·받아쓰기 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
 
 ## 문제 해결
 

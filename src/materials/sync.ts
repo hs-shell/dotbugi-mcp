@@ -18,6 +18,7 @@ import { createFetchHtml, limit } from '../lms-html.js';
 import { SessionExpiredError } from '../lms.js';
 import { acquireLock } from '../player/lock.js';
 import { redact } from '../redact.js';
+import { moveLegacyDir, previousSemester, semesterOf, storageRoot } from '../storage.js';
 import { listCourses } from '../tasks/collect.js';
 import { clean } from '../tasks/text.js';
 import { fileKey, folderFileUrls, parseCoursePage, resourceFileUrl, type CourseModule } from './course-page.js';
@@ -46,13 +47,13 @@ export interface SyncResult {
   warnings: string[];
 }
 
-export const materialsRoot = () => join(homedir(), 'Downloads', 'dotbugi-mcp');
 const LIMITS = { maxBytes: MATERIAL_MAX_BYTES, timeoutMs: MATERIAL_REQUEST_TIMEOUT_MS };
 
-// MCP 도구와 CLI 가 같은 manifest 를 번갈아 덮지 않게 한 번에 하나만 돌린다
+// MCP 도구와 CLI 가 같은 manifest 를 번갈아 덮지 않게 한 번에 하나만 돌린다.
+// 잠금은 저장 위치가 아니라 캐시 폴더에 둔다 — set_storage_dir 가 저장 위치를 옮기는 동안에도 모두 같은 잠금을 보게
 export async function withSyncLock<T>(task: () => Promise<T>): Promise<T> {
   const release = await acquireLock(
-    join(materialsRoot(), MATERIALS_LOCK_NAME),
+    join(homedir(), '.cache', 'dotbugi-mcp', MATERIALS_LOCK_NAME),
     '다른 강의자료 동기화(sync_materials 또는 dotbugi-mcp sync)가 실행 중입니다. 끝난 뒤 다시 실행하세요.'
   );
   try {
@@ -186,15 +187,47 @@ async function syncFile(
   }
 }
 
-// 과목 폴더는 "<과목>". 같은 이름의 다른 과목이 이미 쓰고 있으면 "<과목> (<과목 번호>)"
-export async function openCourseDir(root: string, title: string, courseId: string) {
-  for (const name of [title, `${title} (${courseId})`]) {
-    const dir = childDir(root, name);
+const courseDirNames = (title: string, courseId: string) => [title, `${title} (${courseId})`];
+
+// 학기 폴더 도입 전의 <저장 위치>/<과목>/ 중 이 과목의 manifest 가 있는 것만 이번 학기 폴더로 옮긴다 (sync 잠금 안에서만 부른다).
+// 다른 학기·다른 과목의 폴더는 건드리지 않는다. manifest 경로는 과목 폴더 기준 상대 경로라 옮겨도 그대로 맞는다
+async function migrateCourseDir(root: string, title: string, courseId: string, now: Date): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const name of courseDirNames(title, courseId)) {
+    const legacy = childDir(root, name);
+    const st = await lstat(legacy).catch(() => null);
+    if (!st?.isDirectory() || (await readManifest(legacy).catch(() => null))?.courseId !== courseId) continue;
+    const warning = await moveLegacyDir(legacy, childDir(join(root, semesterOf(now)), name));
+    if (warning) warnings.push(warning);
+  }
+  return warnings;
+}
+
+// 과목 폴더는 "<학기>/<과목>". 같은 이름의 다른 과목이 이미 쓰고 있으면 "<학기>/<과목> (<과목 번호>)"
+export async function openCourseDir(root: string, title: string, courseId: string, now = new Date()) {
+  const current = semesterOf(now);
+  let free: string | null = null;
+  for (const name of courseDirNames(title, courseId)) {
+    const dir = childDir(join(root, current), name);
     await ensureRealDir(root, dir, false);
     const manifest = await readManifest(dir);
-    if (!manifest || manifest.courseId === courseId)
-      return { dir, manifest: manifest ?? { courseId, files: new Map<string, ManifestEntry>() } };
+    if (manifest?.courseId === courseId) return { dir, manifest };
+    if (!manifest) free ??= dir;
   }
+  // 이번 학기 폴더에 이 과목 기록이 없으면 직전 학기 폴더를 이어 쓴다 — 2월 말 개강처럼 경계에 걸친 과목을
+  // 3월에 다시 받거나 폴더가 둘로 갈리지 않게. 지금 수강 중인 과목(같은 courseId)만 여기 온다.
+  // 직전 학기 폴더가 이상하면(링크·깨진 기록) 쓰지 않고 이번 학기 폴더로 간다
+  for (const name of courseDirNames(title, courseId)) {
+    const dir = childDir(join(root, previousSemester(current)), name);
+    try {
+      await ensureRealDir(root, dir, false);
+      const manifest = await readManifest(dir);
+      if (manifest?.courseId === courseId) return { dir, manifest };
+    } catch {
+      // 이번 학기 폴더로 대신 받는다
+    }
+  }
+  if (free) return { dir: free, manifest: { courseId, files: new Map<string, ManifestEntry>() } };
   throw new Error('같은 이름의 다른 과목 폴더가 있어 건너뜁니다.');
 }
 
@@ -213,7 +246,9 @@ async function syncCourse(
     return err instanceof Error ? err.message : String(err);
   };
   if (!LMS_NUMERIC_ID.test(course.courseId)) throw new Error('과목 번호 형식이 올바르지 않습니다.');
-  const { dir: courseDir, manifest } = await openCourseDir(root, title, course.courseId);
+  const now = new Date();
+  for (const w of await migrateCourseDir(root, title, course.courseId, now)) warn(w);
+  const { dir: courseDir, manifest } = await openCourseDir(root, title, course.courseId, now);
   const save = async (m: Manifest) => {
     await ensureRealDir(root, courseDir);
     await writeManifest(courseDir, m);
@@ -274,10 +309,10 @@ async function syncCourse(
   if (dirty) await save(manifest);
 }
 
-// 추적 중인 강좌(dotbugi-mcp courses, 기본: 비교과 제외)의 강의자료를 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/ 에 맞춘다. course 는 과목명 일부(대소문자 무시)
+// 추적 중인 강좌(dotbugi-mcp courses, 기본: 비교과 제외)의 강의자료를 <저장 위치>/<학기>/<과목>/<N주차>/ 에 맞춘다. course 는 과목명 일부(대소문자 무시)
 export async function syncMaterials(session: string, course?: string): Promise<SyncResult> {
   const fetchHtml = createFetchHtml(session);
-  const out: SyncResult = { root: materialsRoot(), files: [], removed: [], warnings: [] };
+  const out: SyncResult = { root: storageRoot(), files: [], removed: [], warnings: [] };
   const budget: Budget = { files: 0, bytes: 0, capped: false };
   const filter = course?.toLowerCase();
   const courses = (await listCourses(fetchHtml)).filter(
@@ -307,7 +342,7 @@ export type RemoveOutcome = 'deleted' | 'kept' | 'missing' | 'modified' | 'outsi
 // 삭제 확인 결과 반영 (CLI·delete_materials 공용). 기록·경로를 다시 읽어 검증하고, 보고한 그 파일(같은 경로·같은 내용)일 때만 지운다.
 // 남기면 keep 으로 표시해 다시 묻지 않는다. 경로 단계가 링크면 ensureRealDir 가 던진다
 export async function resolveRemoved(item: RemovedFile, remove: boolean): Promise<RemoveOutcome> {
-  const root = materialsRoot();
+  const root = storageRoot();
   await ensureRealDir(root, item.courseDir, false);
   const manifest = await readManifest(item.courseDir);
   const entry = manifest?.files.get(item.key);

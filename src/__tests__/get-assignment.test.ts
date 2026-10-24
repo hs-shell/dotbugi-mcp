@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ATTACHMENT_MAX_BYTES, ATTACHMENT_REQUEST_TIMEOUT_MS, LMS_REQUEST_TIMEOUT_MS } from '../constants.js';
+import { withSyncLock } from '../materials/sync.js';
 import { createServer } from '../server.js';
+import { semesterOf } from '../storage.js';
 import { LOGIN_REDIRECT } from './fixtures/lms-pages.js';
 
 const SESSION = 'abcdefghij0123456789';
@@ -73,7 +75,7 @@ beforeAll(async () => {
 });
 
 const call = (args: Record<string, unknown>) => send('tools/call', { name: 'get_assignment', arguments: args });
-const dir = () => join(state.home, 'Downloads', 'dotbugi-mcp', 'assign-5');
+const dir = () => join(state.home, 'Downloads', 'dotbugi-mcp', semesterOf(new Date()), 'assign-5');
 // 다운로드 폴더 위(홈)에 아무것도 새지 않았는지 보려고 홈 아래 파일을 모두 모은다
 const allFiles = async () =>
   (await readdir(state.home, { recursive: true, withFileTypes: true })).filter((e) => e.isFile());
@@ -168,6 +170,29 @@ describe('get_assignment', () => {
     );
     const out = (await call({ cmid: 5 })).structuredContent as { warnings: string[] };
     expect(out.warnings[0]).toContain('상한을 넘습니다');
+  });
+
+  it('학기 폴더 전에 받아 둔 assign-<cmid> 폴더는 이번 학기 폴더로 옮겨 이어 쓴다', async () => {
+    const legacy = join(state.home, 'Downloads', 'dotbugi-mcp', 'assign-5');
+    await mkdir(legacy, { recursive: true });
+    await writeFile(join(legacy, '과제.pdf'), '내 풀이');
+    await call({ cmid: 5 });
+    expect((await readdir(dir())).sort()).toEqual(['_.._evil.sh', '과제 (2).pdf', '과제.pdf']);
+    expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
+    await expect(readdir(legacy)).rejects.toThrow();
+  });
+
+  it('동기화·저장 위치 이동 중(sync 잠금)이면 아무것도 받지 않는다', async () => {
+    let started!: () => void;
+    let finish!: () => void;
+    const ready = new Promise<void>((r) => (started = r));
+    const held = withSyncLock(() => new Promise<void>((r) => ((finish = r), started())));
+    await ready;
+    const result = await call({ cmid: 5 });
+    finish();
+    await held;
+    expect(result).toMatchObject({ isError: true });
+    await expect(readdir(dir())).rejects.toThrow();
   });
 
   it('같은 이름의 파일이 이미 있으면 덮어쓰지 않고 번호를 붙여 받는다', async () => {

@@ -51,8 +51,8 @@ export interface ConfirmRequest {
   // 토큰을 묶을 대상의 정체 (경로+해시 등). 생략하면 targets
   binding?: string[];
   token?: string;
-  // 기본은 삭제. 'change' 는 되돌릴 수 있는 설정 변경 — 확인 창 문구만 다르다
-  kind?: 'delete' | 'change';
+  // 기본은 삭제. 'change' 는 되돌릴 수 있는 설정 변경, 'move'·'relocate' 는 저장 위치 이동·변경(set_storage_dir) — 확인 창 문구만 다르다
+  kind?: keyof typeof WORDS;
 }
 export type ConfirmOutcome = { ok: true } | { ok: false; text: string };
 
@@ -64,6 +64,8 @@ const WORDS = {
     agree: '삭제',
   },
   change: { label: '위와 같이 변경합니다', warn: '', none: '아무것도 바꾸지 않았습니다', agree: '변경' },
+  move: { label: '위 항목을 옮깁니다', warn: '', none: '아무것도 옮기지 않았습니다', agree: '이동' },
+  relocate: { label: '저장 위치를 바꿉니다', warn: '', none: '저장 위치를 바꾸지 않았습니다', agree: '저장 위치 변경' },
 };
 
 export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Promise<ConfirmOutcome> {

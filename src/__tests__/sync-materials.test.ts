@@ -8,6 +8,7 @@ import { SessionExpiredError } from '../lms.js';
 import { fileKey, weekName } from '../materials/course-page.js';
 import { resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
 import { createServer } from '../server.js';
+import { previousSemester, semesterOf } from '../storage.js';
 
 const SESSION = 'abcdefghij0123456789';
 const L = 'https://learn.hansung.ac.kr';
@@ -107,7 +108,8 @@ const fetchMock = vi.fn<typeof fetch>(async (input) => page(String(input)));
 vi.stubGlobal('fetch', fetchMock);
 
 const root = () => join(state.home, 'Downloads', 'dotbugi-mcp');
-const course = (...p: string[]) => join(root(), '자료구조', ...p);
+const sem = () => join(root(), semesterOf(new Date()));
+const course = (...p: string[]) => join(sem(), '자료구조', ...p);
 const manifestFile = () => course('.dotbugi-manifest.json');
 const fileFetches = () => fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('/pluginfile.php/'));
 const sync = () => syncMaterials(SESSION);
@@ -155,7 +157,7 @@ describe('syncMaterials', () => {
       [course('3주차', 'a.txt')]: 'added',
       [course('3주차', 'b.txt')]: 'added',
       [course('_.._탈출', 'notes.txt')]: 'added',
-      [join(root(), '_.._evil', '1주차', 'x.txt')]: 'added',
+      [join(sem(), '_.._evil', '1주차', 'x.txt')]: 'added',
     });
     expect(await readFile(course('강의 개요', '강의 1.pdf'), 'utf8')).toBe('slides v1');
     expect(r.warnings).toEqual([
@@ -403,7 +405,7 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
 
   it('과목 폴더가 링크면 manifest 를 읽지도 쓰지도 않고 건너뛴다', async () => {
     await mkdir(outside());
-    await mkdir(root(), { recursive: true });
+    await mkdir(sem(), { recursive: true });
     await symlink(outside(), course());
     const r = await sync();
     expect(await readdir(outside())).toEqual([]);
@@ -466,11 +468,49 @@ describe('리뷰 반영: 링크 폴더·경합·중단·상한', () => {
     expect(fileFetches().some((u) => u.includes('/intro/'))).toBe(false);
   });
 
+  it('이번 학기 폴더에 기록이 없고 직전 학기 폴더에 같은 과목이 있으면 그 폴더를 이어 쓴다 (다시 받지 않음)', async () => {
+    await sync();
+    const prev = join(root(), previousSemester(semesterOf(new Date())));
+    await mkdir(prev);
+    await rename(course(), join(prev, '자료구조'));
+    fetchMock.mockClear();
+    const r = await sync();
+    expect(fileFetches().filter((u) => !u.includes('/60/'))).toEqual([]);
+    expect(r.files.filter((f) => f.course === '자료구조').every((f) => f.path.startsWith(join(prev, '자료구조')))).toBe(
+      true
+    );
+    await expect(readdir(course())).rejects.toThrow();
+  });
+
+  it('학기 폴더 전 구조의 과목 폴더(manifest 있음)는 이번 학기 폴더로 옮기고, 다시 받지 않는다', async () => {
+    await sync();
+    await rename(course(), join(root(), '자료구조'));
+    // 다른 과목의 manifest 가 있는 같은 이름 폴더·manifest 없는 폴더는 건드리지 않는다
+    await mkdir(join(root(), '_.._evil'), { recursive: true });
+    await rm(join(sem(), '_.._evil'), { recursive: true });
+    fetchMock.mockClear();
+    const r = await sync();
+    expect(fileFetches().filter((u) => !u.includes('/60/'))).toEqual([]);
+    expect(Object.values(statusOf(r)).filter((s) => s !== 'unchanged')).toEqual(['added']);
+    expect(await readdir(course('3주차'))).toEqual(['a.txt', 'b.txt']);
+    expect((await readdir(root())).sort()).toEqual([semesterOf(new Date()), '_.._evil'].sort());
+    expect(r.warnings.filter((w) => w.includes('예전 폴더'))).toEqual([]);
+  });
+
+  it('새 학기 폴더에 같은 과목 폴더가 이미 있으면 옮기지도 합치지도 않고 경고한다', async () => {
+    await sync();
+    await rename(course(), join(root(), '자료구조'));
+    await mkdir(course());
+    const r = await sync();
+    expect(r.warnings).toContainEqual(expect.stringContaining('이미 있습니다'));
+    expect(await readdir(join(root(), '자료구조', '3주차'))).toEqual(['a.txt', 'b.txt']);
+  });
+
   it('같은 이름의 다른 과목은 "<과목> (<번호>)" 폴더에 받는다 (순서가 바뀌어도 같은 폴더)', async () => {
     await sync();
     lms.twin = true;
     await sync();
-    expect(await readdir(join(root(), '자료구조 (300)', '1주차'))).toEqual(['x.txt']);
+    expect(await readdir(join(sem(), '자료구조 (300)', '1주차'))).toEqual(['x.txt']);
     fetchMock.mockClear();
     const r = await sync();
     expect(fileFetches()).toEqual([]);
@@ -595,15 +635,21 @@ describe('delete_materials 도구', () => {
   it('확인 창이 없으면 토큰을 주고, 같은 목록에 그 토큰으로 다시 불러야만 지운다', async () => {
     await setup();
     const { call } = await connect();
-    const first = await call({ paths: ['자료구조/3주차/a.txt'] });
+    const first = await call({ paths: [join(semesterOf(new Date()), '자료구조/3주차/a.txt')] });
     expect(await left()).toEqual(['a.txt', 'b.txt']);
     const token = /confirmToken: "([0-9a-f]+)"/.exec(first)![1];
     // 다른 목록(전체)에는 쓸 수 없고, 거절된 토큰은 버려진다
     expect(await call({ confirmToken: token })).toContain('아무것도 지우지 않았습니다');
-    expect(await call({ paths: ['자료구조/3주차/a.txt'], confirmToken: token })).toContain('아무것도');
+    expect(
+      await call({ paths: [join(semesterOf(new Date()), '자료구조/3주차/a.txt')], confirmToken: token })
+    ).toContain('아무것도');
     expect(await left()).toEqual(['a.txt', 'b.txt']);
-    const again = /confirmToken: "([0-9a-f]+)"/.exec(await call({ paths: ['자료구조/3주차/a.txt'] }))![1];
-    expect(await call({ paths: ['자료구조/3주차/a.txt'], confirmToken: again })).toContain('삭제 1개');
+    const again = /confirmToken: "([0-9a-f]+)"/.exec(
+      await call({ paths: [join(semesterOf(new Date()), '자료구조/3주차/a.txt')] })
+    )![1];
+    expect(
+      await call({ paths: [join(semesterOf(new Date()), '자료구조/3주차/a.txt')], confirmToken: again })
+    ).toContain('삭제 1개');
     expect(await left()).toEqual(['b.txt']);
   });
 

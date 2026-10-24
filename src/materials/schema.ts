@@ -11,7 +11,11 @@ export const syncMaterialsInput = z.object({
 });
 
 export const syncMaterialsOutput = z.object({
-  root: z.string().describe('저장 최상위 폴더 (~/Downloads/dotbugi-mcp)'),
+  root: z
+    .string()
+    .describe(
+      '저장 위치 (기본 ~/Downloads/dotbugi-mcp, get_storage_dir·set_storage_dir). 자료는 그 아래 <YYYY-N학기>/<과목>/'
+    ),
   files: z
     .array(
       z.object({

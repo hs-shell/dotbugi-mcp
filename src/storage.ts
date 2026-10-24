@@ -1,0 +1,78 @@
+import { lstatSync } from 'node:fs';
+import { lstat, mkdir, rename } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join } from 'node:path';
+import * as z from 'zod/v4';
+import { LMS_UTC_OFFSET } from './constants.js';
+import { log } from './log.js';
+import { readStateFile, writeStateFile } from './player/state.js';
+
+// 저장 위치·학기 폴더 규칙의 단일 출처 — 강의자료·과제 첨부·녹취·요약.md 가 모두 <저장 위치>/<YYYY-N학기>/ 아래에 쌓인다.
+// homedir() 는 부를 때마다 읽는다 (테스트가 홈을 바꾼다)
+export const storageConfigFile = () => join(homedir(), '.config', 'dotbugi-mcp', 'storage.json');
+export const defaultStorageRoot = () => join(homedir(), 'Downloads', 'dotbugi-mcp');
+
+const storageConfigSchema = z.object({
+  version: z.literal(1),
+  // 디스크의 값은 사용자가 고칠 수 있다 — 절대 경로·제어 문자 없음만 받는다 (링크 검사는 쓸 때 ensureRealDir)
+  root: z
+    .string()
+    .max(4096)
+    // eslint-disable-next-line no-control-regex
+    .refine((p) => isAbsolute(p) && !/[\x00-\x1f]/.test(p)),
+});
+export type StorageConfig = z.infer<typeof storageConfigSchema>;
+
+// 없으면 null. 깨진 파일은 알리고 기본 위치로 보되, strict(옮기기 전)면 엉뚱한 폴더를 옮기지 않게 오류
+export function readStorageConfig(file = storageConfigFile(), strict = false): StorageConfig | null {
+  const config = readStateFile(file, storageConfigSchema);
+  if (config || !lstatSync(file, { throwIfNoEntry: false })) return config;
+  const message = `저장 위치 설정 파일을 읽지 못했습니다 (형식 오류 등): ${file} — 지우면 기본 위치로 돌아갑니다.`;
+  if (strict) throw new Error(`${message} 바꾸지 않았습니다.`);
+  log(`${message} 지금은 기본 위치(${defaultStorageRoot()})를 씁니다.`);
+  return null;
+}
+
+export const writeStorageConfig = (root: string, file = storageConfigFile()) =>
+  writeStateFile(file, storageConfigSchema, { version: 1, root });
+
+export const storageRoot = () => readStorageConfig()?.root ?? defaultStorageRoot();
+
+// '1970-01-01T00:00:00+09:00' 은 UTC 로 -9시간 — 그 부호를 뒤집으면 LMS 시간대의 오프셋(ms)
+const LMS_OFFSET_MS = -Date.parse(`1970-01-01T00:00:00${LMS_UTC_OFFSET}`);
+
+// 3~8월 그해 1학기, 9~12월 그해 2학기, 1~2월 전년도 2학기 (계절학기도 달 기준). 실행 환경 시간대가 아니라 한국 시간으로 자른다
+export function semesterOf(date: Date): string {
+  const kst = new Date(date.getTime() + LMS_OFFSET_MS);
+  const year = kst.getUTCFullYear();
+  const month = kst.getUTCMonth() + 1;
+  if (month >= 3 && month <= 8) return `${year}-1학기`;
+  return `${month >= 9 ? year : year - 1}-2학기`;
+}
+
+// 바로 앞 학기 ('2026-1학기' → '2025-2학기', '2026-2학기' → '2026-1학기')
+export function previousSemester(semester: string): string {
+  const [year, n] = semester.split(/-|학기/).map(Number);
+  return n === 2 ? `${year}-1학기` : `${year - 1}-2학기`;
+}
+
+export const semesterDir = (date = new Date(), root = storageRoot()) => join(root, semesterOf(date));
+
+// 학기 폴더 도입 전 구조(<저장 위치>/<이름>/)를 <저장 위치>/<학기>/<이름>/ 으로 옮긴다. 같은 파일 시스템 안의 rename 만 —
+// 대상이 이미 있거나 옮기지 못하면 덮어쓰거나 합치지 않고 경고만 돌려준다. 옮겼거나 옮길 것이 없으면 null.
+// from 이 링크·파일이면 옮기지 않는다 (링크를 따라 저장 위치 밖을 끌어오지 않게)
+export async function moveLegacyDir(from: string, to: string): Promise<string | null> {
+  const src = await lstat(from).catch(() => null);
+  if (!src?.isDirectory()) return null;
+  if (await lstat(to).catch(() => null))
+    return `예전 폴더 ${from} 를 옮기지 않았습니다: ${to} 가 이미 있습니다. 확인 후 직접 정리하세요.`;
+  try {
+    await mkdir(dirname(to), { recursive: true, mode: 0o700 });
+    // 학기 폴더가 링크면 그 너머로 옮기지 않는다
+    if (!(await lstat(dirname(to))).isDirectory()) throw new Error(`${dirname(to)} 가 폴더가 아닙니다(링크 등).`);
+    await rename(from, to);
+    return null;
+  } catch (err) {
+    return `예전 폴더 ${from} 를 ${to} 로 옮기지 못했습니다: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}

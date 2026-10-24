@@ -10,6 +10,7 @@ import { registerGetAssignment } from './tools/get-assignment.js';
 import { registerListTasks } from './tools/list-tasks.js';
 import { registerPlayVods } from './tools/play-vods.js';
 import { registerSetupStatusline } from './tools/setup-statusline.js';
+import { registerStorageDirTools } from './tools/storage-dir.js';
 import { registerLogin } from './tools/login.js';
 import { registerLogout } from './tools/logout.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
@@ -32,6 +33,7 @@ export function createServer(): McpServer {
   registerGetAssignment(server);
   registerSyncMaterials(server);
   registerDeleteMaterials(server);
+  registerStorageDirTools(server);
   registerTranscribeVod(server);
   registerAsrTools(server);
   registerAsrRemove(server);

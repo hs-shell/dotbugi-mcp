@@ -22,7 +22,7 @@ export interface TranscribeDeps {
   // 영상 CDN 전용 (세션 없음)
   fetch: typeof fetch;
   spawn: typeof spawn;
-  // 강의자료 폴더 (~/Downloads/dotbugi-mcp)
+  // 저장 위치 (storageRoot). 녹취는 그 아래 학기·과목·주차 폴더에 쓴다
   root: string;
   // 이 작업 전용 임시 폴더. 시작·끝에 통째로 지운다 (잠금을 잡은 뒤에만 부른다)
   tmpDir: string;
@@ -127,7 +127,7 @@ async function writeNew(path: string, body: string): Promise<boolean> {
   return true;
 }
 
-// VOD 하나 → ~/Downloads/dotbugi-mcp/<과목>/<주차 폴더>/녹취-<강의명>.md. 이미 있으면 건너뛴다(덮어쓰지 않음). 임시 파일은 어떤 경우에도 지운다
+// VOD 하나 → <저장 위치>/<학기>/<과목>/<주차 폴더>/녹취-<강의명>.md. 이미 있으면 건너뛴다(덮어쓰지 않음). 임시 파일은 어떤 경우에도 지운다
 export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise<TranscribeResult> {
   const tmp = deps.tmpDir;
   try {
@@ -136,7 +136,7 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     deps.report('prepare', null);
     const meta = await deps.findVod(cmid);
     if (!LMS_NUMERIC_ID.test(meta.courseId)) throw new Error('과목 번호 형식이 올바르지 않습니다.');
-    const { dir: courseDir } = await openCourseDir(deps.root, meta.course, meta.courseId);
+    const { dir: courseDir } = await openCourseDir(deps.root, meta.course, meta.courseId, deps.now());
     const weekDir = childDir(courseDir, meta.week);
     const path = join(weekDir, safeFileName(`녹취-${meta.title}.md`));
     if (await lstat(path).catch(() => null)) return { status: 'skipped', path, meta };

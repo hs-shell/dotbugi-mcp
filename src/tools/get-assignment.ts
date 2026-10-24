@@ -1,12 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import { attachmentName, downloadDir, saveAttachment } from '../assign/download.js';
+import { join } from 'node:path';
+import { assignDirName, attachmentName, downloadDir, saveAttachment } from '../assign/download.js';
 import { parseAssignPage } from '../assign/page.js';
 import { getAssignmentInput, getAssignmentOutput, type GetAssignmentOutput } from '../assign/schema.js';
 import { ASSIGN_VIEW_PATH, ATTACHMENT_MAX_COUNT, LMS_ORIGIN } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
+import { withSyncLock } from '../materials/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
+import { moveLegacyDir, storageRoot } from '../storage.js';
 
 async function downloadAll(urls: URL[], dir: string, session: string) {
   const attachments: GetAssignmentOutput['attachments'] = [];
@@ -65,7 +68,13 @@ export function registerGetAssignment(server: McpServer): void {
         ({ session } = await getSession());
         const page = parseAssignPage(await createFetchHtml(session)(`${ASSIGN_VIEW_PATH}?id=${cmid}`));
         const dir = downloadDir(cmid);
-        const { attachments, warnings } = await downloadAll(page.attachmentUrls, dir, session);
+        // 학기 폴더 도입 전에 받아 둔 <저장 위치>/assign-<cmid> 가 있으면 이번 학기 폴더로 옮긴다 (덮어쓰지 않음)
+        // sync 잠금 안에서 — set_storage_dir 가 저장 위치를 옮기는 도중에 옛 위치에 쓰지 않게
+        const { moved, attachments, warnings } = await withSyncLock(async () => ({
+          moved: await moveLegacyDir(join(storageRoot(), assignDirName(cmid)), dir),
+          ...(await downloadAll(page.attachmentUrls, dir, session)),
+        }));
+        if (moved) warnings.unshift(moved);
         const result: GetAssignmentOutput = {
           title: redact(page.title, [session]),
           deadline: page.deadline,

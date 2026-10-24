@@ -27,7 +27,7 @@ export function parseAutomountRoot(conf: string): string {
 }
 
 let automountRoot: string | undefined;
-function wslAutomountRoot(): string {
+export function wslAutomountRoot(): string {
   if (automountRoot === undefined) {
     let conf = '';
     try {

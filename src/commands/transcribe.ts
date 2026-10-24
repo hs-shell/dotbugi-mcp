@@ -4,10 +4,10 @@ import { LMS_NUMERIC_ID, SIGNAL_EXIT_CODES, VOD_VIEWER_PATH } from '../constants
 import { createFetchHtml, limit } from '../lms-html.js';
 import { lmsFetch } from '../lms.js';
 import { log } from '../log.js';
-import { materialsRoot } from '../materials/sync.js';
 import { acquireLock, adoptLock } from '../player/lock.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
+import { storageRoot } from '../storage.js';
 import { findVod, type VodMeta } from '../transcribe/find-vod.js';
 import { transcribeVod, type Phase } from '../transcribe/pipeline.js';
 import {
@@ -98,7 +98,7 @@ export async function transcribe(arg: string, worker = false): Promise<void> {
       runtime: resolveAsrRuntime,
       fetch,
       spawn,
-      root: materialsRoot(),
+      root: storageRoot(),
       tmpDir: TRANSCRIBE_TMP_DIR,
       now: () => new Date(),
       report,
