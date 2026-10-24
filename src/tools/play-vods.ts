@@ -84,9 +84,9 @@ export function registerPlayVods(server: McpServer): void {
     {
       title: 'VOD 연속 재생 시작',
       description:
-        '미출석 VOD 를 마감 임박 순으로 LMS 공식 플레이어 창(평소 브라우저)에 하나씩 여는 백그라운드 재생을 시작하고 바로 돌아온다. ' +
+        '한성대 LMS 의 미출석 VOD 를 마감 임박 순으로 LMS 공식 플레이어 창(평소 브라우저)에 하나씩 여는 백그라운드 재생을 시작하고 바로 돌아온다. ' +
         '서버가 출석(진도 100%)을 확인해야 다음 강의를 연다. 출석은 공식 플레이어 재생으로만 인정되며 헤드리스·음소거·배속 강제는 하지 않는다. ' +
-        '진행은 vod_status, 중지는 stop_vods. 대상 강좌는 dotbugi-mcp courses 설정을 따른다.',
+        '진행은 vod_status, 중지는 stop_vods. 대상 강좌는 추적 강좌 설정(set_course_tracking)을 따른다.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
@@ -107,7 +107,7 @@ export function registerPlayVods(server: McpServer): void {
     'stop_vods',
     {
       title: 'VOD 연속 재생 중지',
-      description: 'play_vods(또는 dotbugi-mcp play)로 재생 중인 VOD 연속 재생을 멈춘다. 열린 강의 창은 닫지 않는다.',
+      description: 'play_vods 로 재생 중인 VOD 연속 재생을 멈춘다. 열린 강의 창은 닫지 않는다.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },

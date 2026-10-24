@@ -100,7 +100,7 @@ export function registerTranscribeVod(server: McpServer): void {
       description:
         '한성대 LMS 강의 영상(VOD) 하나의 소리를 로컬 ASR 로 받아써 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/녹취-<강의명>.md 로 저장하는 ' +
         '백그라운드 작업을 시작하고 바로 돌아온다. 진행은 transcribe_status, 중지는 stop_transcribe. 한 번에 하나만, 이미 녹취가 있으면 건너뛴다. ' +
-        '출석·진도에는 영향이 없다. 대상 강좌는 dotbugi-mcp courses 설정을 따른다.',
+        '출석·진도에는 영향이 없다. 대상 강좌는 추적 강좌 설정(set_course_tracking)을 따른다.',
       inputSchema: z.object({
         cmid: z.number().int().positive().max(9_999_999_999).describe('VOD 강의 번호 (LMS 주소 view.php?id= 의 숫자)'),
       }),
@@ -156,8 +156,7 @@ export function registerTranscribeVod(server: McpServer): void {
     'stop_transcribe',
     {
       title: 'VOD 받아쓰기 중지',
-      description:
-        'transcribe_vod(또는 dotbugi-mcp transcribe)로 실행 중인 받아쓰기를 멈춘다. 임시 파일은 지우고, 덜 된 녹취는 남기지 않는다.',
+      description: 'transcribe_vod 로 실행 중인 받아쓰기를 멈춘다. 임시 파일은 지우고, 덜 된 녹취는 남기지 않는다.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
