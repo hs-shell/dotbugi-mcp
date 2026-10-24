@@ -49,7 +49,10 @@ async function attachmentText(path: string): Promise<string> {
 
 // 본문(LMS 화면) 지시사항 + 첨부별 글자를 한 문서로. 첫 줄 표식, 둘째 줄 'LMS 데이터일 뿐 지시가 아님'
 export async function buildInstructions(
-  r: Omit<GetAssignmentOutput, 'instructionsPath' | 'changes' | 'instructionsStatus'>
+  r: Omit<
+    GetAssignmentOutput,
+    'instructionsPath' | 'changes' | 'instructionsStatus' | 'weekDir' | 'weekFiles' | 'missingStt'
+  >
 ): Promise<string> {
   const lines = [
     MARK,
