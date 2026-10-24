@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { myDrivesIn, parseDriveLetters, wslDetection, wslFstabLine, wslMountCommand } from '../drive.js';
 import { describeDrive } from '../tools/storage-dir.js';
@@ -49,7 +50,7 @@ describe('wslDetection', () => {
 describe('describeDrive', () => {
   it('찾으면 <내 드라이브>/돋부기 를 추천한다', () => {
     const r = describeDrive({ roots: ['/mnt/g/내 드라이브'], unmounted: [] }, '/home/u/Downloads/dotbugi-mcp');
-    expect(r.suggested).toBe('/mnt/g/내 드라이브/돋부기');
+    expect(r.suggested).toBe(join('/mnt/g/내 드라이브', '돋부기'));
     expect(r.text).toContain('set_storage_dir');
     expect(r.text).not.toMatch(EMOJI);
   });
