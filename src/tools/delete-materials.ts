@@ -27,11 +27,16 @@ export async function deleteMaterials(
   session: string,
   args: DeleteMaterialsArgs,
   asker: Asker,
-  progress?: Progress
+  progress?: Progress,
+  signal?: AbortSignal
 ): Promise<string> {
   return withSyncLock(async () => {
-    // 동기화도 MCP 상한까지만 — 상한에 걸려도 사라진 파일 판정은 그대로다 (못 받은 파일도 LMS 에 있는 것으로 센다)
-    const { removed, files, warnings } = await syncMaterials(session, args.course, mcpCaps(progress));
+    // 받기는 MCP 상한까지만 — 못 받은 파일도 LMS 에 있는 것으로 세고, 목록은 상한 뒤에도 끝까지 읽어 사라진 파일 판정은 그대로다
+    const { removed, files, warnings } = await syncMaterials(
+      session,
+      args.course,
+      mcpCaps({ onProgress: progress, signal, listAfterCap: true })
+    );
     const root = storageRoot();
     const want = args.paths && new Set(args.paths.map((p) => resolve(root, p)));
     const picked = want ? removed.filter((f) => want.has(f.path)) : removed;
@@ -104,7 +109,7 @@ export function registerDeleteMaterials(server: McpServer): void {
       let session = '';
       try {
         ({ session } = await getSession());
-        const text = await deleteMaterials(session, args, askerOf(server, ctx), progressOf(ctx));
+        const text = await deleteMaterials(session, args, askerOf(server, ctx), progressOf(ctx), ctx.mcpReq.signal);
         return { content: [{ type: 'text', text: redact(text, [session]) }] };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

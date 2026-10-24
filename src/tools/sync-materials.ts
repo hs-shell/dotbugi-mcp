@@ -47,7 +47,7 @@ export function registerSyncMaterials(server: McpServer): void {
         ({ session } = await getSession());
         // 한 번 호출은 MCP 상한까지만 받는다 — 남으면 more: true, 다시 호출하면 이어서 (기록은 파일마다 저장)
         const { root, files, removed, warnings, more } = await withSyncLock(() =>
-          syncMaterials(session, course, mcpCaps(progressOf(ctx)))
+          syncMaterials(session, course, mcpCaps({ onProgress: progressOf(ctx), signal: ctx.mcpReq.signal }))
         );
         const result: SyncMaterialsOutput = {
           root,

@@ -59,9 +59,9 @@ export function fileLinks(doc: Document): URL[] {
 }
 
 // 파일 모듈 → 실제 파일 주소. lmsFetch 는 리다이렉트를 따라가지 않으므로 Location 을 직접 확인해 LMS pluginfile 일 때만 쓴다
-export async function resourceFileUrl(cmid: number, session: string): Promise<URL> {
+export async function resourceFileUrl(cmid: number, session: string, signal?: AbortSignal): Promise<URL> {
   return limit(async () => {
-    const res = await lmsFetch(`${RESOURCE_VIEW_PATH}?id=${cmid}&redirect=1`, session);
+    const res = await lmsFetch(`${RESOURCE_VIEW_PATH}?id=${cmid}&redirect=1`, session, undefined, signal);
     if (res.status >= 300 && res.status < 400) {
       await res.body?.cancel();
       const url = URL.parse(res.headers.get('location') ?? '', LMS_ORIGIN);
