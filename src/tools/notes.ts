@@ -98,7 +98,9 @@ export function registerNotesTools(server: McpServer): void {
         // STT 없는 동영상 강의 — 목록을 못 받아도 노트는 만들 수 있으니 경고만
         const warnings: string[] = [];
         const { targets: vods, failures } = await listVodTargets(fetchHtml, root).catch((err: unknown) => {
-          warnings.push(`동영상 강의 목록을 받지 못해 STT 여부는 확인하지 않았습니다: ${String(err)}`);
+          warnings.push(
+            `동영상 강의 목록을 받지 못해 STT 여부는 확인하지 않았습니다: ${redact(err instanceof Error ? err.message : String(err))}`
+          );
           return { targets: [], failures: 0 };
         });
         if (failures) warnings.push(`과목 ${failures}개의 동영상 강의 목록을 받지 못했습니다.`);
@@ -175,7 +177,8 @@ export function registerNotesTools(server: McpServer): void {
         instructions: instructionsInput.optional().describe('이번 노트에 쓴 지시사항 (list_notes 결과의 instructions)'),
         replace: z.boolean().optional().describe('이미 있는 노트를 다시 만들 때 true (사용자 확인을 거친 경우만)'),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      // replace: true 는 기존 노트를 덮어쓴다
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     async ({ dir, content, instructions, replace }) => {
       try {
