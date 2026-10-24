@@ -91,7 +91,7 @@ describe('asr_install', () => {
   });
 
   it('동시에 불러도 하나만 띄우고, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
-    expect(ASR_INSTALL_LOCK_FILE.startsWith(home.dir)).toBe(true);
+    expect(ASR_INSTALL_LOCK_FILE.startsWith(join(home.dir))).toBe(true);
     const d = deps();
     const results = await Promise.all([
       startInstall({ gpu: true, model: '1.7b' }, d),

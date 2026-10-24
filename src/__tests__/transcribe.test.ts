@@ -416,7 +416,7 @@ describe('상태 파일·작업 잠금', () => {
   });
 
   it('동시에 불러도 하나만 띄우고, 잠금을 작업 프로세스 pid 로 넘긴다', async () => {
-    expect(TRANSCRIBE_LOCK_FILE.startsWith(state.home)).toBe(true);
+    expect(TRANSCRIBE_LOCK_FILE.startsWith(join(state.home))).toBe(true);
     const d = workerDeps();
     const results = await Promise.allSettled([startWorker(42, 'Japanese', d), startWorker(43, 'Japanese', d)]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);

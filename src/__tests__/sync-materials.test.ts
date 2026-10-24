@@ -181,7 +181,7 @@ describe('syncMaterials', () => {
     await sync();
     const raw = await readFile(manifestFile(), 'utf8');
     expect(raw).not.toContain(SESSION);
-    expect((await stat(manifestFile())).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') expect((await stat(manifestFile())).mode & 0o777).toBe(0o600);
     const m = JSON.parse(raw) as { courseId: string; files: Record<string, unknown>[] };
     expect(m.courseId).toBe('100');
     expect(m.files.find((f) => f.cmid === 11)).toMatchObject({
