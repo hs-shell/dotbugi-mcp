@@ -116,3 +116,11 @@ export const VOD_MAX_SEGMENTS = 2160;
 export const VOD_MEDIA_MAX_BYTES = 3 * 1024 ** 3;
 export const VOD_MEDIA_TIMEOUT_MS = 60_000;
 export const TRANSCRIPT_MAX_BYTES = 20 * 1024 * 1024;
+
+// 받은 자료 읽기(read_material). 글은 페이징하므로 크게, PDF·이미지는 base64 로 응답에 통째로 실리므로 작게 둔다
+export const READ_MATERIAL_MAX_BYTES = 20 * 1024 * 1024;
+export const READ_MATERIAL_PDF_MAX_BYTES = 8 * 1024 * 1024;
+// Claude 가 받는 이미지는 base64 5MB 까지 — 원본 3.75MB 가 base64 로 5MB
+export const READ_MATERIAL_IMAGE_MAX_BYTES = 3.75 * 1024 * 1024;
+export const READ_MATERIAL_TEXT_MAX_CHARS = 100_000;
+export const READ_MATERIAL_LIST_MAX_ENTRIES = 1000;
