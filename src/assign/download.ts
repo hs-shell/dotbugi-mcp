@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { mkdir, open, unlink, type FileHandle } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { lstat, mkdir, open, readdir, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import {
@@ -94,6 +94,55 @@ export async function openNew(dir: string, name: string): Promise<{ file: FileHa
   throw new Error('같은 이름의 파일이 너무 많습니다. 저장 폴더를 정리하세요.');
 }
 
+// 받는 중인 임시 파일. safeFileName 이 앞의 점을 지우므로 LMS 파일명은 이 형식이 될 수 없다
+const TEMP_NAME = /^\.dotbugi-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.part$/;
+
+// 이전 실행이 죽으며 남긴 임시 파일을 지운다. 요청 시간 상한보다 오래 안 바뀐 것만 — 받는 중인 파일일 수 없다
+async function sweepTemp(dir: string, maxAgeMs: number): Promise<void> {
+  for (const entry of await readdir(dir)) {
+    if (!TEMP_NAME.test(entry)) continue;
+    const path = join(dir, entry);
+    const st = await lstat(path).catch(() => null);
+    if (st?.isFile() && Date.now() - st.mtimeMs > maxAgeMs) await unlink(path).catch(() => {});
+  }
+}
+
+// dir 아래 임시 이름으로 받는다 — 중간에 죽어도 덜 받은 파일이 자료 이름으로 남지 않는다. 실패하면 임시 파일을 지운다
+export async function downloadTemp(
+  url: URL,
+  dir: string,
+  session: string,
+  limits = ATTACHMENT_LIMITS
+): Promise<{ path: string; sha256: string }> {
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await sweepTemp(dir, limits.timeoutMs);
+  const path = join(dir, `.dotbugi-${randomUUID()}.part`);
+  const file = await open(path, 'wx', 0o600);
+  let sha256: string;
+  try {
+    sha256 = await writeBody(file, url, session, limits);
+  } catch (err) {
+    await file.close();
+    await unlink(path);
+    throw err;
+  }
+  await file.close();
+  return { path, sha256 };
+}
+
+// 같은 이름이 있으면 "이름 (2).ext" 자리를 잡아(wx) 그 위로 옮긴다 — 기존 파일은 덮지 않는다
+export async function placeNew(dir: string, name: string, tmpPath: string): Promise<{ name: string; path: string }> {
+  const slot = await openNew(dir, name);
+  await slot.file.close();
+  try {
+    await rename(tmpPath, slot.path);
+  } catch (err) {
+    await unlink(slot.path).catch(() => {});
+    throw err;
+  }
+  return { name: slot.name, path: slot.path };
+}
+
 // 첨부파일을 dir 아래 새 파일로 받는다. 같은 이름이 있으면 번호를 붙인 이름으로 저장한다
 export async function saveAttachment(
   url: URL,
@@ -102,17 +151,11 @@ export async function saveAttachment(
   session: string,
   limits = ATTACHMENT_LIMITS
 ): Promise<{ name: string; path: string; sha256: string }> {
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  const saved = await openNew(dir, name);
-  // shortcut: 받는 도중 프로세스가 죽으면 덜 받은 파일이 남는다, 문제가 되면 임시 이름으로 받은 뒤 옮긴다
-  let sha256: string;
+  const tmp = await downloadTemp(url, dir, session, limits);
   try {
-    sha256 = await writeBody(saved.file, url, session, limits);
+    return { ...(await placeNew(dir, name, tmp.path)), sha256: tmp.sha256 };
   } catch (err) {
-    await saved.file.close();
-    await unlink(saved.path);
+    await unlink(tmp.path).catch(() => {});
     throw err;
   }
-  await saved.file.close();
-  return { name: saved.name, path: saved.path, sha256 };
 }
