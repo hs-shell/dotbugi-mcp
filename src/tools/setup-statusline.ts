@@ -94,7 +94,7 @@ export async function setupStatusline(
   const was = wasMatch ? (wasMatch[1] === 'none' ? undefined : Number(wasMatch[1])) : prev.refreshInterval;
   if (action === 'enable') {
     // 없거나 느리면(정수 > 2초) 낮추고 원래 값을 기록한다. 알 수 없는 값은 건드리지 않는다
-    const lower = was === undefined || (Number.isInteger(was) && (was as number) > REFRESH_SECONDS);
+    const lower = was === undefined || (Number.isSafeInteger(was) && (was as number) > REFRESH_SECONDS);
     const desired = {
       type: 'command',
       ...prev,

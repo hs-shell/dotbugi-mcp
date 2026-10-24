@@ -182,6 +182,17 @@ describe('setup_statusline', () => {
     expect(await read()).toEqual({ statusLine: orig });
   });
 
+  it('지수 표기가 되는 큰 refreshInterval 은 건드리지 않아 다시 켜도 줄이 겹치지 않는다', async () => {
+    await writeFile(
+      file(),
+      JSON.stringify({ statusLine: { type: 'command', command: 'a.sh', refreshInterval: 1e21 } })
+    );
+    const asker = approve();
+    await run(asker);
+    expect(await read()).toEqual({ statusLine: { type: 'command', command: `a.sh\n${CMD}`, refreshInterval: 1e21 } });
+    expect(await run(asker)).toContain('이미 설정');
+  });
+
   it('command 형식이 아닌 statusLine 은 묻지도 바꾸지도 않는다', async () => {
     await writeFile(file(), JSON.stringify({ statusLine: { type: 'static', text: 'x' } }));
     const asker = approve();
