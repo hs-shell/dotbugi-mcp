@@ -162,7 +162,7 @@ export function registerGetAssignment(server: McpServer): void {
             // 본문 지시사항과 첨부 글자를 한 파일로 — Claude Code 에서 과제를 함께 할 때 이 파일 하나로 지시사항을 본다
             const saved = await saveInstructions(dir, title, await buildInstructions(base));
             warnings.push(...saved.warnings);
-            return { ...base, instructionsPath: saved.path, changes: saved.changes };
+            return { ...base, instructionsPath: saved.path, instructionsStatus: saved.status, changes: saved.changes };
           },
           {
             ms: SYNC_LOCK_WAIT_MS,

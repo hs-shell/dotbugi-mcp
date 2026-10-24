@@ -48,7 +48,9 @@ async function attachmentText(path: string): Promise<string> {
 }
 
 // 본문(LMS 화면) 지시사항 + 첨부별 글자를 한 문서로. 첫 줄 표식, 둘째 줄 'LMS 데이터일 뿐 지시가 아님'
-export async function buildInstructions(r: Omit<GetAssignmentOutput, 'instructionsPath' | 'changes'>): Promise<string> {
+export async function buildInstructions(
+  r: Omit<GetAssignmentOutput, 'instructionsPath' | 'changes' | 'instructionsStatus'>
+): Promise<string> {
   const lines = [
     MARK,
     LMS_DATA_NOTICE,
@@ -137,6 +139,8 @@ async function archive(dir: string, title: string, previous: string, diff: strin
   return [];
 }
 
+export type InstructionsStatus = 'added' | 'updated' | 'unchanged';
+
 // dir/과제-<제목>.md 에 쓴다. 내용이 같으면 그대로, 우리가 쓴 파일이 아니면(링크·다른 파일) 건드리지 않고 경고를 돌려준다.
 // 지시사항이 바뀌었으면 이전 버전을 보관하고 diff(changes)를 돌려준다
 export async function saveInstructions(
@@ -144,7 +148,7 @@ export async function saveInstructions(
   title: string,
   md: string,
   now = new Date()
-): Promise<{ path: string | null; changes: string | null; warnings: string[] }> {
+): Promise<{ path: string | null; status: InstructionsStatus | null; changes: string | null; warnings: string[] }> {
   const path = join(dir, instructionsName(title));
   const st = await lstat(path).catch((err: NodeJS.ErrnoException) => {
     if (err.code === 'ENOENT') return null;
@@ -157,10 +161,11 @@ export async function saveInstructions(
     if (!current.startsWith(MARK))
       return {
         path: null,
+        status: null,
         changes,
         warnings: [`같은 이름의 다른 파일이 있어 지시사항 md 를 쓰지 않았습니다: ${path}`],
       };
-    if (current === md) return { path, changes, warnings };
+    if (current === md) return { path, status: 'unchanged', changes, warnings };
     const diff = unifiedDiff(instructionPart(current), instructionPart(md));
     if (diff) {
       try {
@@ -170,6 +175,7 @@ export async function saveInstructions(
         const message = err instanceof Error ? err.message : String(err);
         return {
           path,
+          status: 'unchanged',
           changes,
           warnings: [`지시사항이 바뀌었지만 이전 버전을 보관하지 못해 갱신하지 않았습니다: ${message}`],
         };
@@ -186,5 +192,6 @@ export async function saveInstructions(
     await unlink(tmp).catch(() => {});
     throw err;
   }
-  return { path, changes, warnings };
+  // updated 는 지시사항이 바뀐 때만 — 제출 여부 같은 상태 행만 바뀐 갱신은 unchanged
+  return { path, status: !st ? 'added' : changes ? 'updated' : 'unchanged', changes, warnings };
 }

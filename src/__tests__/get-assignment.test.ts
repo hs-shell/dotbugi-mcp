@@ -457,6 +457,15 @@ describe('get_assignment — 과제 지시사항 md', () => {
     expect(await history()).toHaveLength(2);
   });
 
+  it('instructionsStatus: 새 과제 added, 그대로 unchanged, 지시사항이 바뀌면 updated', async () => {
+    type S = { instructionsStatus: string | null };
+    serve(PAGE());
+    expect(((await call({ cmid: 5 })).structuredContent as S).instructionsStatus).toBe('added');
+    expect(((await call({ cmid: 5 })).structuredContent as S).instructionsStatus).toBe('unchanged');
+    serve(PAGE(' 분량은 3쪽.'));
+    expect(((await call({ cmid: 5 })).structuredContent as S).instructionsStatus).toBe('updated');
+  });
+
   it('첨부 문서 내용이 바뀐 것도 diff 로 잡는다', async () => {
     serve(PAGE());
     await call({ cmid: 5 });
