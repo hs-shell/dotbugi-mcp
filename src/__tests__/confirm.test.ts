@@ -24,6 +24,9 @@ describe('confirmDestructive — elicitation', () => {
     expect(await confirmDestructive(asker, req())).toEqual({ ok: true });
     const [params] = elicit.mock.calls[0] as unknown as [{ message: string }];
     expect(params.message).toContain('- /a\n- /b');
+    // 경고는 긴 목록 끝에 묻히지 않게 목록 앞에 둔다
+    expect(params.message.indexOf('되돌릴 수 없습니다')).toBeGreaterThan(-1);
+    expect(params.message.indexOf('되돌릴 수 없습니다')).toBeLessThan(params.message.indexOf('- /a'));
   });
 
   it.each<ElicitResult>([

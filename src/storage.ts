@@ -14,12 +14,11 @@ export const defaultStorageRoot = () => join(homedir(), 'Downloads', 'dotbugi-mc
 
 const storageConfigSchema = z.object({
   version: z.literal(1),
-  // 디스크의 값은 사용자가 고칠 수 있다 — 절대 경로·제어 문자 없음만 받는다 (링크 검사는 쓸 때 ensureRealDir)
+  // 디스크의 값은 사용자가 고칠 수 있다 — 절대 경로·제어·서식 문자(bidi·제로폭 등) 없음만 받는다 (링크 검사는 쓸 때 ensureRealDir)
   root: z
     .string()
     .max(4096)
-    // eslint-disable-next-line no-control-regex
-    .refine((p) => isAbsolute(p) && !/[\x00-\x1f]/.test(p)),
+    .refine((p) => isAbsolute(p) && !/[\p{Cc}\p{Cf}]/u.test(p)),
 });
 export type StorageConfig = z.infer<typeof storageConfigSchema>;
 

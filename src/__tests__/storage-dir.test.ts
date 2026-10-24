@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MATERIALS_MANIFEST_NAME } from '../constants.js';
 import { readStorageConfig, semesterOf, storageRoot, writeStorageConfig } from '../storage.js';
 import type { Asker } from '../tools/confirm.js';
 import { resolveStorageDir, setStorageDir } from '../tools/storage-dir.js';
@@ -50,7 +51,9 @@ describe('resolveStorageDir', () => {
     ['~/.config/x', '숨김'],
     ['~/Documents/.ssh', '숨김'],
     ['~/Library/x', '시스템'],
-    ['~/a\nb', '제어 문자'],
+    ['~/a\nb', '서식 문자'],
+    ['~/a\u202Ecod.exe', '서식 문자'],
+    ['~/a\u200Bb', '서식 문자'],
     ['~/APPDAT~1/x', '짧은 이름'],
     ['~/AppData./x', '점·공백'],
     ['~/Documents/돋부기 ', '점·공백'],
@@ -146,6 +149,31 @@ describe('setStorageDir', () => {
     expect(text).toContain('옮긴 항목 1개');
     expect(text).toContain('같은 이름이 있어 그대로 둠');
     expect(await readdir(oldRoot())).toEqual(['assign-5']);
+  });
+
+  it('저장 위치의 dotbugi 자료만 옮기고 개인 파일·다른 폴더는 그대로 둔다', async () => {
+    // 저장 위치가 ~/Downloads 처럼 넓은 폴더인 경우
+    await writeStorageConfig(home('Downloads'));
+    const dl = (...p: string[]) => home('Downloads', ...p);
+    await mkdir(dl('2026-2학기'), { recursive: true });
+    await mkdir(dl('assign-7'));
+    await mkdir(dl('자료구조'));
+    await writeFile(dl('자료구조', MATERIALS_MANIFEST_NAME), JSON.stringify({ version: 1, courseId: '1', files: [] }));
+    // manifest 형식이 틀린 폴더·이름만 비슷한 폴더·링크·개인 파일은 dotbugi 자료가 아니다
+    await mkdir(dl('가짜과목'));
+    await writeFile(dl('가짜과목', MATERIALS_MANIFEST_NAME), '{}');
+    await mkdir(dl('assign-x'));
+    await symlink(dl('2026-2학기'), dl('2026-1학기'));
+    await writeFile(dl('사진.jpg'), 'P');
+    const a = asker(true);
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, a);
+    expect(a.asked[0]).toContain('dotbugi 자료 3개');
+    expect(a.asked[0]).toContain('아닌 항목 4개');
+    expect(a.asked[0]).not.toContain('사진.jpg');
+    expect(text).toContain('옮긴 항목 3개');
+    expect(text).toContain('옮기지 않은 항목 4개 (dotbugi 자료가 아님)');
+    expect((await readdir(home('Documents', '돋부기'))).sort()).toEqual(['2026-2학기', 'assign-7', '자료구조'].sort());
+    expect((await readdir(dl())).sort()).toEqual(['2026-1학기', 'assign-x', '가짜과목', '사진.jpg'].sort());
   });
 
   it('지금 위치의 안쪽·상위 폴더는 거부한다', async () => {
