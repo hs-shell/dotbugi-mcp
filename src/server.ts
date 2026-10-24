@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
 import { registerSummarizeWeek } from './prompts/summarize-week.js';
+import { registerShortcuts } from './prompts/shortcuts.js';
 import { registerAsrRemove } from './tools/asr-remove.js';
 import { registerAsrTools } from './tools/asr.js';
 import { registerListCourses, registerSetCourseTracking } from './tools/courses.js';
@@ -43,5 +44,6 @@ export function createServer(): McpServer {
   registerAsrRemove(server);
   registerSetupStatusline(server);
   registerSummarizeWeek(server);
+  registerShortcuts(server);
   return server;
 }
