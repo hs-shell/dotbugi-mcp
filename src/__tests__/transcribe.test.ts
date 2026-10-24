@@ -467,6 +467,8 @@ describe('상태 파일·작업 잠금', () => {
     };
     poll();
     await startWorker(42, 'auto', d);
+    // 끝난 직후엔 감시가 아직 한 번 덜 돌았을 수 있다
+    await vi.waitFor(() => expect(atHandoff).not.toBe('not seen'));
     await rm(TRANSCRIBE_LOCK_FILE, { force: true });
     expect(atHandoff).toMatchObject({ status: 'running', cmid: 42, pid: WORKER });
   });

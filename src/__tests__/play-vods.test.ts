@@ -79,6 +79,8 @@ describe('startPlayer', () => {
     };
     poll();
     await startPlayer({ ...deps(), spawn: spawnImpl as unknown as typeof spawn });
+    // 끝난 직후엔 감시가 아직 한 번 덜 돌았을 수 있다
+    await vi.waitFor(() => expect(atHandoff).not.toBe('not seen'));
     expect(atHandoff).toMatchObject({ status: 'playing', pid: WORKER });
   });
 });
