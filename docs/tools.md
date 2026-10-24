@@ -204,6 +204,8 @@ LMS 는 읽기만 하고, 강의자료는 로컬에 저장합니다. 추적 중�
 
 Claude Code 사용자 설정(`~/.claude/settings.json`, `CLAUDE_CONFIG_DIR` 가 있으면 그 아래)의 `statusLine` 에 STT 진행 한 줄을 넣거나(`enable`, 기본) 뺍니다(`disable`). 프로젝트 설정은 건드리지 않습니다. Claude Desktop 앱에는 상태 표시줄이 없습니다.
 
+설정을 바꾸지 않고 보려면 [Claude Code 플러그인](../README.md#설치등록)을 쓰세요 — 같은 줄을 입력창 위에 보여 주고, 끝난 줄은 1분 동안만 남습니다.
+
 ```text
 STT 2/5 ▸ 데이터베이스 3주차 ▓▓▓░░░░░ 42%
 ```
