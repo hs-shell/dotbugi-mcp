@@ -39,7 +39,7 @@ describe('출력 문구 규칙', () => {
     const scanned = files(join(ROOT, 'src'), /\.ts$/).filter((p) => !p.includes('__tests__'));
     const found = lines(scanned).filter(([at, text]) => {
       // 서버 안내(모델용)의 인식 키워드 한 줄은 허용 — "받아써 줘" 를 transcribe_lecture 로 잇는 라우팅이라 사용자 문구가 아니다
-      if (at.startsWith(join('src', 'instructions.ts:')) && text.startsWith('- "받아써 줘"')) return false;
+      if (/^src[\\/]instructions\.ts:/.test(at) && text.startsWith('- "받아써 줘"')) return false;
       const code = text
         // 주석은 사람(개발자)용이라 뺀다 — 주소의 :// 는 앞이 공백이 아니라 남는다
         .replace(/(^|\s)\/\/.*$/, '')
