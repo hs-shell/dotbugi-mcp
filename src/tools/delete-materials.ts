@@ -111,8 +111,18 @@ export function registerDeleteMaterials(server: McpServer): void {
       try {
         ({ session } = await getSession());
         const text = await deleteMaterials(session, args, askerOf(server, ctx), progressOf(ctx), ctx.mcpReq.signal);
-        return { content: [{ type: 'text', text: redact(`${LMS_DATA_NOTICE}
-${text}`, [session]) }] };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: redact(
+                `${LMS_DATA_NOTICE}
+${text}`,
+                [session]
+              ),
+            },
+          ],
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: redact(message, [session]) }], isError: true };

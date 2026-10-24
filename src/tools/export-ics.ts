@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod/v4';
+import { LMS_DATA_NOTICE } from '../constants.js';
 import { ensureRealDir } from '../materials/sync.js';
 import { redact } from '../redact.js';
 import { semesterDir, storageRoot } from '../storage.js';
@@ -59,6 +60,7 @@ export function registerExportIcs(server: McpServer): void {
         const path = await writeIcs(ics, now);
         const result = { path, count, skipped, warnings };
         const text = [
+          LMS_DATA_NOTICE,
           ...warnings,
           `캘린더 파일: ${path} — 일정 ${count}개${skipped > 0 ? `, 마감 정보 없음 ${skipped}개 건너뜀` : ''}`,
         ].join('\n');
