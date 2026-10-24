@@ -73,7 +73,7 @@ export const FILE_NAME_SUFFIX_MAX = 100;
 // 확장자를 뺀 파일명 길이(코드 포인트). 한글 4바이트 문자여도 파일 시스템 이름 한도(255바이트) 안에 든다
 export const FILE_NAME_STEM_MAX_LENGTH = 60;
 
-// 공식 VOD 플레이어 페이지. 여는 주소는 숫자 cmid 로만 만든다
+// LMS 가 주는 VOD 링크 주소 (cmid 추출용). 재생 창은 VOD_VIEWER_PATH 로 연다
 export const VOD_PLAYER_PATH = '/mod/vod/view.php';
 export const LMS_NUMERIC_ID = /^\d{1,10}$/;
 // 서버 진도 확인 간격 (1~2분) — 강의 하나에 몇 시간 걸려도 LMS 요청은 분당 1건 미만

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { LMS_NUMERIC_ID, LMS_ORIGIN, VOD_PLAYER_PATH } from '../constants.js';
+import { LMS_NUMERIC_ID, LMS_ORIGIN, VOD_VIEWER_PATH } from '../constants.js';
 import { findBrowser } from '../login/find-browser.js';
 
 // 브라우저 실행 인자에는 숫자 cmid 로 만든 LMS 주소만 들어간다 (LMS 가 준 문자열은 넘기지 않는다)
@@ -7,7 +7,7 @@ export function appCommand(cmid: string): [string, string[]] {
   if (!LMS_NUMERIC_ID.test(cmid)) throw new Error('강의 번호 형식이 올바르지 않습니다.');
   const browser = findBrowser();
   if (!browser) throw new Error('Chrome·Edge·Brave·Whale 중 설치된 브라우저를 찾지 못했습니다.');
-  return [browser, [`--app=${LMS_ORIGIN}${VOD_PLAYER_PATH}?id=${cmid}`]];
+  return [browser, [`--app=${LMS_ORIGIN}${VOD_VIEWER_PATH}?id=${cmid}`]];
 }
 
 // 평소 프로필의 앱 모드 창으로 공식 플레이어를 연다. 셸을 거치지 않고, 이미 실행 중인 브라우저면 그 창에 붙는다

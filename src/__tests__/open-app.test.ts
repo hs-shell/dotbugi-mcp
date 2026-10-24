@@ -7,7 +7,7 @@ describe('appCommand', () => {
   it('브라우저에는 숫자 cmid 로 만든 LMS 플레이어 --app 인자 하나만 넘긴다', () => {
     expect(appCommand('42')).toEqual([
       '/usr/bin/google-chrome',
-      ['--app=https://learn.hansung.ac.kr/mod/vod/view.php?id=42'],
+      ['--app=https://learn.hansung.ac.kr/mod/vod/viewer.php?id=42'],
     ]);
   });
 
