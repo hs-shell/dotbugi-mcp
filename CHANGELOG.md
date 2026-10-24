@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.4](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.3...v0.4.4) (2026-10-24)
+
+
+### Bug Fixes
+
+* 2026-07-28 프로토콜 연결에서 확인 창이 뜨지 않는 문제 ([#164](https://github.com/hs-shell/dotbugi-mcp/issues/164)) ([3c05ac4](https://github.com/hs-shell/dotbugi-mcp/commit/3c05ac434bf7d1d76f0126cabab7e3d9acfa6a79))
+* work 요청이 숫자로 시작하면 과제 목록과 대조해 cmid 판단 ([#162](https://github.com/hs-shell/dotbugi-mcp/issues/162)) ([2811f66](https://github.com/hs-shell/dotbugi-mcp/commit/2811f6665b5cea4d824a24299c3782fada45498e)), closes [#159](https://github.com/hs-shell/dotbugi-mcp/issues/159)
+* 플러그인에 /dotbugi:status 같은 짧은 명령 추가 ([#161](https://github.com/hs-shell/dotbugi-mcp/issues/161)) ([b9282c9](https://github.com/hs-shell/dotbugi-mcp/commit/b9282c94f15c4dc08a4c2910a58c9d640789df68))
+
 ## [0.4.3](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.2...v0.4.3) (2026-10-24)
 
 
