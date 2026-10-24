@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CourseBase } from '@dotbugi/lms-parser';
+import { isAssignDirName } from '../assign/folder.js';
 import { LMS_NUMERIC_ID } from '../constants.js';
 import { childDir, ensureRealDir, openCourseDir } from '../materials/sync.js';
 import { clean } from '../tasks/text.js';
@@ -66,7 +67,8 @@ export async function scanNotesTargets(
     }
     const vods = missingStt.filter((v) => v.courseId === c.courseId && isWeek(v.week, opts.week));
     const local = (await readdir(courseDir, { withFileTypes: true }).catch(() => []))
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      // 과목 폴더 바로 아래의 과제 폴더(과제-<이름>)는 주차가 아니다 — 노트는 과제 지시사항을 읽지 않는다
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !isAssignDirName(e.name))
       .map((e) => e.name);
     const weeks = [...new Set([...local, ...vods.map((v) => v.week)])].filter((w) => isWeek(w, opts.week)).sort();
     for (const week of weeks) {

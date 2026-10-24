@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CourseBase } from '@dotbugi/lms-parser';
+import { isAssignDirName } from '../assign/folder.js';
 import { safeFileName } from '../assign/download.js';
 import { LMS_NUMERIC_ID } from '../constants.js';
 import { childDir, ensureRealDir, openCourseDir } from '../materials/sync.js';
@@ -47,7 +48,8 @@ const inRange = (name: string, { from, to }: WeekRange) =>
 export async function summarySources(root: string, courseDir: string, range: WeekRange) {
   const out = { sources: [] as Source[], missingNotes: [] as string[], warnings: [] as string[] };
   const weeks = (await readdir(courseDir, { withFileTypes: true }).catch(() => []))
-    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && inRange(e.name, range))
+    // 과목 폴더 바로 아래의 과제 폴더(과제-<이름>)는 주차가 아니다
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !isAssignDirName(e.name) && inRange(e.name, range))
     .map((e) => e.name)
     .sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
   for (const week of weeks) {

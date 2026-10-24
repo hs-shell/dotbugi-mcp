@@ -42,6 +42,12 @@ describe('scanSummaryTargets + saveSummary', () => {
     });
   });
 
+  it('과목 폴더 바로 아래의 과제 폴더(과제-<이름>)는 주차로 보지 않는다', async () => {
+    await mkdir(weekDir('과제-공지 과제'));
+    await writeFile(join(weekDir('과제-공지 과제'), '과제-공지 과제.md'), '지시사항');
+    expect((await scan()).targets[0]).toMatchObject({ missingNotes: ['2주차'] });
+  });
+
   it('주차 범위는 N주차 폴더만 ("10주차" 는 1주차가 아님), 노트가 하나도 없으면 no-notes', async () => {
     expect((await scan({ range: { from: 1, to: 1 } })).targets[0]).toMatchObject({
       label: '1주차',

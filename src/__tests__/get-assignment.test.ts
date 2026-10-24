@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile, mkdir, symlink, stat } from 'node:fs/promises';
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile, mkdir, symlink, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
@@ -14,7 +14,7 @@ import { createServer } from '../server.js';
 import { semesterOf } from '../storage.js';
 import { REPORT_PAGE, SUBMISSION_FILE } from './fixtures/assign-report.js';
 import { zip } from './fixtures/docs.js';
-import { LOGIN_REDIRECT } from './fixtures/lms-pages.js';
+import { LOGIN_REDIRECT, PAGES } from './fixtures/lms-pages.js';
 
 const SESSION = 'abcdefghij0123456789';
 const L = 'https://learn.hansung.ac.kr';
@@ -40,7 +40,7 @@ vi.mock('../constants.js', async (orig) => ({
 }));
 
 // 익명화한 Moodle 3.2 과제 화면 (본문·첨부는 #intro, 제출 상황 표)
-const ASSIGN_PAGE = `<html><body><div role="main"><h2>과제1</h2>
+const ASSIGN_PAGE = `<html><body class="path-mod-assign course-100"><div role="main"><h2>과제1</h2>
   <div id="intro" class="box generalbox"><div class="no-overflow">
     <p>이진 트리를 구현하세요.<br>보고서는 <b>PDF</b>로.</p>
     <ul><li>삽입</li><li>삭제</li></ul>
@@ -62,8 +62,16 @@ const ASSIGN_PAGE = `<html><body><div role="main"><h2>과제1</h2>
   </tbody></table></div>
 </div></body></html>`;
 
+// 과제(cmid 5)가 8주차 섹션에 있는 강좌 화면
+const COURSE_PAGE = `<ul><li id="section-0"><span class="sectionname">공지</span><ul>
+  <li id="module-9" class="modtype_assign"><a href="${L}/mod/assign/view.php?id=9">공지 과제</a></li></ul></li>
+  <li id="section-8"><span class="sectionname">8주차</span><ul>
+  <li id="module-5" class="modtype_assign"><a href="${L}/mod/assign/view.php?id=5">과제1</a></li></ul></li></ul>`;
+
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = String(input);
+  if (url === `${L}/`) return Promise.resolve(new Response(PAGES[`${L}/`]));
+  if (url === `${L}/course/view.php?id=100`) return Promise.resolve(new Response(COURSE_PAGE));
   if (url === `${L}/mod/assign/view.php?id=5`) return Promise.resolve(new Response(ASSIGN_PAGE));
   if (url === `${FILE}?forcedownload=1`) return Promise.resolve(new Response('%PDF-1.4'));
   if (url === TRAVERSAL) return Promise.resolve(new Response('echo hi'));
@@ -102,10 +110,24 @@ beforeAll(async () => {
 const call = (args: Record<string, unknown>) => send('tools/call', { name: 'get_assignment', arguments: args });
 // 본문·첨부 글자를 합친 과제 지시사항 md
 const MD = '과제-과제1.md';
-const dir = () => join(state.home, 'Downloads', 'dotbugi-mcp', semesterOf(new Date()), 'assign-5');
-// 다운로드 폴더 위(홈)에 아무것도 새지 않았는지 보려고 홈 아래 파일을 모두 모은다
+const semester = () => join(state.home, 'Downloads', 'dotbugi-mcp', semesterOf(new Date()));
+const courseDir = () => join(semester(), '자료구조');
+const dir = () => join(courseDir(), '8주차', '과제-과제1');
+// 과제 폴더 표식 (cmid 로 폴더를 다시 찾는다)
+const MARKER = '.dotbugi-assign.json';
+// 과목·주차를 찾느라 과제 화면 다음에 보내는 요청 (내 강좌 목록, 강좌 화면)
+const PLACE_URLS = [`${L}/`, `${L}/course/view.php?id=100`];
+// 다운로드 폴더 위(홈)에 아무것도 새지 않았는지 보려고 홈 아래 파일을 모두 모은다 (과제 표식·과목 기록 제외)
 const allFiles = async () =>
-  (await readdir(state.home, { recursive: true, withFileTypes: true })).filter((e) => e.isFile());
+  (await readdir(state.home, { recursive: true, withFileTypes: true })).filter(
+    (e) => e.isFile() && e.name !== MARKER && e.name !== '.dotbugi-manifest.json'
+  );
+const listDir = async (d = dir()) => (await readdir(d)).filter((n) => n !== MARKER).sort();
+// 이미 받아 둔 과제 폴더 (표식 포함)
+async function seedDir(d = dir(), cmid = 5) {
+  await mkdir(d, { recursive: true });
+  await writeFile(join(d, MARKER), JSON.stringify({ cmid }));
+}
 
 beforeEach(async () => {
   state.home = await mkdtemp(join(tmpdir(), 'dotbugi-home-'));
@@ -165,12 +187,14 @@ describe('get_assignment', () => {
     // 첨부만 긴 제한 시간을 쓴다
     expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([
       LMS_REQUEST_TIMEOUT_MS,
+      LMS_REQUEST_TIMEOUT_MS,
+      LMS_REQUEST_TIMEOUT_MS,
       ATTACHMENT_REQUEST_TIMEOUT_MS,
       ATTACHMENT_REQUEST_TIMEOUT_MS,
     ]);
     timeout.mockRestore();
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
-    expect(urls).toEqual([`${L}/mod/assign/view.php?id=5`, `${FILE}?forcedownload=1`, TRAVERSAL]);
+    expect(urls).toEqual([`${L}/mod/assign/view.php?id=5`, ...PLACE_URLS, `${FILE}?forcedownload=1`, TRAVERSAL]);
     for (const [, init] of fetchMock.mock.calls) expect(init).toMatchObject({ redirect: 'manual' });
     expect(JSON.stringify(result)).not.toContain(SESSION);
   });
@@ -193,7 +217,7 @@ describe('get_assignment', () => {
     expect(out.attachments.map((a) => a.name)).toEqual(['과제.pdf']);
     expect(out.warnings).toEqual(['첨부파일을 받지 못했습니다 (_.._evil.sh): 파일이 20MB 상한을 넘습니다.']);
     expect(sent).toBeLessThan(ATTACHMENT_MAX_BYTES + 3 * chunk.byteLength);
-    expect((await readdir(dir())).sort()).toEqual([MD, '과제.pdf']);
+    expect(await listDir()).toEqual([MD, '과제.pdf']);
   });
 
   it('Content-Length 가 상한을 넘으면 받지 않는다', async () => {
@@ -206,23 +230,24 @@ describe('get_assignment', () => {
     expect(out.warnings[0]).toContain('상한을 넘습니다');
   });
 
-  it('학기 폴더 전에 받아 둔 assign-<cmid> 폴더는 이번 학기 폴더로 옮겨 이어 쓴다', async () => {
+  it('학기 폴더 전에 받아 둔 assign-<cmid> 폴더는 과목·주차 아래 과제 폴더로 옮겨 이어 쓴다', async () => {
     const legacy = join(state.home, 'Downloads', 'dotbugi-mcp', 'assign-5');
     await mkdir(legacy, { recursive: true });
     await writeFile(join(legacy, '과제.pdf'), '내 풀이');
     await call({ cmid: 5 });
-    expect((await readdir(dir())).sort()).toEqual(['_.._evil.sh', '과제 (2).pdf', MD, '과제.pdf']);
+    expect(await listDir()).toEqual(['_.._evil.sh', '과제 (2).pdf', MD, '과제.pdf']);
     expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
     await expect(readdir(legacy)).rejects.toThrow();
   });
 
-  it('assign 폴더가 링크면 따라가지 않고 아무것도 받지 않는다', async () => {
+  it('주차 폴더가 링크면 따라가지 않고 예전 assign-<cmid> 폴더에 받는다', async () => {
     const outside = await mkdtemp(join(tmpdir(), 'dotbugi-outside-'));
     try {
-      await mkdir(join(dir(), '..'), { recursive: true });
-      await symlink(outside, dir());
-      const result = await call({ cmid: 5 });
-      expect(result).toMatchObject({ isError: true });
+      await mkdir(courseDir(), { recursive: true });
+      await symlink(outside, join(courseDir(), '8주차'));
+      const out = (await call({ cmid: 5 })).structuredContent as { downloadDir: string; warnings: string[] };
+      expect(out.downloadDir).toBe(join(semester(), 'assign-5'));
+      expect(out.warnings[0]).toContain('예전처럼 학기 폴더의 assign-<cmid> 폴더에 받았습니다');
       expect(await readdir(outside)).toEqual([]);
     } finally {
       await rm(outside, { recursive: true, force: true });
@@ -260,7 +285,7 @@ describe('get_assignment', () => {
   });
 
   it('같은 이름의 파일이 이미 있으면 덮어쓰지 않고 번호를 붙여 받는다', async () => {
-    await mkdir(dir(), { recursive: true });
+    await seedDir();
     await writeFile(join(dir(), '과제.pdf'), '내 풀이');
     const out = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
     expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
@@ -276,13 +301,22 @@ describe('get_assignment', () => {
   it('쿼리만 다른 같은 파일은 한 번만 받고, 다른 파일과 이름이 겹치면 번호를 붙인다', async () => {
     const view = `${L}/mod/assign/view.php?id=5`;
     const other = `${L}/pluginfile.php/12/mod_assign/introattachment/0/%EA%B3%BC%EC%A0%9C.pdf`;
-    const page = `<html><body><div role="main"><h2>과제1</h2><div id="intro">
+    const page = `<html><body class="course-100"><div role="main"><h2>과제1</h2><div id="intro">
       <a href="${FILE}?forcedownload=1">a</a><a href="${FILE}">b</a><a href="${other}">c</a></div></div></body></html>`;
     fetchMock.mockImplementation(async (input) =>
-      String(input) === view ? new Response(page) : new Response(String(input) === other ? '두번째' : '첫번째')
+      String(input) === view
+        ? new Response(page)
+        : PLACE_URLS.includes(String(input))
+          ? fakeFetch(input)
+          : new Response(String(input) === other ? '두번째' : '첫번째')
     );
     const out = (await call({ cmid: 5 })).structuredContent as { attachments: { name: string }[] };
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([view, `${FILE}?forcedownload=1`, other]);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      view,
+      ...PLACE_URLS,
+      `${FILE}?forcedownload=1`,
+      other,
+    ]);
     expect(out.attachments.map((a) => a.name)).toEqual(['과제.pdf', '과제 (2).pdf']);
     expect(await readFile(join(dir(), '과제 (2).pdf'), 'utf8')).toBe('두번째');
   });
@@ -326,14 +360,14 @@ describe('get_assignment', () => {
   });
 
   it('다시 호출하면 내용이 같은 파일은 새로 두지 않고 기존 경로를 돌려준다', async () => {
-    await mkdir(dir(), { recursive: true });
+    await seedDir();
     await writeFile(join(dir(), '과제.pdf'), '내 풀이');
     const first = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[] };
     const again = (await call({ cmid: 5 })).structuredContent as { attachments: unknown[]; warnings: string[] };
     expect(again.attachments).toHaveLength(2);
     expect(again.attachments).toEqual(expect.arrayContaining(first.attachments));
     expect(again.warnings).toEqual([]);
-    expect((await readdir(dir())).sort()).toEqual(['_.._evil.sh', '과제 (2).pdf', MD, '과제.pdf']);
+    expect(await listDir()).toEqual(['_.._evil.sh', '과제 (2).pdf', MD, '과제.pdf']);
   });
 
   it('호출이 취소되면 남은 첨부를 받지 않고 바로 끝내 잠금을 푼다', async () => {
@@ -357,7 +391,7 @@ describe('get_assignment', () => {
 describe('get_assignment — 과제 지시사항 md', () => {
   const DOCX = `${L}/pluginfile.php/11/mod_assign/introattachment/0/%EC%95%88%EB%82%B4.docx`;
   const PAGE = (extra = '') =>
-    `<html><body><div role="main"><h2>과제1</h2><div id="intro"><p>보고서는 PDF로.${extra}</p>
+    `<html><body class="course-100"><div role="main"><h2>과제1</h2><div id="intro"><p>보고서는 PDF로.${extra}</p>
     <a href="${DOCX}">안내.docx</a></div></div></body></html>`;
   const serve = (page: string, docText = '표지에 학번을 쓰시오') =>
     fetchMock.mockImplementation(async (input) => {
@@ -367,7 +401,7 @@ describe('get_assignment — 과제 지시사항 md', () => {
         return new Response(
           new Uint8Array(zip({ 'word/document.xml': `<w:p><w:r><w:t>${docText}</w:t></w:r></w:p>` }))
         );
-      return new Response('not found', { status: 404 });
+      return fakeFetch(input);
     });
 
   it('본문(DOM) 지시사항과 첨부 문서 글자를 합쳐 과제-<제목>.md 로 저장한다', async () => {
@@ -527,6 +561,80 @@ describe('get_assignment — 과제 지시사항 md', () => {
     expect(out.changes).toContain('+보고서는 PDF로. 바뀜');
     expect(out.warnings).toEqual([expect.stringContaining('변경기록을 쓰지 않았습니다')]);
     expect(await readFile(target, 'utf8')).toBe('원본');
+  });
+
+  type Placed = Out & { downloadDir: string };
+  const noCourse = (page: string) => page.replace(' class="course-100"', '');
+
+  it('과목·주차를 모르는 과제 화면이면 예전 assign-<cmid> 에 받고, 알게 되면 기록째 과목·주차 폴더로 옮겨 이어 쓴다', async () => {
+    serve(noCourse(PAGE()));
+    const first = (await call({ cmid: 5 })).structuredContent as Placed;
+    expect(first.downloadDir).toBe(join(semester(), 'assign-5'));
+    expect(first.warnings[0]).toContain('과제 화면에서 과목을 찾지 못했습니다');
+    serve(noCourse(PAGE(' 분량은 3쪽.')));
+    await call({ cmid: 5 });
+    serve(PAGE(' 분량은 5쪽.'));
+    const moved = (await call({ cmid: 5 })).structuredContent as Placed;
+    expect(moved.downloadDir).toBe(dir());
+    expect(moved.changes).toContain('+보고서는 PDF로. 분량은 5쪽.');
+    await expect(readdir(join(semester(), 'assign-5'))).rejects.toThrow();
+    // 옮기기 전의 이전 버전·변경기록이 끊기지 않는다
+    expect(await history()).toHaveLength(2);
+    expect((await readFile(join(dir(), LOG), 'utf8')).match(/^## /gm)).toHaveLength(2);
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    '예전 assign-<cmid> 폴더를 옮기지 못하면 원본을 그대로 쓰고 경고한다',
+    async () => {
+      const legacy = join(semester(), 'assign-5');
+      await mkdir(legacy, { recursive: true });
+      await writeFile(join(legacy, '내 풀이.txt'), '풀이');
+      const week = join(courseDir(), '8주차');
+      await mkdir(week, { recursive: true });
+      await chmod(week, 0o500);
+      try {
+        serve(PAGE());
+        const out = (await call({ cmid: 5 })).structuredContent as Placed;
+        expect(out.downloadDir).toBe(legacy);
+        expect(out.warnings[0]).toContain('옮기지 못했습니다');
+        expect(await readFile(join(legacy, '내 풀이.txt'), 'utf8')).toBe('풀이');
+        expect(out.instructionsPath).toBe(join(legacy, MD));
+      } finally {
+        await chmod(week, 0o700);
+      }
+    }
+  );
+
+  it('같은 과목에 같은 이름의 다른 과제가 있으면 "과제-<이름> (<cmid>)" 에 받는다', async () => {
+    await seedDir(dir(), 6);
+    serve(PAGE());
+    const out = (await call({ cmid: 5 })).structuredContent as Placed;
+    expect(out.downloadDir).toBe(`${dir()} (5)`);
+    expect(await readdir(dir())).toEqual([MARKER]);
+  });
+
+  it('강의자료를 받기 전이면 과목 폴더에 이 과목 기록을 남긴다 (같은 이름의 다른 과목이 차지하지 않게)', async () => {
+    serve(PAGE());
+    await call({ cmid: 5 });
+    const manifest = JSON.parse(await readFile(join(courseDir(), '.dotbugi-manifest.json'), 'utf8'));
+    expect(manifest).toMatchObject({ courseId: '100', files: [] });
+  });
+
+  it('과제 이름이 바뀌어도 처음 만든 폴더를 이어 쓴다', async () => {
+    serve(PAGE());
+    await call({ cmid: 5 });
+    serve(PAGE().replace('<h2>과제1</h2>', '<h2>과제1 (수정)</h2>'));
+    const out = (await call({ cmid: 5 })).structuredContent as Placed;
+    expect(out.downloadDir).toBe(dir());
+    expect(await readdir(join(courseDir(), '8주차'))).toEqual(['과제-과제1']);
+  });
+
+  it('주차가 아닌 섹션(맨 위 공지 등)의 과제는 과목 폴더 바로 아래에 받는다', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input) === `${L}/mod/assign/view.php?id=9` ? new Response(PAGE()) : fakeFetch(input)
+    );
+    const out = (await call({ cmid: 9 })).structuredContent as Placed;
+    expect(out.downloadDir).toBe(join(courseDir(), '과제-과제1'));
   });
 
   it('실제 과제 화면: 화면의 지시사항만 담고, 숨은 hwp 편집기 JSON·제출자 본인 첨부는 빼며 받지 않는다', async () => {
