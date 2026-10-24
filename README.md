@@ -1,16 +1,16 @@
 # dotbugi-mcp
 
-한성대 LMS(learn.hansung.ac.kr)의 강의 영상(VOD)·과제·퀴즈·강의자료를 Claude Code / Claude Desktop 대화에서 다루게 해 주는 연결 기능(MCP 서버)입니다. 마감 임박 할 일 조회, 과제 본문·첨부 받기, 강의자료 동기화, 주차별 요약, VOD 연속 재생, 강의 받아쓰기를 Claude 에게 말로 요청하면 됩니다. LMS 에 제출하거나 글을 쓰지는 않습니다.
+한성대 LMS(learn.hansung.ac.kr)의 강의 영상(VOD)·과제·퀴즈·강의자료를 Claude Code / Claude Desktop 대화에서 다루게 해 주는 연결 기능(MCP 서버)입니다. 마감 임박 할 일 조회, 과제 본문·첨부 받기, 강의자료 동기화, 주차별 요약, 강의 받아쓰기를 Claude 에게 말로 요청하면 됩니다. LMS 에 제출하거나 글을 쓰지는 않습니다.
 
 ## 요구사항
 
 - **Node.js 22.22.1 이상**
 - 로그인용 [dotbugi 확장](https://github.com/hs-shell/dotbugi) **5.1.0 이상**
 
-| 기능                             | Windows  | macOS             | Linux  | WSL |
-| -------------------------------- | -------- | ----------------- | ------ | --- |
-| 조회·과제·강의자료·요약·VOD 재생 | O        | O                 | O      | O   |
-| 받아쓰기(로컬 음성 인식)         | WSL 에서 | O (Apple Silicon) | x64 만 | O   |
+| 기능                     | Windows  | macOS             | Linux  | WSL |
+| ------------------------ | -------- | ----------------- | ------ | --- |
+| 조회·과제·강의자료·요약  | O        | O                 | O      | O   |
+| 받아쓰기(로컬 음성 인식) | WSL 에서 | O (Apple Silicon) | x64 만 | O   |
 
 ## 설치·등록
 
@@ -68,7 +68,6 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 | "LMS 에서 지워진 자료 정리해줘"                         | `delete_materials` (승인 화면)                             |
 | "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?"   | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
 | "자료구조 5주차 정리해줘"                               | `summarize_week` 프롬프트                                  |
-| "안 들은 강의 차례로 틀어줘" / "재생 멈춰"              | `play_vods` / `stop_vods`, `vod_status`                    |
 | "받아쓰기 준비해줘"                                     | `asr_install`, `asr_status`                                |
 | "이 강의 받아써줘" / "어디까지 됐어?" / "받아쓰기 멈춰" | `transcribe_vod` / `transcribe_status` / `stop_transcribe` |
 | "LMS 로그아웃해줘"                                      | `logout`                                                   |
@@ -83,7 +82,7 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 | `/dotbugi:overdue [과목]`                  | 마감 지난 것까지 (`includePast`)            |
 | `/dotbugi:sync [과목]`                     | 강의자료 받기 (`sync_materials`)            |
 | `/dotbugi:assignment <cmid>`               | 과제 본문·첨부 (`get_assignment`)           |
-| `/dotbugi:play` / `stop` / `status`        | VOD 재생 시작·중지·진행 상태                |
+| `/dotbugi:status`                          | 받아쓰기 진행 상태 (`transcribe_status`)    |
 | `/dotbugi:transcribe <cmid>`               | 강의 받아쓰기 (`transcribe_vod`)            |
 | `/dotbugi:courses`                         | 내 강좌·추적 여부 (`list_courses`)          |
 | `/dotbugi:track <과목>` / `untrack <과목>` | 강좌 추적 켜기·끄기 (`set_course_tracking`) |
@@ -102,9 +101,6 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 |          | [`export_ics`](docs/tools.md#export_ics)                                                                                                                                       | 할 일 마감을 캘린더 파일(.ics)로 저장                               |
 |          | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 강좌 추적 켜기·끄기                        |
 |          | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기                             |
-| 재생     | [`vod_status`](docs/tools.md#vod_status)                                                                                                                                       | 남은 VOD 와 연속 재생 진행 상황                                     |
-|          | [`play_vods`](docs/tools.md#play_vods--stop_vods) / [`stop_vods`](docs/tools.md#play_vods--stop_vods)                                                                          | 미출석 VOD 를 공식 플레이어로 차례로 재생 / 중지                    |
-|          | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                           | Claude Code 상태 표시줄 켜기·끄기 (승인 후)                         |
 | 자료     | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                                  |
 |          | [`get_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir) / [`set_storage_dir`](docs/tools.md#get_storage_dir--set_storage_dir)                                      | 저장 위치·학기 폴더 확인 / 승인 후 저장 위치 변경(기존 자료도 이동) |
 |          | [`read_material`](docs/tools.md#read_material)                                                                                                                                 | 받은 자료·첨부·녹취 읽기, 폴더 살펴보기                             |
@@ -122,8 +118,7 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 - 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 그 밖의 외부 접속은 받아쓰기용 영상 서버(`*.edge.naverncp.com`, 쿠키 없음)와 음성 인식 런타임 설치 때의 github.com·huggingface.co·PyPI 뿐이며, 텔레메트리는 없습니다.
 - 도구 출력·로그에는 세션 값·연결 코드·영상 주소를 넣지 않습니다.
 - LMS 에 제출·작성·수정하지 않습니다. 과제 제출은 직접 하세요.
-- 출석은 LMS **공식 플레이어**를 평소 브라우저 창에서 재생해서만 인정받습니다 (헤드리스·음소거·배속 강제 없음).
-- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`, 재생·받아쓰기 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
+- 받은 파일은 저장 위치(기본 `~/Downloads/dotbugi-mcp/`, `set_storage_dir` 로 변경)의 학기 폴더 `<YYYY-N학기>/<과목>/<N주차>/`, 받아쓰기 상태와 음성 인식 런타임은 `~/.cache/dotbugi-mcp/`, 강좌·저장 위치 설정은 `~/.config/dotbugi-mcp/` 에 둡니다.
 
 ## 문제 해결
 

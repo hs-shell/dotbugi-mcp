@@ -73,27 +73,15 @@ export const FILE_NAME_SUFFIX_MAX = 100;
 // 확장자를 뺀 파일명 길이(코드 포인트). 한글 4바이트 문자여도 파일 시스템 이름 한도(255바이트) 안에 든다
 export const FILE_NAME_STEM_MAX_LENGTH = 60;
 
-// LMS 가 주는 VOD 링크 주소 (cmid 추출용). 재생 창은 VOD_VIEWER_PATH 로 연다
-export const VOD_PLAYER_PATH = '/mod/vod/view.php';
 export const LMS_NUMERIC_ID = /^\d{1,10}$/;
-// 서버 진도 확인 간격 (1~2분) — 강의 하나에 몇 시간 걸려도 LMS 요청은 분당 1건 미만
-export const VOD_POLL_INTERVAL_MS = 90_000;
-// 강제 종료되면 status 가 playing 으로 남는다 — updatedAt 이 이보다 오래되면 읽는 쪽(#6)은 멈춘 것으로 본다
-export const PLAYER_STATE_STALE_MS = 2 * VOD_POLL_INTERVAL_MS;
-// 상태 표시줄은 이보다 오래된 상태 파일(죽은 재생·지난 오류)은 아예 표시하지 않는다
-export const STATUSLINE_HIDE_AFTER_MS = 60 * 60_000;
 // 상태 파일 읽기 상한 (정상 파일은 1KB 안팎)
 export const PLAYER_STATE_MAX_BYTES = 16 * 1024;
 // 상태 파일의 글(과목·제목·메시지 등) 길이 상한. 넘으면 쓸 때·읽을 때 자른다
 export const PLAYER_STATE_TEXT_MAX = 200;
-// 진도를 이만큼 연속으로 모르면(약 15분) 상태·로그로 알린다
-export const VOD_UNKNOWN_WARN_POLLS = 10;
 // 로그인 페이지가 200 으로 오면(리다이렉트 없이) 로그인 폼의 비밀번호 입력란으로 알아본다.
 // 폼으로 한정한다 — 교수가 쓴 과제 본문·자료 HTML 에 비밀번호 입력란이 있어도 만료로 오판하지 않게
 export const LMS_LOGIN_FORM_SELECTOR =
   'form#login input[type="password"], form[action*="/login/index.php"] input[type="password"]';
-// 진도 페이지(user_progress.php)의 진도 표
-export const VOD_PROGRESS_TABLE_SELECTOR = '.user_progress';
 
 // 강의자료 동기화(sync_materials). 파일 모듈은 redirect=1 로 실제 파일(pluginfile) 주소를 리다이렉트로 받는다
 export const RESOURCE_VIEW_PATH = '/mod/resource/view.php';

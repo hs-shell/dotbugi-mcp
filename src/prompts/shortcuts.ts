@@ -64,22 +64,10 @@ const shortcuts: {
       `\`get_assignment\` 를 cmid: ${id} 로 불러 마감·본문 요약·받은 첨부 경로·제출 주소를 보여 줘.`,
   },
   {
-    name: 'play',
-    title: 'VOD 연속 재생',
-    description: '미출석 VOD 를 마감 임박 순으로 재생한다.',
-    text: () => '`play_vods` 를 불러 결과를 그대로 알려 줘.',
-  },
-  {
-    name: 'stop',
-    title: 'VOD 재생 중지',
-    description: 'VOD 연속 재생을 멈춘다.',
-    text: () => '`stop_vods` 를 불러 결과를 그대로 알려 줘.',
-  },
-  {
     name: 'status',
-    title: '진행 상태',
-    description: 'VOD 재생·받아쓰기 진행 상태를 보여 준다.',
-    text: () => '`vod_status` 와 `transcribe_status` 를 불러 각각 한두 줄로 알려 줘.',
+    title: '받아쓰기 진행 상태',
+    description: '강의 받아쓰기 진행 상태를 보여 준다.',
+    text: () => '`transcribe_status` 를 불러 한두 줄로 알려 줘.',
   },
   {
     name: 'transcribe',
@@ -98,7 +86,7 @@ const shortcuts: {
   {
     name: 'track',
     title: '강좌 추적 켜기',
-    description: '강좌를 할 일·자료·재생 대상에 넣는다.',
+    description: '강좌를 할 일·자료 대상에 넣는다.',
     args: { course: courseRequired },
     text: ({ course: c }) =>
       `\`set_course_tracking\` 을 course: "${c}", tracked: true 로 불러 결과를 알려 줘. 여러 강좌가 맞아 저장되지 않았으면 후보를 보여 주고 어느 courseId 인지 사용자에게 물어 줘.`,
@@ -106,7 +94,7 @@ const shortcuts: {
   {
     name: 'untrack',
     title: '강좌 추적 끄기',
-    description: '강좌를 할 일·자료·재생 대상에서 뺀다.',
+    description: '강좌를 할 일·자료 대상에서 뺀다.',
     args: { course: courseRequired },
     text: ({ course: c }) =>
       `\`set_course_tracking\` 을 course: "${c}", tracked: false 로 불러 결과를 알려 줘. 여러 강좌가 맞아 저장되지 않았으면 후보를 보여 주고 어느 courseId 인지 사용자에게 물어 줘.`,

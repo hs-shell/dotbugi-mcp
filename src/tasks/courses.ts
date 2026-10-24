@@ -37,7 +37,7 @@ export const writeCoursesConfig = (config: CoursesConfig, file = COURSES_FILE) =
 export const isTracked = (course: CourseBase, config: CoursesConfig) =>
   config.courses[course.courseId] ?? !course.isCommunity;
 
-// 모든 소비자(list_tasks·vod_status·play·sync·transcribe)가 같은 기준으로 강좌를 고르게 하는 단일 지점
+// 모든 소비자(list_tasks·sync·transcribe)가 같은 기준으로 강좌를 고르게 하는 단일 지점
 export const selectTrackedCourses = (all: CourseBase[], config: CoursesConfig) =>
   all.filter((c) => isTracked(c, config));
 

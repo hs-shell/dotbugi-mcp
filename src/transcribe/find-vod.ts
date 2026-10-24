@@ -2,8 +2,8 @@ import { fetchVodList, getIndexPageLink, type FetchHtml } from '@dotbugi/lms-par
 import { LMS_NUMERIC_ID } from '../constants.js';
 import { SessionExpiredError } from '../lms.js';
 import { weekName } from '../materials/course-page.js';
-import { cmidOf } from '../player/scheduler.js';
 import { listCourses } from '../tasks/collect.js';
+import { cmidOfUrl } from '../tasks/select.js';
 import { clean } from '../tasks/text.js';
 
 export interface VodMeta {
@@ -55,7 +55,7 @@ export async function findVod(fetchHtml: FetchHtml, cmid: number): Promise<VodMe
       failures++;
       continue;
     }
-    const vod = vods.find((v) => cmidOf(v.url) === String(cmid));
+    const vod = vods.find((v) => cmidOfUrl(v.url) === cmid);
     if (!vod) {
       const dimmed = page && findDimmed(page, cmid);
       if (dimmed) return { course: clean(course.courseTitle), courseId: course.courseId, ...dimmed };

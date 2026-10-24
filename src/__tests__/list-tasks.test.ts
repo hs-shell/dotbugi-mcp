@@ -1,9 +1,6 @@
-import { rmSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LMS_DATA_NOTICE, TASKS_CACHE_TTL_MS } from '../constants.js';
-import { PLAYER_STATE_FILE } from '../player/state.js';
 import { createServer } from '../server.js';
 import { fakeLmsFetch, LOGIN_REDIRECT, NOW } from './fixtures/lms-pages.js';
 
@@ -16,14 +13,6 @@ const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
 const fetchMock = vi.fn<typeof fetch>(fakeLmsFetch);
 vi.stubGlobal('fetch', fetchMock);
-// vod_status 가 읽는 play 상태 파일을 임시 경로로 돌린다
-vi.mock('../player/state.js', async (importOriginal) => {
-  const { mkdtempSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const { join } = await import('node:path');
-  const dir = mkdtempSync(join(tmpdir(), 'vod-status-'));
-  return { ...(await importOriginal<object>()), PLAYER_STATE_FILE: join(dir, 'player-state.json') };
-});
 
 // SDK 인메모리 전송으로 JSON-RPC 요청을 보내고 같은 id 의 응답을 받는다
 let send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -58,9 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   fetchMock.mockClear();
-  rmSync(PLAYER_STATE_FILE, { force: true });
 });
-afterAll(() => rmSync(dirname(PLAYER_STATE_FILE), { recursive: true, force: true }));
 
 describe('list_tasks', () => {
   it('tools/list 에 읽기 전용 도구로 노출된다', async () => {
@@ -135,61 +122,6 @@ describe('list_tasks', () => {
     getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. login 도구를 호출하세요.'));
     const result = await call({ refresh: true });
     expect(result).toMatchObject({ isError: true });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('vod_status', () => {
-  it('남은 VOD 만 돌려주고, 재생 상태 파일이 없으면 player 는 null', async () => {
-    const result = await call({ refresh: true }, 'vod_status');
-    const { tasks, player } = result.structuredContent as { tasks: { type: string; title: string }[]; player: null };
-    expect(tasks.map((t) => [t.type, t.title])).toEqual([['vod', '트리 순회']]);
-    expect(player).toBeNull();
-    expect((result.content as { text: string }[])[0].text).toMatch(/^※.*\n\[강의\] .*트리 순회/);
-  });
-
-  const state = {
-    version: 1,
-    status: 'playing',
-    updatedAt: new Date(NOW.getTime() - 60_000).toISOString(),
-    total: 1,
-    index: 1,
-    current: { course: '자료구조', title: '트리 순회', week: 8, deadline: null, progress: 40, remainingSeconds: 600 },
-    next: null,
-    message: null,
-  };
-
-  it('재생 중이면 지금 강의의 진도와 상태 표시줄 한 줄을 붙인다', async () => {
-    writeFileSync(PLAYER_STATE_FILE, JSON.stringify(state));
-    const result = await call({}, 'vod_status');
-    expect(result.structuredContent).toMatchObject({ player: { ...state, stale: false } });
-    const lines = (result.content as { text: string }[])[0].text.split('\n');
-    expect(lines[0]).toBe(LMS_DATA_NOTICE);
-    expect(lines[1]).toBe('🎬 VOD 1/1 · 자료구조 트리 순회  ▓▓▓▓░░░░░░ 40%  10분 남음');
-    expect(lines[2]).toContain('트리 순회');
-  });
-
-  it('재생 중인데 갱신이 끊기면 stale 이다', async () => {
-    writeFileSync(
-      PLAYER_STATE_FILE,
-      JSON.stringify({ ...state, updatedAt: new Date(NOW.getTime() - 10 * 60_000).toISOString() })
-    );
-    const result = await call({}, 'vod_status');
-    expect(result.structuredContent).toMatchObject({ player: { stale: true } });
-  });
-
-  it('세션이 없어도 실패하지 않고 재생 상태와 login 안내를 돌려준다', async () => {
-    writeFileSync(PLAYER_STATE_FILE, JSON.stringify(state));
-    getSession.mockRejectedValue(new Error('저장된 LMS 세션이 없습니다. login 도구를 호출하세요.'));
-    const result = await call({}, 'vod_status');
-    expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({
-      fetchedAt: null,
-      tasks: [],
-      warnings: [expect.stringContaining('login 도구')],
-      player: { status: 'playing', stale: false },
-    });
-    expect((result.content as { text: string }[])[0].text.split('\n')[1]).toMatch(/^🎬 VOD 1\/1/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
