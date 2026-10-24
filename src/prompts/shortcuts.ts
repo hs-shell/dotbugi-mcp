@@ -80,7 +80,8 @@ const shortcuts: {
     description: 'VOD 강의를 받아쓴다.',
     args: { cmid },
     text: ({ cmid: id }) =>
-      `\`transcribe_vod\` 를 cmid: ${id} 로 불러 결과를 알려 줘. 진행은 /status 로 볼 수 있다고 덧붙여 줘.`,
+      // /status 는 Claude Code 기본 명령이라 겹친다 — MCP 프롬프트 이름(README 설치 이름 dotbugi 기준)으로 안내한다
+      `\`transcribe_vod\` 를 cmid: ${id} 로 불러 결과를 알려 줘. 진행은 /dotbugi:status (또는 transcribe_status) 로 볼 수 있다고 덧붙여 줘.`,
   },
   {
     name: 'courses',
