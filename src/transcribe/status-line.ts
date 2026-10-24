@@ -1,3 +1,4 @@
+import { styleText } from 'node:util';
 import { STATUSLINE_HIDE_AFTER_MS } from '../constants.js';
 import { clean } from '../tasks/text.js';
 import { queuePosition, type TranscribeQueue } from './queue.js';
@@ -12,12 +13,18 @@ const show = (text: string) => {
   return chars.length > TEXT_MAX ? `${chars.slice(0, TEXT_MAX - 1).join('')}…` : chars.join('');
 };
 
+// 색은 글을 다 만든 뒤 줄 전체에 입힌다 — 자르기·막대 너비 계산이 색 코드에 영향받지 않게.
+// 상태 표시줄 stdout 은 파이프라 styleText 의 TTY 검사를 끄고, NO_COLOR 는 부르는 쪽(color)에서 따진다
+const paint = (format: 'cyan' | 'green' | 'red' | 'dim', text: string, color: boolean) =>
+  color ? styleText(format, text, { validateStream: false }) : text;
+
 // 표시할 게 없으면 빈 문자열. 예) 받아쓰기 2/5 ▸ 데이터베이스 3주차 ▓▓▓▓░░░░ 42% (이모지는 쓰지 않는다)
 export function renderTranscribeStatusLine(
   state: TranscribeState | null,
   queue: TranscribeQueue,
   now: number,
-  alive: (pid: number) => boolean
+  alive: (pid: number) => boolean,
+  color = false
 ): string {
   if (!state) return '';
   const { position, total } = queuePosition(state, queue);
@@ -35,13 +42,13 @@ export function renderTranscribeStatusLine(
       const filled = Math.round((state.progress / 100) * BAR_WIDTH);
       parts.push(` ${'▓'.repeat(filled)}${'░'.repeat(BAR_WIDTH - filled)} ${state.progress}%`);
     } else if (state.phase) parts.push(` ${TRANSCRIBE_PHASE_LABELS[state.phase]}`);
-    return parts.join('');
+    return paint('cyan', parts.join(''), color);
   }
   const age = now - Date.parse(state.updatedAt);
   if (!(age >= 0 && age < STATUSLINE_HIDE_AFTER_MS)) return '';
   const failed = queue.finished.filter((f) => f.status === 'error').length;
-  if (state.status === 'stopped') return '○ 받아쓰기 중지';
+  if (state.status === 'stopped') return paint('dim', '○ 받아쓰기 중지', color);
   if (state.status === 'error' && total <= 1)
-    return `✗ 받아쓰기 오류${state.message ? `: ${show(state.message)}` : ''}`;
-  return `✓ 받아쓰기 끝${total > 1 ? ` ${total}개` : ''}${failed ? ` (실패 ${failed})` : ''}`;
+    return paint('red', `✗ 받아쓰기 오류${state.message ? `: ${show(state.message)}` : ''}`, color);
+  return paint('green', `✓ 받아쓰기 끝${total > 1 ? ` ${total}개` : ''}${failed ? ` (실패 ${failed})` : ''}`, color);
 }

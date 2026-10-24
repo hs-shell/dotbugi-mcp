@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { STATUSLINE_HIDE_AFTER_MS } from '../constants.js';
 import type { TranscribeQueue } from '../transcribe/queue.js';
@@ -50,6 +51,17 @@ describe('renderTranscribeStatusLine', () => {
     const line = render(state({ course: '\u001b[31m빨강\u001b[0m', title: 'x'.repeat(100) }));
     expect(line).not.toContain('\u001b');
     expect(line).toContain('…');
+  });
+
+  it('색을 켜면 상태별 색을 줄 전체에 입히고, 색을 빼면 글은 그대로다', () => {
+    const colored = (s: TranscribeState) => renderTranscribeStatusLine(s, queue(), NOW, () => true, true);
+    const long = state({ title: 'x'.repeat(100) });
+    expect(colored(long)).toBe(`\u001b[36m${render(long)}\u001b[39m`);
+    expect(stripVTControlCharacters(colored(long))).toBe(render(long));
+    expect(colored(state({ status: 'done' })).startsWith('\u001b[32m✓')).toBe(true);
+    expect(colored(state({ status: 'error' })).startsWith('\u001b[31m✗')).toBe(true);
+    expect(colored(state({ status: 'stopped' })).startsWith('\u001b[2m○')).toBe(true);
+    expect(render(state())).not.toContain('\u001b');
   });
 
   it('프로세스가 없거나 갱신이 끊긴 running 은 숨긴다', () => {
