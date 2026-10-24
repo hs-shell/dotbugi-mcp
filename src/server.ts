@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/server';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
-import { registerSummarizeWeek } from './prompts/summarize-week.js';
+import { registerNotesPrompt } from './prompts/notes.js';
 import { registerShortcuts } from './prompts/shortcuts.js';
 import { registerAsrRemove } from './tools/asr-remove.js';
 import { registerAsrTools } from './tools/asr.js';
@@ -16,6 +16,7 @@ import { registerStorageDirTools } from './tools/storage-dir.js';
 import { registerLogin } from './tools/login.js';
 import { registerLogout } from './tools/logout.js';
 import { registerSyncMaterials } from './tools/sync-materials.js';
+import { registerNotesTools } from './tools/notes.js';
 import { registerTranscribeVod } from './tools/transcribe-vod.js';
 
 // 버전은 package.json 단일 출처 (src/·dist/ 모두 한 단계 아래라 같은 상대 경로)
@@ -36,10 +37,11 @@ export function createServer(): McpServer {
   registerReadMaterial(server);
   registerStorageDirTools(server);
   registerTranscribeVod(server);
+  registerNotesTools(server);
   registerSetupStatusline(server);
   registerAsrTools(server);
   registerAsrRemove(server);
-  registerSummarizeWeek(server);
+  registerNotesPrompt(server);
   registerShortcuts(server);
   return server;
 }

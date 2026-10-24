@@ -144,3 +144,7 @@ export const READ_MATERIAL_LIST_MAX_ENTRIES = 1000;
 export const DOC_TEXT_MAX_INFLATED_BYTES = 100 * 1024 * 1024;
 export const DOC_TEXT_MAX_ENTRIES = 5000;
 export const DOC_TEXT_TIMEOUT_MS = 10_000;
+// 노트 작성 지시사항(사용자 입력) 길이 상한
+export const NOTES_INSTRUCTIONS_MAX_LENGTH = 300;
+// save_notes 본문 길이 상한
+export const NOTES_CONTENT_MAX_CHARS = 200_000;
