@@ -14,7 +14,7 @@ export interface Source {
 export const isTranscript = (name: string) =>
   name.endsWith('.md') && ['STT-', LEGACY_PREFIX].some((p) => name.startsWith(p) && name.length > p.length + 3);
 
-const sha256Of = (path: string) =>
+export const sha256Of = (path: string) =>
   new Promise<string>((resolve, reject) => {
     const hash = createHash('sha256');
     createReadStream(path)
@@ -36,11 +36,12 @@ export async function weekSources(dir: string, isOutput: (name: string) => boole
   return Promise.all(names.map(async (name) => ({ name, sha256: await sha256Of(join(dir, name)) })));
 }
 
-// 이전 지문과 비교한 바뀐 점 (사람이 읽는 이유). 같으면 빈 배열
-export function sourceChanges(prev: Source[], cur: Source[]): string[] {
+const materialLabel = (name: string): string => (isTranscript(name) ? 'STT' : '강의자료');
+
+// 이전 지문과 비교한 바뀐 점 (사람이 읽는 이유). 같으면 빈 배열. label 은 자료 종류 이름 (요약은 '노트')
+export function sourceChanges(prev: Source[], cur: Source[], label = materialLabel): string[] {
   const before = new Map(prev.map((s) => [s.name, s.sha256]));
   const after = new Map(cur.map((s) => [s.name, s.sha256]));
-  const label = (name: string) => (isTranscript(name) ? 'STT' : '강의자료');
   const reasons: string[] = [];
   for (const [name, sha] of after) {
     if (!before.has(name)) reasons.push(`${label(name)} 추가: ${name}`);

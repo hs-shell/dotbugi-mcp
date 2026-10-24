@@ -51,7 +51,7 @@ export interface ConfirmRequest {
   // 토큰을 묶을 대상의 정체 (경로+해시 등). 생략하면 targets
   binding?: string[];
   token?: string;
-  // 기본은 삭제. 'change' 는 되돌릴 수 있는 설정 변경, 'move'·'relocate' 는 저장 위치 이동·변경(set_storage_dir), 'transcribe' 는 오래 걸리는 STT 변환 시작, 'notes' 는 주차별 노트 만들기 — 확인 창 문구만 다르다
+  // 기본은 삭제. 'change' 는 되돌릴 수 있는 설정 변경, 'move'·'relocate' 는 저장 위치 이동·변경(set_storage_dir), 'transcribe' 는 오래 걸리는 STT 변환 시작, 'notes'·'summary' 는 노트·요약 만들기 — 확인 창 문구만 다르다
   kind?: keyof typeof WORDS;
 }
 export type ConfirmOutcome = { ok: true } | { ok: false; text: string };
@@ -69,6 +69,7 @@ const WORDS = {
   relocate: { label: '저장 위치를 바꿉니다', warn: '', none: '저장 위치를 바꾸지 않았습니다', agree: '저장 위치 변경' },
   transcribe: { label: '위 강의를 STT 변환합니다', warn: '', none: '아무것도 시작하지 않았습니다', agree: 'STT 변환' },
   notes: { label: '위 주차의 노트를 만듭니다', warn: '', none: '노트를 만들지 않았습니다', agree: '노트 만들기' },
+  summary: { label: '위 범위의 요약을 만듭니다', warn: '', none: '요약을 만들지 않았습니다', agree: '요약 만들기' },
 };
 
 export async function confirmDestructive(asker: Asker, req: ConfirmRequest): Promise<ConfirmOutcome> {
