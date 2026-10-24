@@ -15,7 +15,7 @@ import {
   SYNC_LOCK_WAIT_MS,
 } from '../constants.js';
 import { createFetchHtml } from '../lms-html.js';
-import { withSyncLock } from '../materials/sync.js';
+import { ensureRealDir, withSyncLock } from '../materials/sync.js';
 import { SessionExpiredError } from '../lms.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
@@ -131,9 +131,12 @@ export function registerGetAssignment(server: McpServer): void {
         const { dir, moved, attachments, warnings } = await withSyncLock(
           async () => {
             const dir = downloadDir(cmid);
+            const moved = await moveLegacyDir(join(storageRoot(), assignDirName(cmid)), dir);
+            // 학기·assign 폴더가 링크면 그 너머(저장 위치 밖)에 쓰게 된다 — 쓰기 전에 각 단계가 실제 폴더인지 확인한다
+            await ensureRealDir(storageRoot(), dir);
             return {
               dir,
-              moved: await moveLegacyDir(join(storageRoot(), assignDirName(cmid)), dir),
+              moved,
               ...(await downloadAll(page.attachmentUrls, dir, session, progressOf(ctx), ctx.mcpReq.signal)),
             };
           },

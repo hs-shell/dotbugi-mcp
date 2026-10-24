@@ -1,7 +1,13 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { CALLBACK_HOST, CALLBACK_MAX_BODY_BYTES, CALLBACK_PATH, SESSION_PATTERN } from '../constants.js';
+import {
+  CALLBACK_HOST,
+  CALLBACK_MAX_BODY_BYTES,
+  CALLBACK_MAX_FAILURES,
+  CALLBACK_PATH,
+  SESSION_PATTERN,
+} from '../constants.js';
 
 export interface CallbackServer {
   port: number;
@@ -12,32 +18,38 @@ export interface CallbackServer {
 }
 
 // dotbugi 확장이 보내는 { code, session } 을 127.0.0.1 에서 한 번만 받는다.
-// 확장 출처(Origin) + 일회용 코드 둘 다 맞아야 수락한다. 거부 사유는 응답 코드로만 알린다(값은 기록하지 않음)
+// 확장 출처(Origin) + 일회용 코드 둘 다 맞아야 수락한다. 잘못된 요청은 거부만 하고 시간 초과까지 계속 기다린다. 거부 사유는 응답 코드로만 알린다(값은 기록하지 않음)
 export function startCallbackServer(allowedOrigins: readonly string[], timeoutMs: number): Promise<CallbackServer> {
   const code = randomBytes(24).toString('base64url');
   let accept!: (session: string) => void;
   let fail!: (err: Error) => void;
   const session = new Promise<string>((res, rej) => ((accept = res), (fail = rej)));
   let done = false;
+  let failures = 0;
 
   const server = createServer((req, res) => {
     const origin = req.headers.origin;
     if (done || req.method !== 'POST' || req.url !== CALLBACK_PATH) return void res.writeHead(404).end();
-    // DNS 리바인딩 등으로 다른 이름을 거쳐 온 요청은 받지 않는다
-    if (req.headers.host !== `${CALLBACK_HOST}:${port()}`) return void res.writeHead(421).end();
-    if (!origin || !allowedOrigins.includes(origin)) return void res.writeHead(403).end();
-    if (Number(req.headers['content-length'] ?? 0) > CALLBACK_MAX_BODY_BYTES) return void res.writeHead(413).end();
-    // 본문을 읽기 전에 닫아 동시에 들어온 두 번째 요청은 받지 않는다. 기회는 한 번뿐이라 코드 추측도 막힌다
-    done = true;
+    // 잘못된 요청에 닫으면 포트가 풀려 다른 로컬 사용자가 선점할 수 있다. 그래서 거부만 하고 계속 붙들고 있는다
     const reject = (status: number) => {
-      res.writeHead(status).end('', close);
-      fail(new Error('잘못된 연결 요청을 받아 중단했습니다. login 도구로 다시 시도하세요.'));
+      failures++;
+      res.writeHead(status).end();
     };
+    // 192비트 코드라 추측은 사실상 불가능하지만, 실패가 쌓이면 이후 요청은 모두 거부한다(포트는 시간 초과까지 유지)
+    if (failures >= CALLBACK_MAX_FAILURES) return void res.writeHead(429).end();
+    // DNS 리바인딩 등으로 다른 이름을 거쳐 온 요청은 받지 않는다
+    if (req.headers.host !== `${CALLBACK_HOST}:${port()}`) return reject(421);
+    if (!origin || !allowedOrigins.includes(origin)) return reject(403);
+    if (Number(req.headers['content-length'] ?? 0) > CALLBACK_MAX_BODY_BYTES) return reject(413);
     readBody(req, res, reject, (body) => {
+      // 동시에 들어온 다른 유효 요청이 먼저 수락됐으면 받지 않는다
+      if (done) return void res.writeHead(404).end();
       const msg = parseJson(body);
       if (!msg) return reject(400);
       if (!sameCode(String(msg.code), code)) return reject(403);
       if (!SESSION_PATTERN.test(String(msg.session))) return reject(400);
+      // 모든 검사를 통과한 뒤에만 일회성으로 닫는다
+      done = true;
       res.writeHead(200, { 'Access-Control-Allow-Origin': origin }).end('ok', close);
       accept(String(msg.session));
     });

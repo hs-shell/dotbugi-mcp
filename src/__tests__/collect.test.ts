@@ -149,16 +149,26 @@ describe('collectTasks', () => {
     expect(items).toContainEqual(expect.objectContaining({ title: '지난 퀴즈', done: true, status: '응시' }));
   });
 
-  it('LMS 텍스트의 서식 문자를 지우고, LMS 출처가 아닌 링크는 비운다', async () => {
+  it('LMS 텍스트의 서식 문자를 지우고, LMS 출처가 아닌 링크는 쓰지 않는다', async () => {
     withPages({
       [`${L}/mod/assign/index.php?id=200`]: `<table class="generaltable"><tbody>
-        <tr><td class="cell c0"></td><td class="cell c1"><a href="https://evil.example/x">과제\u202e 이름\u200b</a></td>
-        <td class="cell c2">곧\u200b마감</td><td class="cell c3">미제출</td></tr></tbody></table>`,
+        <tr><td class="cell c0"></td><td class="cell c1"><a href="view.php?id=20">과제\u202e 이름\u200b</a></td>
+        <td class="cell c2">곧\u200b마감</td><td class="cell c3">미제출</td></tr>
+        <tr><td class="cell c0"></td><td class="cell c1"><a href="https://evil.example/x">외부 과제</a></td>
+        <td class="cell c2">2026-10-30 18:00</td><td class="cell c3">미제출</td></tr></tbody></table>`,
     });
     const { items } = await collectTasks(SESSION);
     expect(items).toContainEqual(
-      expect.objectContaining({ course: '운영체제', title: '과제 이름', deadline: '곧 마감', url: '' })
+      expect.objectContaining({
+        course: '운영체제',
+        title: '과제 이름',
+        deadline: '곧 마감',
+        url: `${L}/mod/assign/view.php?id=20`,
+      })
     );
+    // lms-parser 0.1.1 은 외부 링크 행을 url '' 로 남기고, 0.1.2 부터는 행을 아예 뺀다 — 어느 쪽이든 외부 주소는 쓰지 않는다
+    const external = items.find((i) => i.title === '외부 과제');
+    if (external) expect(external.url).toBe('');
   });
 
   it('VOD 시간 형식을 못 읽으면 진도 NaN% 대신 진도를 뺀다', () => {

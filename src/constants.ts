@@ -25,6 +25,8 @@ export const CONNECT_HASH_KEY = 'dotbugi-connect';
 export const CALLBACK_HOST = '127.0.0.1';
 export const CALLBACK_PATH = '/cb';
 export const CALLBACK_MAX_BODY_BYTES = 4096;
+// 실패한 콜백 요청이 이만큼 쌓이면 이후는 모두 거부한다(닫지는 않음 — 포트 선점 방지)
+export const CALLBACK_MAX_FAILURES = 20;
 export const LOGIN_TIMEOUT_MS = 5 * 60_000;
 
 // 브라우저 시작이 느린 첫 호출도 넉넉히 기다리되, 응답이 없으면 멈추지 않도록 끊는다

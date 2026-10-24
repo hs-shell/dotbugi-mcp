@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as crypto from 'node:crypto';
 import { request } from 'node:http';
-import { CALLBACK_MAX_BODY_BYTES } from '../constants.js';
+import { CALLBACK_MAX_BODY_BYTES, CALLBACK_MAX_FAILURES } from '../constants.js';
 import { startCallbackServer, type CallbackServer } from '../login/callback-server.js';
 
 vi.mock('node:crypto', async (orig) => {
@@ -17,7 +17,7 @@ afterEach(() => server?.close());
 
 async function start(timeoutMs = 10_000) {
   server = await startCallbackServer([ORIGIN], timeoutMs);
-  // 거부 시 session 이 reject 되므로 처리되지 않은 rejection 으로 남지 않게 한다
+  // 시간 초과·close 로 session 이 reject 될 수 있으므로 처리되지 않은 rejection 으로 남지 않게 한다
   server.session.catch(() => undefined);
   return server;
 }
@@ -45,15 +45,26 @@ describe('startCallbackServer', () => {
   it('세션 형식이 이상하면 400', async () => {
     await start();
     expect((await post({ code: server.code, session: 'bad;session' })).status).toBe(400);
-    await start();
     expect((await post('not json')).status).toBe(400);
   });
 
-  it('잘못된 요청 한 번이면 중단한다 (재시도·추측 불가)', async () => {
+  it('잘못된 요청에는 닫지 않고, 이후 유효한 요청을 받는다 (포트 선점 방지)', async () => {
     await start();
     expect((await post({ code: 'wrong', session: SESSION })).status).toBe(403);
-    await expect(server.session).rejects.toThrow('잘못된 연결 요청');
-    await expect(post({ code: server.code, session: SESSION })).rejects.toThrow();
+    expect((await post('not json')).status).toBe(400);
+    expect((await post({ code: server.code, session: SESSION }, { origin: 'chrome-extension://evil' })).status).toBe(
+      403
+    );
+    const res = await post({ code: server.code, session: SESSION });
+    expect(res.status).toBe(200);
+    await expect(server.session).resolves.toBe(SESSION);
+  });
+
+  it(`실패가 ${CALLBACK_MAX_FAILURES}번 쌓이면 유효한 요청도 429 로 거부하되 포트는 붙들고 있는다`, async () => {
+    await start();
+    for (let i = 0; i < CALLBACK_MAX_FAILURES; i++) await post({ code: 'wrong', session: SESSION });
+    expect((await post({ code: server.code, session: SESSION })).status).toBe(429);
+    expect((await post({ code: server.code, session: SESSION })).status).toBe(429);
   });
 
   it('Host 헤더가 127.0.0.1:<port> 가 아니면 421', async () => {

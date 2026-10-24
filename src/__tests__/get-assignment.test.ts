@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile, mkdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
@@ -205,6 +205,19 @@ describe('get_assignment', () => {
     expect((await readdir(dir())).sort()).toEqual(['_.._evil.sh', '과제 (2).pdf', '과제.pdf']);
     expect(await readFile(join(dir(), '과제.pdf'), 'utf8')).toBe('내 풀이');
     await expect(readdir(legacy)).rejects.toThrow();
+  });
+
+  it('assign 폴더가 링크면 따라가지 않고 아무것도 받지 않는다', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'dotbugi-outside-'));
+    try {
+      await mkdir(join(dir(), '..'), { recursive: true });
+      await symlink(outside, dir());
+      const result = await call({ cmid: 5 });
+      expect(result).toMatchObject({ isError: true });
+      expect(await readdir(outside)).toEqual([]);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it('동기화·저장 위치 이동이 기다림 동안 끝나지 않으면(sync 잠금) 아무것도 받지 않고 다시 시도를 안내한다', async () => {
