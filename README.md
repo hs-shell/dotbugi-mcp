@@ -57,39 +57,47 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 
 ## 이렇게 물어보세요
 
-| 요청 예시                                           | 쓰는 도구                               |
-| --------------------------------------------------- | --------------------------------------- |
-| "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?" | `list_tasks`                            |
-| "자료구조 과제 내용이랑 첨부파일 받아줘"            | `get_assignment`                        |
-| "운영체제 강의자료 받아줘"                          | `sync_materials`                        |
-| "자료구조 5주차 정리해줘"                           | `summarize_week` 프롬프트               |
-| "안 들은 강의 차례로 틀어줘" / "재생 멈춰"          | `play_vods` / `stop_vods`, `vod_status` |
-| "이 강의 받아써줘" / "받아쓰기 어디까지 됐어?"      | `transcribe_vod` / `transcribe_status`  |
+| 요청 예시                                               | 쓰는 도구                                                  |
+| ------------------------------------------------------- | ---------------------------------------------------------- |
+| "이번 주 마감 과제 알려줘", "안 들은 강의 뭐 있어?"     | `list_tasks`                                               |
+| "운영체제 과목은 추적 꺼줘"                             | `list_courses` / `set_course_tracking`                     |
+| "자료구조 과제 내용이랑 첨부파일 받아줘"                | `get_assignment`                                           |
+| "운영체제 강의자료 받아줘"                              | `sync_materials`                                           |
+| "LMS 에서 지워진 자료 정리해줘"                         | `delete_materials` (승인 화면)                             |
+| "자료구조 5주차 정리해줘"                               | `summarize_week` 프롬프트                                  |
+| "안 들은 강의 차례로 틀어줘" / "재생 멈춰"              | `play_vods` / `stop_vods`, `vod_status`                    |
+| "받아쓰기 준비해줘"                                     | `asr_install`, `asr_status`                                |
+| "이 강의 받아써줘" / "어디까지 됐어?" / "받아쓰기 멈춰" | `transcribe_vod` / `transcribe_status` / `stop_transcribe` |
+| "LMS 로그아웃해줘"                                      | `logout`                                                   |
 
 Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구조 5` 처럼 직접 부를 수도 있습니다.
+
+**삭제는 사용자가 직접 승인합니다.** `delete_materials`·`asr_remove` 는 지울 목록을 Claude 앱의 확인 창에 띄우고, 사용자가 체크하고 승인해야만 지웁니다 (Claude 가 대신 승인할 수 없습니다). 확인 창을 지원하지 않는 앱에서는 Claude 가 목록을 보여 주고 동의를 물은 뒤에만 지웁니다.
 
 ## 도구 목록
 
 인자·출력·상한·파일 위치는 [docs/tools.md](docs/tools.md) 에 있습니다.
 
-| 이름                                                                   | 하는 일                                   |
-| ---------------------------------------------------------------------- | ----------------------------------------- |
-| [`login`](docs/tools.md#login)                                         | dotbugi 확장 연결로 LMS 로그인            |
-| [`list_tasks`](docs/tools.md#list_tasks)                               | VOD·과제·퀴즈를 마감 임박 순으로 조회     |
-| [`vod_status`](docs/tools.md#vod_status)                               | 남은 VOD 와 연속 재생 진행 상황           |
-| [`play_vods`](docs/tools.md#play_vods--stop_vods)                      | 미출석 VOD 를 공식 플레이어로 차례로 재생 |
-| [`stop_vods`](docs/tools.md#play_vods--stop_vods)                      | 연속 재생 중지                            |
-| [`get_assignment`](docs/tools.md#get_assignment)                       | 과제 본문·마감·제출 상황, 첨부파일 받기   |
-| [`sync_materials`](docs/tools.md#sync_materials)                       | 강의자료를 과목·주차 폴더로 동기화        |
-| [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status)    | VOD 하나를 로컬 음성 인식으로 받아쓰기    |
-| [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status) | 받아쓰기 진행 상황                        |
-| [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)            | 주차 강의자료를 `요약.md` 로 정리         |
+| 분류     | 이름                                                                                                                                                                           | 하는 일                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| 로그인   | [`login`](docs/tools.md#login) / [`logout`](docs/tools.md#logout)                                                                                                              | LMS 로그인(확장 연결 또는 임시 브라우저) / 로그아웃 |
+| 할 일    | [`list_tasks`](docs/tools.md#list_tasks)                                                                                                                                       | VOD·과제·퀴즈를 마감 임박 순으로 조회               |
+|          | [`list_courses`](docs/tools.md#list_courses--set_course_tracking) / [`set_course_tracking`](docs/tools.md#list_courses--set_course_tracking)                                   | 내 강좌·추적 여부 조회 / 강좌 추적 켜기·끄기        |
+|          | [`get_assignment`](docs/tools.md#get_assignment)                                                                                                                               | 과제 본문·마감·제출 상황, 첨부파일 받기             |
+| 재생     | [`vod_status`](docs/tools.md#vod_status)                                                                                                                                       | 남은 VOD 와 연속 재생 진행 상황                     |
+|          | [`play_vods`](docs/tools.md#play_vods--stop_vods) / [`stop_vods`](docs/tools.md#play_vods--stop_vods)                                                                          | 미출석 VOD 를 공식 플레이어로 차례로 재생 / 중지    |
+| 자료     | [`sync_materials`](docs/tools.md#sync_materials)                                                                                                                               | 강의자료를 과목·주차 폴더로 동기화                  |
+|          | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                           | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제        |
+|          | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                    | 주차 강의자료를 `요약.md` 로 정리                   |
+| 받아쓰기 | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) | VOD 하나를 로컬 음성 인식으로 받아쓰기 / 진행 상황  |
+|          | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                          | 받아쓰기 중지                                       |
+|          | [`asr_install`](docs/tools.md#asr_install--asr_status) / [`asr_status`](docs/tools.md#asr_install--asr_status) / [`asr_remove`](docs/tools.md#asr_remove)                      | 음성 인식 런타임 설치 / 상태·검증 / 승인 후 삭제    |
 
-로그아웃·강좌 켜기/끄기·받아쓰기 런타임 설치 등 일부는 아직 터미널 명령입니다 → [docs/tools.md](docs/tools.md#터미널-명령)
+모든 기능을 대화로 쓸 수 있습니다. 같은 일을 터미널 명령으로도 할 수 있습니다 → [docs/tools.md](docs/tools.md#터미널에서도-할-수-있는-것)
 
 ## 개인정보·보안
 
-- LMS 세션은 **OS 키체인에만** 저장합니다 (파일 저장 없음). 같은 사용자 권한의 프로세스는 키체인을 읽을 수 있으니 필요 없을 때는 `npx -y @dotbugi/mcp logout` 하세요.
+- LMS 세션은 **OS 키체인에만** 저장합니다 (파일 저장 없음). 같은 사용자 권한의 프로세스는 키체인을 읽을 수 있으니 필요 없을 때는 "LMS 로그아웃해줘" 라고 하세요.
 - 세션 쿠키는 `https://learn.hansung.ac.kr` 로만 보냅니다. 그 밖의 외부 접속은 받아쓰기용 영상 서버(`*.edge.naverncp.com`, 쿠키 없음)와 음성 인식 런타임 설치 때의 github.com·huggingface.co·PyPI 뿐이며, 텔레메트리는 없습니다.
 - 도구 출력·로그에는 세션 값·연결 코드·영상 주소를 넣지 않습니다.
 - LMS 에 제출·작성·수정하지 않습니다. 과제 제출은 직접 하세요.
@@ -101,8 +109,8 @@ Claude Code 에서는 프롬프트를 `/mcp__dotbugi__summarize_week 자료구�
 - **"저장된 LMS 세션이 없습니다" / "세션이 만료되었습니다"**: "dotbugi 로그인해줘" 라고 다시 요청하세요.
 - **연결 창이 안 뜸**: dotbugi 확장이 5.1.0 이상인지, 열린 LMS 탭에 로그인돼 있는지 확인하세요.
 - **Claude Desktop 에서 서버가 안 뜸**: 대개 `npx` 경로 문제입니다. 위 [설치·등록](#설치등록)의 macOS·Windows·WSL 안내를 보세요.
-- **받아쓰기가 "런타임이 설치되어 있지 않습니다"**: 터미널에서 `npx -y @dotbugi/mcp asr install` 을 한 번 실행하세요 (약 2GB, [상세](docs/tools.md#asr--로컬-음성-인식-런타임)).
-- **원하는 과목이 안 보임**: 추적 강좌 설정 `npx -y @dotbugi/mcp courses` 로 켜세요 (기본: 비교과 꺼짐).
+- **받아쓰기가 "런타임이 설치되어 있지 않습니다"**: "받아쓰기 준비해줘" 라고 해 음성 인식 런타임을 한 번 설치하세요 (약 2GB, [상세](docs/tools.md#asr_install--asr_status)).
+- **원하는 과목이 안 보임**: "내 강좌 추적 설정 보여줘" 로 확인하고 켜 달라고 하세요 (기본: 비교과 꺼짐).
 
 ## 라이선스·기여
 
