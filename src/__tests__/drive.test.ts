@@ -12,15 +12,10 @@ const EMOJI = /\p{Extended_Pictographic}/u;
 
 describe('myDrivesIn', () => {
   it('"내 드라이브"/"My Drive" 만 고르고 공유 드라이브·다른 컴퓨터는 무시한다', () => {
-    const isDir = dirs(
-      '/cs/GoogleDrive-a/My Drive',
-      '/cs/GoogleDrive-a/Shared drives',
-      '/cs/GoogleDrive-b/내 드라이브'
-    );
-    expect(myDrivesIn(['/cs/GoogleDrive-a', '/cs/GoogleDrive-b', '/cs/none'], isDir)).toEqual([
-      '/cs/GoogleDrive-a/My Drive',
-      '/cs/GoogleDrive-b/내 드라이브',
-    ]);
+    const a = join('cs', 'GoogleDrive-a');
+    const b = join('cs', 'GoogleDrive-b');
+    const isDir = dirs(join(a, 'My Drive'), join(a, 'Shared drives'), join(b, '내 드라이브'));
+    expect(myDrivesIn([a, b, join('cs', 'none')], isDir)).toEqual([join(a, 'My Drive'), join(b, '내 드라이브')]);
   });
 });
 
