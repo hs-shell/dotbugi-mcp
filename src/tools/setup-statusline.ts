@@ -33,12 +33,19 @@ export function statusLineCommand(node = process.execPath, entry = ENTRY, platfo
   return `${q(node)} ${q(entry)} statusline`;
 }
 
+// 진행률이 살아 움직이게 상태 표시줄을 이 간격(초)으로 다시 그린다
+const REFRESH_SECONDS = 2;
+// enable 이 refreshInterval 을 바꿨으면 원래 값을 우리 줄 끝 인자로 남긴다 (settings.json 에 모르는 키를 더하지 않으려고).
+// statusline 명령은 이 인자를 무시하고, disable 이 읽어 그대로 되돌린다
+const REFRESH_WAS = /\s--refresh-was=(none|\d+)$/;
+
 // 우리가 넣은 것(또는 문서대로 손으로 넣은 dotbugi-mcp statusline)만 우리 것으로 본다.
 // 패키지 이름이 없는 폴더에서 실행해도 enable 이 지금 만드는 명령과 같으면 우리 것
 export const isOurStatusLine = (v: unknown, current?: string): boolean => {
-  const cmd = (v as { command?: unknown } | null)?.command;
-  if (typeof cmd !== 'string') return false;
-  return cmd === current || (/dotbugi-mcp|@dotbugi[\\/]mcp/.test(cmd) && /\sstatusline$/.test(cmd.trim()));
+  const raw = (v as { command?: unknown } | null)?.command;
+  if (typeof raw !== 'string') return false;
+  const cmd = raw.trim().replace(REFRESH_WAS, '');
+  return cmd === current || (/dotbugi-mcp|@dotbugi[\\/]mcp/.test(cmd) && /\sstatusline$/.test(cmd));
 };
 
 async function readRaw(file: string): Promise<string | null> {
@@ -81,22 +88,33 @@ export async function setupStatusline(
   const lines = typeof oldCommand === 'string' ? oldCommand.split('\n') : [];
   const hasOurs = lines.length > 0 && isOurStatusLine({ command: lines.at(-1) }, command);
   const base = hasOurs ? lines.slice(0, -1) : lines;
+  // 사용자가 원래 쓰던 refreshInterval — 전에 우리가 바꿨으면 우리 줄에 남긴 값
+  const wasMatch = hasOurs ? REFRESH_WAS.exec(lines.at(-1)!.trim()) : null;
+  const prev = (old ?? {}) as Record<string, unknown>;
+  const was = wasMatch ? (wasMatch[1] === 'none' ? undefined : Number(wasMatch[1])) : prev.refreshInterval;
   if (action === 'enable') {
-    const prev = (old ?? {}) as Record<string, unknown>;
+    // 없거나 느리면(정수 > 2초) 낮추고 원래 값을 기록한다. 알 수 없는 값은 건드리지 않는다
+    const lower = was === undefined || (Number.isInteger(was) && (was as number) > REFRESH_SECONDS);
     const desired = {
       type: 'command',
       ...prev,
-      command: [...base, command].join('\n'),
-      refreshInterval: prev.refreshInterval ?? 30,
+      command: [...base, lower ? `${command} --refresh-was=${was ?? 'none'}` : command].join('\n'),
+      refreshInterval: lower ? REFRESH_SECONDS : was,
     };
     if (isDeepStrictEqual(old, desired)) return `이미 설정돼 있습니다 (${file}).`;
     next.statusLine = desired;
   } else {
     if (old === undefined) return `${file} 에 설정된 상태 표시줄이 없습니다.`;
     if (!hasOurs) return `${file} 의 상태 표시줄에 dotbugi 가 넣은 줄이 없어 바꾸지 않았습니다: ${JSON.stringify(old)}`;
-    // 우리 줄만 빼고 사용자 명령은 되돌린다 (refreshInterval 등 다른 값은 그대로)
-    if (base.length) next.statusLine = { ...(old as object), command: base.join('\n') };
-    else delete next.statusLine;
+    // 우리 줄만 빼고 사용자 명령·refreshInterval 은 enable 전으로 되돌린다 (padding 등 다른 값은 그대로)
+    if (base.length) {
+      const restored: Record<string, unknown> = { ...prev, command: base.join('\n') };
+      if (wasMatch) {
+        if (was === undefined) delete restored.refreshInterval;
+        else restored.refreshInterval = was;
+      }
+      next.statusLine = restored;
+    } else delete next.statusLine;
   }
   const out = `${JSON.stringify(next, null, 2)}\n`;
   const targets = [
@@ -135,7 +153,7 @@ export async function setupStatusline(
 
   if (action === 'disable') return `상태 표시줄을 해제했습니다 (${file}).`;
   return [
-    `상태 표시줄을 설정했습니다 (${file}). Claude Code 에서 STT 진행 상황이 아래쪽에 한 줄로 보입니다.`,
+    `상태 표시줄을 설정했습니다 (${file}). Claude Code 아래쪽에 동영상 강의 STT 진행률이 한 줄로 보입니다 (기존 상태 표시줄은 그 위에 그대로).`,
     'Claude Desktop 앱에는 상태 표시줄이 없습니다 (Claude Code 전용).',
     ...(/[\\/]_npx[\\/]/.test(command)
       ? [
@@ -151,8 +169,8 @@ export function registerSetupStatusline(server: McpServer): void {
     {
       title: 'Claude Code 상태 표시줄 설정',
       description:
-        'Claude Code 사용자 설정(~/.claude/settings.json)의 statusLine 에 동영상 강의 STT(받아쓰기) 진행 표시(몇 번째/전체·진행률)를 넣거나(enable) 뺀다(disable). ' +
-        '이미 쓰는 상태 표시줄이 있으면 지우지 않고 그 아래 줄에 더한다. 사용자가 확인 창에서 승인해야 바꾸고, statusLine 외 설정은 건드리지 않는다. disable 은 dotbugi 가 넣은 줄만 뺀다. ' +
+        'Claude Code 사용자 설정(~/.claude/settings.json)의 statusLine 에 동영상 강의 STT 진행 표시(몇 번째/전체·진행률)를 넣거나(enable) 뺀다(disable). ' +
+        '이미 쓰는 상태 표시줄이 있으면 지우지 않고 그 아래 줄에 더한다 (진행률이 보이게 refreshInterval 은 2초 이하로). 사용자가 확인 창에서 승인해야 바꾸고, statusLine 외 설정은 건드리지 않는다. disable 은 dotbugi 가 넣은 줄만 빼고 원래 상태 표시줄로 되돌린다. ' +
         'Claude Desktop 에는 상태 표시줄이 없다. 확인 창이 없는 클라이언트면 confirmToken 을 돌려준다 — 사용자 동의를 받은 뒤에만 그 토큰으로 다시 호출한다.',
       inputSchema: z.object({
         action: z.enum(['enable', 'disable']).default('enable').describe('enable: 설정, disable: 해제'),

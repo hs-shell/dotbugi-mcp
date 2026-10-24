@@ -41,10 +41,7 @@ describe('출력 문구 규칙', () => {
       const code = text
         // 주석은 사람(개발자)용이라 뺀다 — 주소의 :// 는 앞이 공백이 아니라 남는다
         .replace(/(^|\s)\/\/.*$/, '')
-        .replace(/^\s*\*.*$/, '')
-        // 모델이 "받아써 줘" 를 알아듣게 도구 설명에 병기하는 건 허용
-        .replaceAll('STT(음성 → 텍스트, 받아쓰기)', '')
-        .replaceAll('STT(받아쓰기)', '');
+        .replace(/^\s*\*.*$/, '');
       return /받아쓰|받아써|녹취/.test(code) && !code.includes('LEGACY_PREFIX =');
     });
     expect(found).toEqual([]);
