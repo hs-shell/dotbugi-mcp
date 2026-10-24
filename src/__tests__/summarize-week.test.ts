@@ -37,7 +37,7 @@ describe('summarize_week', () => {
   it('도구 이름·주차 폴더·요약.md 섹션·신뢰할 수 없는 데이터 안내를 담는다', async () => {
     const t = text(await get({ course: '자료구조', week: '3' }));
     expect(t).toContain('`sync_materials`');
-    expect(t).toContain('~/Downloads/dotbugi-mcp/<과목>/<주차 폴더>/');
+    expect(t).toContain('<저장 위치>/<YYYY-N학기>/<과목>/<주차 폴더>/');
     expect(t).toContain('3주차에 해당하는 주차 폴더');
     expect(t).toContain('"자료구조"');
     for (const s of ['핵심 개념', '용어 정리', '예제', '예상 문제', '출처']) expect(t).toContain(`## ${s}`);

@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, readdir, rename, unlink, type FileHandle } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -9,9 +8,11 @@ import {
   FILE_NAME_SUFFIX_MAX,
 } from '../constants.js';
 import { lmsFetch } from '../lms.js';
+import { semesterDir } from '../storage.js';
 
-// 과제마다 전용 폴더. 이 폴더 밖에는 쓰지 않는다
-export const downloadDir = (cmid: number) => join(homedir(), 'Downloads', 'dotbugi-mcp', `assign-${cmid}`);
+// 과제마다 전용 폴더 (<저장 위치>/<학기>/assign-<cmid>). 이 폴더 밖에는 쓰지 않는다
+export const assignDirName = (cmid: number) => `assign-${cmid}`;
+export const downloadDir = (cmid: number, now = new Date()) => join(semesterDir(now), assignDirName(cmid));
 
 // Windows 는 확장자 앞 공백까지 무시하고 예약 이름으로 본다 (CON .txt)
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])\s*(\.|$)/i;

@@ -212,7 +212,7 @@ function deps(over: Partial<TranscribeDeps> = {}) {
   return { d, reports, fetched, files, sp, runtime };
 }
 
-const OUT = () => join(dir, 'root', '자료구조', '3주차', '녹취-1강 소개.md');
+const OUT = () => join(dir, 'root', '2026-2학기', '자료구조', '3주차', '녹취-1강 소개.md');
 const tmpGone = async (d: TranscribeDeps) => expect(await stat(d.tmpDir).catch(() => null)).toBeNull();
 
 describe('transcribeVod', () => {
@@ -237,7 +237,7 @@ describe('transcribeVod', () => {
   });
 
   it('이미 녹취가 있으면 런타임 확인·요청 없이 건너뛰고, 강제 종료로 남은 임시 파일은 지운다', async () => {
-    await mkdir(join(dir, 'root', '자료구조', '3주차'), { recursive: true });
+    await mkdir(join(dir, 'root', '2026-2학기', '자료구조', '3주차'), { recursive: true });
     await writeFile(OUT(), '내 메모');
     const { d, fetched, runtime } = deps();
     await mkdir(d.tmpDir, { recursive: true });

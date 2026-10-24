@@ -98,7 +98,7 @@ export function registerTranscribeVod(server: McpServer): void {
     {
       title: 'VOD 받아쓰기 시작',
       description:
-        '한성대 LMS 강의 영상(VOD) 하나의 소리를 로컬 ASR 로 받아써 ~/Downloads/dotbugi-mcp/<과목>/<N주차>/녹취-<강의명>.md 로 저장하는 ' +
+        '한성대 LMS 강의 영상(VOD) 하나의 소리를 로컬 ASR 로 받아써 <저장 위치>/<YYYY-N학기>/<과목>/<N주차>/녹취-<강의명>.md 로 저장하는 ' +
         '백그라운드 작업을 시작하고 바로 돌아온다. 진행은 transcribe_status, 중지는 stop_transcribe. 한 번에 하나만, 이미 녹취가 있으면 건너뛴다. ' +
         '출석·진도에는 영향이 없다. 대상 강좌는 추적 강좌 설정(set_course_tracking)을 따른다.',
       inputSchema: z.object({
