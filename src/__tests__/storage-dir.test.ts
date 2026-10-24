@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   driveRoots: [] as string[],
   // 이 경로 아래에서 나가는 rename 은 다른 드라이브인 것처럼 EXDEV 로 실패시킨다
   exdevFrom: null as string | null,
+  // drvfs 처럼 권한 복사가 필요한 fs.copyFile·chmod 를 EPERM 으로 거부한다
+  drvfs: false,
 }));
 vi.mock('node:os', async (orig) => {
   const os = await orig<typeof import('node:os')>();
@@ -28,6 +30,10 @@ vi.mock('node:fs/promises', async (orig) => {
       if (state.exdevFrom && from.startsWith(state.exdevFrom))
         throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
       return fs.rename(from, to);
+    },
+    copyFile: async (...a: Parameters<typeof fs.copyFile>) => {
+      if (state.drvfs) throw Object.assign(new Error('operation not permitted, copyfile'), { code: 'EPERM' });
+      return fs.copyFile(...a);
     },
   };
 });
@@ -61,6 +67,7 @@ beforeEach(async () => {
   state.localAppData = null;
   state.driveRoots = [];
   state.exdevFrom = null;
+  state.drvfs = false;
 });
 afterEach(async () => {
   await rm(state.home, { recursive: true, force: true });
@@ -268,6 +275,37 @@ describe('setStorageDir', () => {
     expect(await readFile(join(real, 'assign-5', 'a.txt'), 'utf8')).toBe('A');
   });
 
+  it('권한 복사를 거부하는 드라이브(WSL drvfs)로도 내용 복사·검증으로 옮긴다', async () => {
+    await seed();
+    state.exdevFrom = oldRoot();
+    state.drvfs = true;
+    const to = home('Documents', '돋부기');
+    const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(text).toContain('옮긴 항목 2개');
+    expect(text).not.toContain('EPERM');
+    expect(await readFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'utf8')).toBe('A');
+    expect(readStorageConfig()).toEqual({ version: 1, root: to });
+  });
+
+  it('일부를 옮기지 못했으면 같은 경로로 다시 부를 때 남은 항목을 이어서 옮긴다', async () => {
+    await seed();
+    state.exdevFrom = oldRoot();
+    const to = home('Documents', '돋부기');
+    await writeFile(join(oldRoot(), 'assign-5', 'b.txt'), 'B');
+    // 링크가 든 항목은 복사하지 않는다 → 첫 호출에서 실패로 남는다
+    await symlink(home(), join(oldRoot(), 'assign-5', 'link'));
+    const first = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
+    expect(first).toContain('이어서 옮깁니다');
+    expect(readStorageConfig()).toEqual({ version: 1, root: to, movedFrom: oldRoot() });
+    await rm(join(oldRoot(), 'assign-5', 'link'));
+    const a = asker(true);
+    const second = await setStorageDir({ path: '~/Documents/돋부기' }, a);
+    expect(a.asked).toHaveLength(1);
+    expect(second).toContain('옮긴 항목 1개');
+    expect(await readFile(join(to, 'assign-5', 'b.txt'), 'utf8')).toBe('B');
+    expect(readStorageConfig()).toEqual({ version: 1, root: to });
+  });
+
   it('새 위치 저장 뒤·원본 삭제 전에 끊겼으면 같은 경로로 다시 부를 때 승인받고 남은 원본을 지운다', async () => {
     await seed();
     const to = home('Documents', '돋부기');
@@ -282,7 +320,7 @@ describe('setStorageDir', () => {
     expect(no.asked).toHaveLength(1);
     expect((await readdir(oldRoot())).sort()).toEqual(['2026-2학기', 'assign-5', 'mine.txt']);
     const text = await setStorageDir({ path: '~/Documents/돋부기' }, asker(true));
-    expect(text).toContain('남은 원본 2개를 지웠습니다');
+    expect(text).toContain('옮긴 항목 2개');
     expect(await readdir(oldRoot())).toEqual(['mine.txt']);
     expect(await readFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'utf8')).toBe('A');
     expect(readStorageConfig()).toEqual({ version: 1, root: to });
@@ -293,6 +331,8 @@ describe('setStorageDir', () => {
     const to = home('Documents', '돋부기');
     await mkdir(join(to, '2026-2학기', '자료구조'), { recursive: true });
     await writeFile(join(to, '2026-2학기', '자료구조', 'a.txt'), 'changed');
+    // 내용이 다른 항목만 남은 경우 (새 위치에 없는 항목은 이어서 옮기는 대상이라 뺀다)
+    await rm(join(oldRoot(), 'assign-5'), { recursive: true });
     await writeStorageConfig(to, undefined, oldRoot());
     const a = asker(true);
     expect(await setStorageDir({ path: '~/Documents/돋부기' }, a)).toContain('이미 저장 위치가');

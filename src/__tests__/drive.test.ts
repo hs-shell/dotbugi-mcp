@@ -46,17 +46,19 @@ describe('describeDrive', () => {
   it('찾으면 <내 드라이브>/돋부기 를 추천한다', () => {
     const r = describeDrive({ roots: ['/mnt/g/내 드라이브'], unmounted: [] }, '/home/u/Downloads/dotbugi-mcp');
     expect(r.suggested).toBe(join('/mnt/g/내 드라이브', '돋부기'));
-    expect(r.text).toContain('set_storage_dir');
-    expect(r.text).not.toMatch(EMOJI);
+    expect(r.guidance).toContain('set_storage_dir');
+    expect(r.guidance).not.toMatch(EMOJI);
   });
   it('WSL 에서 마운트되지 않았으면 마운트 명령을 알려 준다', () => {
     const r = describeDrive({ roots: [], unmounted: ['G'] }, '/x');
     expect(r.suggested).toBeNull();
-    expect(r.text).toContain('sudo mount -t drvfs G:');
-    expect(r.text).toContain('/etc/fstab');
-    expect(r.text).not.toMatch(EMOJI);
+    expect(r.guidance).toContain('sudo mount -t drvfs G:');
+    expect(r.guidance).toContain('/etc/fstab');
+    // Claude Code 의 ! 입력은 sudo 비밀번호를 받을 수 없어 wsl.exe -u root 방식도 함께 안내한다
+    expect(r.guidance).toMatch(/! wsl\.exe -u root -e sh -c "mkdir -p \S+\/g && mount -t drvfs G: \S+\/g"/);
+    expect(r.guidance).not.toMatch(EMOJI);
   });
   it('없으면 설치 안내', () => {
-    expect(describeDrive({ roots: [], unmounted: [] }, '/x').text).toContain('google.com/drive/download');
+    expect(describeDrive({ roots: [], unmounted: [] }, '/x').guidance).toContain('google.com/drive/download');
   });
 });
