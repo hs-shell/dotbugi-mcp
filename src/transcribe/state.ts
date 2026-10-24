@@ -8,6 +8,10 @@ export const TRANSCRIBE_STATE_FILE = join(CACHE_DIR, 'transcribe-state.json');
 export const TRANSCRIBE_LOCK_FILE = join(CACHE_DIR, 'transcribe.lock');
 // 임시 영상 파일 자리. 고정 경로라 강제 종료로 남은 것도 다음 실행이 지운다 (tmpfs /tmp 면 RAM 을 쓴다)
 export const TRANSCRIBE_TMP_DIR = join(CACHE_DIR, 'transcribe-tmp');
+// 작업 프로세스는 단계 진행이 없어도(ASR 이 한참 계산만 할 때) 이 간격으로 상태를 다시 쓴다 — 살아 있다는 표시
+export const TRANSCRIBE_HEARTBEAT_MS = 60_000;
+// 이보다 오래 갱신이 없으면 강제 종료된 작업의 흔적으로 본다 (박동 3번을 놓친 셈)
+export const TRANSCRIBE_STATE_STALE_MS = 3 * TRANSCRIBE_HEARTBEAT_MS;
 export const TRANSCRIBE_BUSY = '이미 받아쓰기가 실행 중입니다. transcribe_status 로 확인하고 끝난 뒤 다시 실행하세요.';
 
 // 표시용 데이터만 — 영상 주소(토큰)·세션은 넣지 않는다. 혹시 메시지에 주소가 섞여도 쓸 때 지운다
@@ -31,3 +35,9 @@ export type TranscribeState = z.infer<typeof transcribeStateSchema>;
 export const readTranscribeState = (file = TRANSCRIBE_STATE_FILE) => readStateFile(file, transcribeStateSchema);
 export const writeTranscribeState = (state: TranscribeState, file = TRANSCRIBE_STATE_FILE) =>
   writeStateFile(file, transcribeStateSchema, state);
+
+// 실행 중인데 갱신이 끊김. 미래 시각(시계가 뒤로 감)도 믿을 수 없어 끊긴 것으로 본다 (player isStale 과 같은 규칙)
+export function isTranscribeStale(state: TranscribeState, now: number): boolean {
+  const age = now - Date.parse(state.updatedAt);
+  return state.status === 'running' && (age > TRANSCRIBE_STATE_STALE_MS || age < 0);
+}
