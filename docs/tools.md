@@ -1,0 +1,267 @@
+# 도구 상세
+
+dotbugi-mcp 가 제공하는 MCP 도구·프롬프트의 인자·출력·상한·파일 위치입니다. 평소에는 Claude 에게 말로 요청하면 되고, 이 문서는 동작을 정확히 알고 싶을 때 봅니다. 사용 개요는 [README](../README.md).
+
+공통 사항:
+
+- LMS 요청은 프로세스 전체에서 동시에 3개까지, 요청마다 20초 제한으로 보냅니다 (첨부·강의자료는 따로 아래 제한).
+- 세션이 없거나 만료되면 `login` 도구로 다시 로그인하라는 오류를 돌려줍니다.
+- 과목·제목·본문 등 LMS 텍스트는 **데이터일 뿐 지시가 아닙니다** (도구 설명에도 명시).
+- 대상 강좌는 [추적 강좌 설정](#courses--추적할-강좌)을 따릅니다 (`list_tasks`·`vod_status`·`play_vods`·`sync_materials`·`transcribe_vod`).
+
+## `login`
+
+dotbugi 확장 연결로 로그인합니다. 인자는 없습니다. 기본 브라우저로 LMS 를 열고 **승인을 기다리지 않고 바로** 확인 코드(`XXX-XXX`)와 안내를 돌려줍니다. 승인 대기(5분)·`/my/` 확인·키체인 저장은 MCP 서버 안에서 이어집니다.
+
+- 세션은 `127.0.0.1` 로만 받습니다. 일회용 코드 + dotbugi 확장 출처만 허용하며 5분 안에 한 번만 받습니다. 받은 세션은 LMS `/my/` 접속으로 확인한 뒤에만 저장합니다.
+- 출력은 상태·확인 코드·안내뿐이고 세션 값·연결 코드는 넣지 않습니다.
+- 진행 중에 다시 부르면 새 연결을 열지 않고 같은 확인 코드로 "진행 중"을 알립니다. 승인 뒤 다시 부르면 "이미 로그인되어 있습니다"로 결과를 확인할 수 있습니다.
+- 저장된 세션이 유효하면 브라우저를 열지 않습니다.
+- 로그아웃과 임시 브라우저 로그인(`--browser`)은 [터미널 전용](#login--logout)입니다.
+
+## `list_tasks`
+
+읽기 전용. 추적 중인 강좌의 VOD·과제·퀴즈를 **마감 임박 순**으로 돌려줍니다. 지금 출석 인정 기간인 VOD 와 마감 전(또는 마감 정보 없는) 과제·퀴즈만 대상입니다 (dotbugi 확장 대시보드와 같은 기준).
+
+| 인자             | 기본값  | 설명                                         |
+| ---------------- | ------- | -------------------------------------------- |
+| `type`           | 전부    | `vod` / `assign` / `quiz` 중 하나만          |
+| `incompleteOnly` | `true`  | 미출석·미제출·미응시만                       |
+| `withinDays`     | -       | 마감이 N일 이내인 것만 (마감 정보 없음 제외) |
+| `course`         | -       | 과목명 일부 (대소문자 무시, 100자까지)       |
+| `refresh`        | `false` | 1시간 캐시를 무시하고 다시 가져오기          |
+
+- 출력(`structuredContent`): `fetchedAt`, `tasks`(종류·과목·제목·완료 여부·상태·시작·마감(한국 시간 ISO, 해석 못 하면 LMS 원문)·남은 시간·URL), `warnings`. 텍스트로는 한 줄씩 요약합니다.
+- 결과는 메모리에 1시간 캐시합니다. 추적 강좌 설정이 바뀌면 새로 가져옵니다.
+- 일부 과목·항목을 가져오지 못하면 `warnings`(텍스트 맨 앞에도)에 실패 건수를 알리고, 그 결과는 캐시하지 않습니다.
+
+## `vod_status`
+
+읽기 전용. `list_tasks(type: vod)` 와 같은 기준의 **남은(미출석) VOD** 를 마감 임박 순으로 돌려주고, 연속 재생 중이면 지금 강의의 진도·남은 시간(`player`)을 붙입니다. 인자는 `refresh` 하나입니다.
+
+- `player`: [상태 파일](#재생-상태-파일) 내용 + `stale`(재생 중인데 갱신이 3분 넘게 끊김). 파일이 없거나 형식이 틀리면 `null`.
+- 텍스트는 상태 표시줄과 같은 한 줄(재생 중일 때) + `list_tasks` 와 같은 목록입니다.
+- 세션이 없거나 만료됐거나 LMS 를 못 읽어도 오류로 끝내지 않고 `player` 와 함께 `tasks: []`·`fetchedAt: null`·`warnings`(로그인 안내)를 돌려줍니다.
+
+## `play_vods` / `stop_vods`
+
+VOD 연속 재생을 시작·중지합니다. 인자는 없습니다.
+
+- `play_vods`: 세션을 먼저 확인하고, 재생을 백그라운드 작업 프로세스(셸 없이 인자 배열로 실행)로 넘긴 뒤 **바로** 돌아옵니다. 이미 재생 중이면 새로 띄우지 않고 "이미 재생 중"이라고 답합니다. 진행은 `vod_status` 로 봅니다.
+- `stop_vods`: 잠금 파일의 pid 가 살아 있고 상태 파일도 **같은 pid 로 재생 중**일 때만 SIGTERM 을 보내고(자기 자신·잘못된 pid·갱신이 끊긴 상태의 pid 엔 보내지 않음), 최대 5초 동안 멈추기를 기다려 결과를 알립니다. 상태는 `stopped` 로 남습니다. 열린 강의 창은 직접 닫아 주세요.
+- Windows 에서는 SIGTERM 이 곧바로 강제 종료라 상태가 `playing` 으로 남을 수 있습니다 (3분 뒤 `stale` 로 보임).
+
+재생 동작:
+
+- 지금 **출석 인정 기간 안의 미출석 VOD** 를 마감 임박 순(같으면 과목·주차 순)으로, LMS **공식 플레이어 페이지**(`/mod/vod/view.php?id=<번호>`)를 평소 브라우저 프로필의 앱 모드 창(`--app`)으로 하나씩 엽니다. 출석·진도는 공식 플레이어가 평소처럼 기록합니다.
+- 90초마다 서버 진도 페이지(`report/ubcompletion/user_progress.php`)를 한 장씩 확인하고, **서버가 출석(진도 100%)을 확인한 뒤에만** 다음 강의 창을 엽니다. 서버 반영 주기만큼 늦게 넘어갈 수 있습니다.
+- 다 본 창은 직접 닫아 주세요 (평소 프로필 창은 외부에서 제어하지 않습니다). 이미 출석한 강의는 열지 않고, 보는 중에 출석 인정 기간이 끝나면 건너뜁니다.
+- 세션이 만료되면 멈추고 상태 파일 `message` 로 로그인을 안내합니다. 진도를 10번(약 15분) 연속 확인하지 못하면 로그와 `message` 로 알립니다.
+- 한 번에 하나만 실행됩니다 (`~/.cache/dotbugi-mcp/player.lock`, `play_vods` 와 터미널 `play` 공용, 강제 종료로 남은 잠금은 다음 실행이 넘겨받음).
+- 헤드리스 재생·자동 음소거·배속 강제·플레이어 검사 우회·진도 요청 직접 생성은 **하지 않습니다**.
+- 브라우저는 Chrome → Edge → Brave → Whale 순으로 찾습니다. WSL 에서는 Windows 쪽 브라우저를 실행합니다.
+
+### 재생 상태 파일
+
+`~/.cache/dotbugi-mcp/player-state.json` (디렉터리 0700·파일 0600, 원자적 교체). 세션·URL 은 넣지 않고 표시용 데이터만 담습니다.
+
+```json
+{
+  "version": 1,
+  "status": "playing",
+  "updatedAt": "2026-10-24T03:00:00.000Z",
+  "total": 3,
+  "index": 1,
+  "current": {
+    "course": "자료구조",
+    "title": "트리 순회",
+    "week": 8,
+    "deadline": "2026-10-27T23:59:59+09:00",
+    "progress": 25,
+    "remainingSeconds": 900
+  },
+  "next": { "course": "운영체제", "title": "스케줄링", "week": 8, "deadline": "2026-10-28T23:59:59+09:00" },
+  "message": null,
+  "pid": 12345
+}
+```
+
+- `status`: `playing` / `done`(모두 마침) / `stopped`(Ctrl+C·`stop_vods`) / `error`(`message` 에 이유)
+- `pid`: 상태를 쓴 재생 프로세스. 강의 목록을 모으는 동안은 `total: 0`·`current: null` 인 `playing` 입니다.
+- `index`: 지금 강의 순번(1부터, 없으면 0). `progress`·`remainingSeconds`(출석 인정까지 남은 학습 시간)는 서버 진도를 못 읽으면 `null`.
+- 재생 중에는 약 90초마다 `updatedAt` 이 갱신됩니다. 강제 종료되면 `playing` 으로 남으므로, `updatedAt` 이 3분보다 오래되면 멈춘 것으로 봅니다.
+- 글(과목·제목·메시지)은 쓸 때·읽을 때 200자로 자릅니다. 링크(symlink)·16KB 초과·형식이 틀린 파일은 읽지 않습니다.
+
+## `get_assignment`
+
+LMS 는 읽기만 하고, 첨부파일은 로컬에 저장합니다. 과제 하나의 본문·마감·제출 상황을 돌려주고 첨부파일을 서버가 직접 받아 **로컬 경로만** 알려줍니다. **제출은 하지 않습니다** — 사용자가 `submitUrl`(`https://learn.hansung.ac.kr/mod/assign/view.php?id=<cmid>`)에서 직접 제출합니다.
+
+| 인자   | 설명                                                                                   |
+| ------ | -------------------------------------------------------------------------------------- |
+| `cmid` | 과제 id (양의 정수). 과제 주소 `mod/assign/view.php?id=<cmid>` (`list_tasks` 의 `url`) |
+
+- 출력(`structuredContent`): 제목·마감(한국 시간 ISO, 해석 못 하면 LMS 원문)·제출 상황 표(LMS 표기 그대로)·본문(마크다운)·첨부파일 경로·저장 폴더·제출 링크·경고.
+- 본문은 **신뢰할 수 없는 데이터**로 표시합니다. 스크립트와 흔한 방식으로 숨긴 글(숨김 클래스·`display:none`·글자 크기 0 등, 최선 노력)은 버리고, 제어·서식 문자(제로폭·방향 전환 등)는 공백으로 바꿉니다. 링크 글자가 주소처럼 보이는데 실제 주소와 다르면 실제 주소를 함께 보여 줍니다. `<pre>` 는 코드 블록으로 줄바꿈을 살립니다.
+- 저장 위치: `~/Downloads/dotbugi-mcp/assign-<cmid>/`
+  - 본문 영역의 `https://learn.hansung.ac.kr/pluginfile.php/…` 링크만 받습니다. 다른 주소에는 세션을 보내지 않으며 리다이렉트는 따라가지 않습니다.
+  - 파일명에서 경로 문자(`/`, `\`, `..` 등)·제어 문자·Windows 금지 문자와 예약 이름을 걸러내고, 실제 경로가 저장 폴더 안인지 다시 확인합니다.
+  - 파일당 20MB, 과제당 20개까지 (받는 도중에도 크기를 세어 넘으면 멈추고 지웁니다). 첨부 요청은 120초까지 기다립니다. 임시 파일로 받은 뒤 옮기므로 덜 받은 파일이 남지 않습니다.
+  - 쿼리(`?forcedownload=1` 등)만 다른 같은 파일 링크는 한 번만 받습니다.
+  - 같은 이름의 파일이 있으면 **덮어쓰지 않고** `이름 (2).pdf` 처럼 번호를 붙여 저장하고 경고합니다 (다시 호출하면 번호 붙은 사본이 늘어납니다).
+- 일부 첨부파일을 못 받아도 나머지 결과는 돌려주고 `warnings` 로 알립니다.
+
+## `sync_materials`
+
+LMS 는 읽기만 하고, 강의자료는 로컬에 저장합니다. 추적 중인 강좌 화면의 **파일(`mod/resource`)·폴더(`mod/folder`) 자료**를 과목·주차별 폴더에 받고 로컬 경로를 돌려줍니다.
+
+| 인자     | 설명                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| `course` | 과목명 일부 (대소문자 무시, 100자까지). 생략하면 추적 중인 강좌 전부 |
+
+- 저장 위치: `~/Downloads/dotbugi-mcp/<과목>/<N주차>/` — 섹션 이름에서 `N주차`(또는 `Week N`)를 읽고, 주차가 없는 섹션은 섹션명을 씁니다. 과목·주차 이름도 파일명과 같은 규칙으로 정리하고 저장 폴더 안인지 다시 확인합니다. 저장 폴더 아래에 링크(symlink) 폴더가 끼어 있으면 그 과목·주차는 건너뜁니다. 정리한 이름이 같은 다른 과목(분반 등)은 `<과목> (<과목 번호>)` 폴더를 씁니다.
+- 출력(`structuredContent`): `root`, `files`(과목·주차·로컬 경로·`added`/`updated`/`unchanged`), `removed`(LMS 에서 사라진 파일, `locallyModified` 포함), `warnings`. 텍스트에는 개수와 추가·갱신·삭제 대상 경로만 싣습니다.
+- **증분**: 과목 폴더의 `.dotbugi-manifest.json`(0600, 원자적 교체)에 파일별 cmid·리비전이 든 pluginfile 주소·sha256·상대 경로·받은 시각을 기록합니다.
+  - 새 파일과 **리비전(주소)이 바뀐 파일만** 다시 받습니다. 받은 내용의 해시가 기존과 같으면 파일을 쓰지 않습니다.
+  - 로컬 파일 해시가 기록과 다르면(사용자가 수정) 덮어쓰지 않고 `이름 (2).pdf` 로 새 버전을 저장하고 경고합니다. 로컬에서 지운 파일은 다시 받습니다.
+  - 기록 파일은 읽을 때마다 검증하고(링크·4MB 초과·형식 오류면 그 과목을 건너뜀), 기록된 경로도 쓰거나 지우기 전에 과목 폴더 안인지 다시 확인합니다.
+- **LMS 에서 사라진 파일은 지우지 않고** `removed` 로 알리기만 합니다. 삭제는 [터미널 `sync`](#sync--사라진-강의자료-삭제) 에서 하나씩 확인합니다. 목록을 못 읽은 자료는 사라진 것으로 보지 않습니다.
+- 파일 자료는 `mod/resource/view.php?id=<cmid>&redirect=1` 의 리다이렉트 주소가 **LMS 출처의 `/pluginfile.php/`** 일 때만 받습니다 (리다이렉트를 자동으로 따라가지 않고 직접 확인). 폴더 자료는 폴더 화면의 pluginfile 링크만 받고, 하위 폴더는 펼쳐 같은 주차 폴더에 받습니다.
+- `이름.part` 로 받은 뒤 다 받으면 제자리로 옮기고, 받을 때마다 기록 파일을 갱신합니다. 받은 그대로인 파일을 새 버전으로 바꾸기 직전에 해시를 다시 재므로, 받는 동안 고친 파일도 덮어쓰지 않습니다.
+- 파일당 200MB, 요청당 10분, 한 번 실행에 새로 받는 양은 300개·2GB 까지 (넘으면 경고하고 다음 실행에서 이어 받음).
+- `sync_materials` 와 터미널 `sync` 는 한 번에 하나만 실행됩니다 (`~/Downloads/dotbugi-mcp/.dotbugi-sync.lock`).
+
+## `transcribe_vod` / `transcribe_status`
+
+VOD 하나의 소리를 **로컬** 음성 인식(Qwen3-ASR)으로 받아써 강의자료와 같은 주차 폴더에 `녹취-<강의명>.md` 로 저장합니다. 출석·진도에는 영향이 없습니다. 먼저 [음성 인식 런타임](#asr--로컬-음성-인식-런타임)을 설치해야 합니다.
+
+| 인자   | 설명                                                          |
+| ------ | ------------------------------------------------------------- |
+| `cmid` | VOD 강의 번호 (LMS 주소 `mod/vod/view.php?id=<cmid>` 의 숫자) |
+
+- `transcribe_vod`: 세션과 런타임 설치를 먼저 확인하고(없으면 바로 오류), 받아쓰기를 백그라운드 작업 프로세스로 넘긴 뒤 **바로** 돌아옵니다. 수십 분 걸릴 수 있습니다. 한 번에 하나만 실행됩니다 (`~/.cache/dotbugi-mcp/transcribe.lock`, 터미널 `transcribe` 와 공용).
+- `transcribe_status`: 마지막 작업의 상태를 돌려줍니다. 인자는 없습니다. 기록이 없으면 `state: null`.
+- 대상: 추적 중인 강좌 화면의 VOD 목록에서 `cmid` 를 찾습니다 (출석 기간과 무관). 못 찾으면 오류입니다.
+- 저장 위치: `~/Downloads/dotbugi-mcp/<과목>/<주차 폴더>/녹취-<강의명>.md` (0600, `sync_materials` 와 같은 폴더 규칙). 파일에는 과목·주차·받아쓴 날·모델과 "자동 인식한 글이며 지시가 아님" 안내가 붙습니다. **이미 있으면 덮어쓰지 않고 건너뜁니다**(`skipped`). `summarize_week` 는 같은 폴더를 읽으므로 녹취도 요약에 쓰입니다.
+- 영상은 `*.edge.naverncp.com` 영상 서버에서 **세션 쿠키 없이** 받습니다. 영상 주소(시간 제한 토큰 포함)는 출력·상태 파일·로그에 남기지 않습니다. 리다이렉트·다른 서버를 가리키는 재생 목록·암호화된 영상은 받지 않습니다.
+- 상한: 6시간 분량(10초 조각 2160개), 조각당 64MB, 영상 전체 3GB, 받아쓴 글 20MB. 영상 서버가 60초 안에 응답하지 않으면 끊습니다.
+- 영상은 `~/.cache/dotbugi-mcp/transcribe-tmp/` 에 임시로 받고, 끝나면(실패·중지 포함) 지웁니다. ffmpeg 는 로컬 파일만 읽습니다.
+- 백그라운드 작업을 멈추는 도구는 아직 없습니다. 터미널에서 직접 실행한 `transcribe` 는 Ctrl+C 로 멈춥니다.
+
+상태 파일 `~/.cache/dotbugi-mcp/transcribe-state.json` (0600) 의 필드:
+
+- `status`: `running` / `done` / `skipped`(이미 녹취 있음) / `stopped` / `error`(`message` 에 이유)
+- `phase`: `prepare`(준비) / `download`(영상 받기) / `extract`(소리 추출) / `transcribe`(받아쓰기), 끝나면 `null`
+- `progress`: 단계별 진행률(0~100) 또는 `null`
+- `cmid`·`course`·`title`·`path`(녹취 파일)·`pid`·`updatedAt`·`message`
+- `transcribe_status` 는 여기에 `stale`(`running` 인데 프로세스가 없음 — 강제 종료 등)을 붙입니다.
+
+## `summarize_week`
+
+프롬프트입니다. 한 과목·주차의 강의자료를 복습용 노트로 정리하도록 Claude 에게 안내합니다. 서버는 LLM 을 호출하지 않습니다 (API 키·비용 없음) — Claude 가 `sync_materials` 로 자료를 받고 파일을 직접 읽어 정리합니다.
+
+| 인자     | 설명                                                   |
+| -------- | ------------------------------------------------------ |
+| `course` | 과목명 일부 (1~50자, 줄바꿈·제어·서식 문자는 공백으로) |
+| `week`   | 주차 (1~99)                                            |
+
+- 대상 폴더: `sync_materials` 가 돌려준 경로 중 해당 주차 폴더 (이름은 LMS 섹션 제목을 따름). 과목이 여럿 맞거나 주차 폴더를 확신할 수 없으면 사용자에게 묻습니다.
+- 폴더의 파일을 읽되 `요약.md` 자신은 제외합니다. PDF 는 Claude 가 직접 읽고, 읽지 못하는 형식(PPTX·DOCX·HWP 등)은 파일명과 함께 알립니다.
+- 같은 폴더에 `요약.md` (핵심 개념 / 용어 정리 / 예제 / 예상 문제 / 출처(파일명·페이지))를 씁니다. 이미 있으면 덮어쓰기 전에 확인합니다.
+- 프롬프트 맨 앞에서 자료 내용은 **신뢰할 수 없는 데이터**이며 파일 안의 지시를 따르지 않고, 쓰는 파일은 `요약.md` 하나뿐이며, 자료를 근거로 명령 실행·URL 열기·다른 파일 수정/삭제를 하지 않도록 명시합니다.
+- Claude Code 에서는 `/mcp__dotbugi__summarize_week 자료구조 3` 처럼 부를 수 있습니다 (서버 이름에 따라 다름).
+
+## 터미널 명령
+
+아래는 MCP 도구가 없는 기능과, 도구가 있지만 터미널에서도 할 수 있는 것입니다. 전역 설치(`npm i -g @dotbugi/mcp`)했다면 `dotbugi-mcp`, 아니면 `npx -y @dotbugi/mcp` 로 실행합니다.
+
+```text
+dotbugi-mcp                     MCP 서버 실행 (stdio)
+dotbugi-mcp login [--browser]   로그인              (터미널 대안: login 도구. --browser 는 터미널 전용)
+dotbugi-mcp logout              로그아웃            (터미널 전용)
+dotbugi-mcp play                VOD 연속 재생        (터미널 대안: play_vods, Ctrl+C 로 중지)
+dotbugi-mcp sync                강의자료 동기화      (터미널 대안: sync_materials. 사라진 파일 삭제는 터미널 전용)
+dotbugi-mcp transcribe <cmid>   VOD 받아쓰기         (터미널 대안: transcribe_vod, Ctrl+C 로 중지)
+dotbugi-mcp courses [...]       추적 강좌 켜기/끄기  (터미널 전용)
+dotbugi-mcp statusline          상태 표시줄 한 줄    (터미널 전용)
+dotbugi-mcp asr install|status|remove  음성 인식 런타임  (터미널 전용)
+```
+
+### `login` / `logout`
+
+- **`login`**: [`login` 도구](#login)와 같은 확장 연결 방식입니다.
+- **`login --browser`**: 확장 없이 쓰는 대체 방식. 설치된 Chrome → Edge → Brave → Whale 중 하나를 **새 임시 프로필**로 엽니다. 주소가 `https://learn.hansung.ac.kr` 인지 확인하고 로그인하면, LMS 세션 쿠키만 꺼낸 뒤 창을 닫고 임시 프로필을 삭제합니다. 평소 브라우저 정보에는 접근하지 않습니다. 브라우저 제어는 TCP 디버깅 포트 대신 파이프(`--remote-debugging-pipe`)로 연결하므로 다른 프로세스가 창에 붙을 수 없고, Ctrl+C 로 중단해도 창을 닫고 임시 프로필을 지웁니다. **WSL 에서는 지원하지 않습니다** (디버깅 파이프가 Windows 브라우저로 전달되지 않음).
+- **`logout`**: 키체인에서 세션을 지웁니다. `--browser` 로 얻은 세션은 LMS 서버에서도 로그아웃합니다. 확장 방식 세션은 평소 브라우저와 공유되므로 서버 로그아웃은 하지 않습니다 (브라우저까지 로그아웃되기 때문).
+
+세션 보관:
+
+- 웹서비스 토큰(폐기 불가, 12주 유효) 대신 **세션 쿠키(`MoodleSession`)** 를 씁니다. 활동이 없으면 만료되고 로그아웃으로 서버에서 끊을 수 있습니다.
+- **OS 키체인에만** 저장합니다 (Windows 자격 증명 관리자 / macOS 키체인 / Linux Secret Service, 없으면 커널 키링 — 재부팅 시 사라짐). 키체인을 쓸 수 없으면 로그인을 거부하며 파일로 대신 저장하지 않습니다. WSL 에서는 Windows 자격 증명 관리자(`session.dotbugi-mcp` 일반 자격 증명)를 PowerShell 로 씁니다.
+- 키체인은 **같은 사용자 권한으로 실행되는 프로세스라면 읽을 수 있습니다** (Bash 실행 권한이 있는 AI 에이전트 포함). 필요 없을 때는 `logout` 하세요.
+- 확장 연결용 일회용 코드는 브라우저를 여는 명령(`xdg-open`·`rundll32` 등)의 실행 인자에 잠시 나타나 같은 기기의 다른 프로세스가 볼 수 있습니다. 이 코드로는 세션을 **넣을** 수만 있고 읽을 수는 없으며, 한 번 받으면(또는 5분 뒤) 무효가 됩니다.
+
+### `courses` — 추적할 강좌
+
+`list_tasks`·`vod_status`·`play_vods`·`sync_materials`·`transcribe_vod` 가 다룰 강좌를 고릅니다. dotbugi 확장의 강좌 토글과는 **별개**입니다 (공유하지 않음).
+
+```bash
+dotbugi-mcp courses                 # ↑↓(k/j) 이동 · Space 켜기/끄기 · Enter 저장 · q/Esc/Ctrl+C 취소
+dotbugi-mcp courses --list          # 켜짐/꺼짐 · courseId · 과목명 (탭 구분)
+dotbugi-mcp courses --on 비교과      # 과목명 일부(대소문자 무시) 또는 courseId
+dotbugi-mcp courses --off 12345
+```
+
+- 강좌 목록은 LMS 메인의 내 강좌에서 가져오므로 로그인이 필요합니다. 터미널(TTY)이 아니면 옵션 없이 실행해도 `--list` 처럼 출력합니다.
+- `--on`/`--off` 에 여러 강좌가 맞으면 저장하지 않고 후보를 보여 줍니다.
+- 기본값: 정규 강좌 켜짐, 비교과(커뮤니티) 꺼짐. 직접 정하지 않은 강좌(새 학기 강좌 포함)는 기본값을 따릅니다. 꺼진 강좌는 LMS 요청도 하지 않습니다.
+- 저장: `~/.config/dotbugi-mcp/courses.json` (디렉터리 0700·파일 0600, 원자적 교체). `{ "version": 1, "courses": { "<courseId>": true | false } }` 만 담고, 읽을 때 검증해 형식이 틀리면 기본값으로 봅니다.
+
+### `sync` — 사라진 강의자료 삭제
+
+`sync_materials` 와 같은 동기화를 한 뒤, LMS 에서 사라진 파일마다 `삭제할까요? [y/N]` 를 묻습니다 (기본 유지, 받은 뒤 수정한 파일은 추가 경고). 남기기로 한 파일은 기록해 다시 묻지 않습니다. 보고한 그 파일(같은 경로·같은 내용)일 때만 지우고, 묻는 사이 파일이 바뀌면 지우지 않습니다. 터미널(TTY)이 아니면 묻지 않고 그대로 둡니다.
+
+### `statusline` — Claude Code 상태 표시줄
+
+연속 재생 중 Claude Code 아래쪽에 진행 상황을 한 줄로 띄웁니다.
+
+```text
+🎬 VOD 3/7 · 초급일본어 5과  ▓▓▓▓▓▓░░░░ 62%  12분 남음 · 다음: 6과 (D-1)
+```
+
+`~/.claude/settings.json` 에 추가합니다 (`refreshInterval` 은 Claude Code 가 한가할 때도 N초마다 다시 그리게 합니다). 매번 실행되므로 전역 설치(`npm i -g @dotbugi/mcp`)를 권장합니다.
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "dotbugi-mcp statusline",
+    "refreshInterval": 30
+  }
+}
+```
+
+- [재생 상태 파일](#재생-상태-파일)만 읽습니다. 네트워크·키체인·Claude Code 가 넘기는 세션 JSON(stdin)은 쓰지 않습니다.
+- 재생 중이 아니면(파일 없음·`done`·`stopped`) 아무것도 출력하지 않습니다. `error` 는 짧은 오류 한 줄로 보여줍니다.
+- 갱신이 3분 넘게 끊기면 `⚠ N분째 갱신 없음`(갱신 시각이 미래면 `⚠ 갱신 시각 이상`)을 붙이고, 1시간 넘게 지난 상태(강제 종료·지난 오류)는 숨깁니다. 지난 마감은 `D-day` 대신 `마감` 으로 보여줍니다.
+- 과목·제목 등 LMS 텍스트는 제어·서식 문자(터미널 이스케이프 포함)를 지우고 30자로 자릅니다.
+- 이미 다른 상태 표시줄을 쓰고 있다면 그 스크립트에서 이 명령의 출력을 이어 붙이면 됩니다.
+
+### `asr` — 로컬 음성 인식 런타임
+
+`transcribe_vod` 가 쓰는 Qwen3-ASR 런타임을 설치·확인·제거합니다. Docker·sudo 없이 `~/.cache/dotbugi-mcp/asr/` 한 폴더(0700)에만 설치하고, 시스템 패키지·PATH 는 건드리지 않습니다.
+
+```bash
+dotbugi-mcp asr install                    # CPU: ffmpeg + qwen_asr + Qwen3-ASR-0.6B (약 2GB)
+dotbugi-mcp asr install --gpu --model 1.7b # NVIDIA GPU: ffmpeg + Python venv(uv) + 선택 모델 (venv 약 6GB)
+dotbugi-mcp asr status                     # 설치 구성·용량·sha256 검증 결과
+dotbugi-mcp asr remove                     # 폴더 삭제 (터미널이 아니면 --yes 필요)
+```
+
+- 실행 방식은 자동으로 고르지 않습니다. CPU 는 0.6B 고정, `--model 0.6b|1.7b` 는 `--gpu` 와 함께일 때만 고를 수 있고 `config.json` 에 저장됩니다. 다시 `install` 하면 바뀝니다.
+- 지원: Linux x64·WSL — x86-64-v3 CPU(AVX2·FMA 등, Intel Haswell·AMD Excavator 이후) + **glibc 2.35 이상**(Ubuntu 22.04·Debian 12 이후). macOS Apple Silicon 은 바이너리 검증 전이라 아직 CPU 설치가 거부됩니다. `--gpu` 는 Linux x64 + NVIDIA GPU + [uv](https://docs.astral.sh/uv/) 필요. Windows 는 WSL 에서 실행하세요.
+- 받는 파일은 모두 코드에 고정된 sha256·크기와 일치해야 쓰입니다 (`src/asr/pins.ts`). 60초 동안 데이터가 오지 않으면 끊습니다. `.part` 로 받아 검증한 뒤에만 이름을 바꾸므로 중단돼도 다시 실행하면 이어 받습니다.
+  - `qwen_asr`: 공개 저장소 [hs-shell/dotbugi-asr-binaries](https://github.com/hs-shell/dotbugi-asr-binaries) Release(`asr-v*`)의 미리 빌드한 바이너리 — antirez/qwen-asr 커밋 고정, OpenBLAS 정적 링크
+  - ffmpeg: PyPI `imageio-ffmpeg` 0.6.0 휠 안의 정적 바이너리
+  - 모델: Hugging Face `Qwen/Qwen3-ASR-0.6B`·`1.7B` 고정 리비전
+  - GPU venv: `src/asr/gpu-requirements.txt` (해시 고정, 휠만) — `uv pip install --require-hashes --only-binary :all:`
+- uv 캐시와 uv 가 받는 Python 도 같은 폴더(`uv-cache/`, `python/`)에 두므로 `asr remove` 로 모두 지워집니다.
+- 내려받기는 https 로 github.com·huggingface.co·files.pythonhosted.org 와 그 CDN 만 허용합니다.
