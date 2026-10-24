@@ -11,6 +11,10 @@ import type { GetAssignmentOutput } from './schema.js';
 // 이 줄로 시작하는 파일만 우리가 쓴 지시사항 md 로 보고 갱신한다 (같은 이름의 첨부 등은 덮지 않음)
 const MARK = '<!-- dotbugi-mcp: 과제 지시사항 -->';
 
+// md 에 넣는 제출 상황 행. '마감까지 남은 기한'·'최종 수정 일시'처럼 호출마다 바뀌는 행을 넣으면
+// '내용이 바뀔 때만 갱신'이 매번 갱신이 되고 지시사항 diff 추적이 깨진다 — 잘 바뀌지 않는 행만 (structuredContent 엔 전부)
+const STABLE_STATUS = new Set(['제출 여부', '채점 상황', 'Submission status', 'Grading status']);
+
 export const instructionsName = (title: string) => safeFileName(`과제-${title}.md`);
 
 // 첨부 하나의 글자. 글·문서는 꺼내고(상한까지), PDF·이미지 등은 경로만 안내한다
@@ -40,7 +44,7 @@ export async function buildInstructions(r: Omit<GetAssignmentOutput, 'instructio
     '',
     `- 마감: ${r.deadline ?? '-'}`,
     `- 제출 페이지 (제출은 직접): ${r.submitUrl}`,
-    ...r.status.map((s) => `- ${s.label}: ${s.value}`),
+    ...r.status.filter((s) => STABLE_STATUS.has(s.label)).map((s) => `- ${s.label}: ${s.value}`),
     '',
     '## 본문 지시사항 (LMS 과제 화면)',
     '',

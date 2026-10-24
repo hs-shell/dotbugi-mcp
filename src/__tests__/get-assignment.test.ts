@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile, mkdir, symlink } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile, mkdir, symlink, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
@@ -390,6 +390,28 @@ describe('get_assignment — 과제 지시사항 md', () => {
     expect(out.instructionsPath).toBeNull();
     expect(out.warnings).toEqual([expect.stringContaining('같은 이름의 다른 파일이 있어')]);
     expect(await readFile(join(dir(), MD), 'utf8')).toBe('내 메모');
+  });
+
+  it('남은 기한처럼 호출마다 바뀌는 제출 상황 행은 md 에 넣지 않아, 시간만 달라지면 파일을 갱신하지 않는다', async () => {
+    const page = (left: string) =>
+      PAGE().replace(
+        '</div></body>',
+        `<div class="submissionstatustable"><table><tbody>
+        <tr><td class="cell c0">제출 여부</td><td class="cell c1">제출 안 함</td></tr>
+        <tr><td class="cell c0">마감까지 남은 기한</td><td class="cell c1">${left}</td></tr>
+        </tbody></table></div></div></body>`
+      );
+    serve(page('3일 2시간 남음'));
+    const first = (await call({ cmid: 5 })).structuredContent as { instructionsPath: string };
+    const before = await stat(first.instructionsPath);
+    serve(page('3일 1시간 남음'));
+    const again = (await call({ cmid: 5 })).structuredContent as { status: { value: string }[] };
+    expect(again.status.map((s) => s.value)).toContain('3일 1시간 남음');
+    const md = await readFile(first.instructionsPath, 'utf8');
+    expect(md).toContain('- 제출 여부: 제출 안 함');
+    expect(md).not.toContain('남음');
+    expect((await stat(first.instructionsPath)).mtimeMs).toBe(before.mtimeMs);
+    expect((await stat(first.instructionsPath)).ino).toBe(before.ino);
   });
 
   it('실제 과제 화면: 화면의 지시사항만 담고, 숨은 hwp 편집기 JSON·제출자 본인 첨부는 빼며 받지 않는다', async () => {
