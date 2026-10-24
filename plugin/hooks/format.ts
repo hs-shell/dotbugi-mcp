@@ -6,7 +6,7 @@ const BAR_WIDTH = 8;
 const TEXT_MAX = 30;
 // src/transcribe/state.ts 의 TRANSCRIBE_STATE_STALE_MS. pid 확인을 못 하므로 갱신이 끊긴 것만으로 강제 종료를 가린다
 export const STALE_MS = 3 * 60_000;
-// 입력창 위는 상태 표시줄보다 눈에 띄어 끝난 줄을 짧게만 보여 준다
+// src/constants.ts 의 STATUSLINE_HIDE_AFTER_MS — 끝난 줄을 상태 표시줄과 같이 1분만 보여 준다
 export const HIDE_AFTER_MS = 60_000;
 const PHASE_LABELS: Record<string, string> = {
   prepare: '준비',

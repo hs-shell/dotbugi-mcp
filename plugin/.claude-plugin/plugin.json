@@ -8,6 +8,6 @@
   "license": "Apache-2.0",
   "types": "./types/index.d.ts",
   "mcpServers": {
-    "dotbugi": { "command": "npx", "args": ["-y", "@dotbugi/mcp"] }
+    "dotbugi": { "command": "npx", "args": ["-y", "@dotbugi/mcp@latest"] }
   }
 }

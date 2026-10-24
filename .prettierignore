@@ -14,3 +14,5 @@ scripts
 # release-please 가 릴리스마다 다시 쓰는 파일
 CHANGELOG.md
 .release-please-manifest.json
+# extra-files 로 version 을 고치며 JSON.stringify 로 다시 써 배열이 여러 줄로 펴진다
+plugin/.claude-plugin/plugin.json
