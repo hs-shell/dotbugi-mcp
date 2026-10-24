@@ -87,7 +87,7 @@ export function registerSetCourseTracking(server: McpServer): void {
     {
       title: '강좌 추적 켜기/끄기',
       description:
-        '강좌 하나의 추적을 켜거나 끈다 (dotbugi-mcp courses --on/--off 와 같은 규칙). ' +
+        '강좌 하나의 추적을 켜거나 끈다. ' +
         'course 는 courseId 정확히 또는 과목명 일부. 여러 강좌가 맞으면 저장하지 않고 후보를 돌려주니 courseId 로 다시 호출한다. ' +
         UNTRUSTED,
       inputSchema: setCourseTrackingInput,

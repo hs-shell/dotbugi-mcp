@@ -86,7 +86,7 @@ export function registerLogin(server: McpServer): void {
     {
       title: 'LMS 로그인',
       description:
-        'LMS 세션을 받아 OS 키체인에 저장한다. method=extension(기본)은 기본 브라우저로 LMS 를 열고 dotbugi 확장 연결로, ' +
+        '한성대 LMS(learn.hansung.ac.kr) 세션을 받아 OS 키체인에 저장한다. method=extension(기본)은 기본 브라우저로 LMS 를 열고 dotbugi 확장 연결로, ' +
         'method=browser 는 임시 프로필 브라우저 창에서 사용자가 직접 로그인한다 (확장이 없을 때, WSL 미지원). ' +
         '로그인을 기다리지 않고 안내(extension 은 확인 코드 XXX-XXX 포함)를 바로 돌려주므로 사용자에게 그대로 전달한다. ' +
         '이미 로그인돼 있으면 그렇다고만 알린다.',
