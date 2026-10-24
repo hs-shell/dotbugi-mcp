@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { getIndexPageLink, type CourseBase, type FetchHtml } from '@dotbugi/lms-parser';
-import { attachmentName, openNew, safeFileName, saveAttachment } from '../assign/download.js';
+import { attachmentName, downloadTemp, placeNew, safeFileName } from '../assign/download.js';
 import {
   LMS_NUMERIC_ID,
   MATERIAL_MAX_BYTES,
@@ -144,18 +144,11 @@ async function syncFile(
   const weekDir = childDir(courseDir, file.week);
   await ensureRealDir(root, weekDir);
   const name = attachmentName(file.url);
-  // 임시 이름(.part, wx)으로 받고 다 받은 뒤에만 제자리로 옮긴다 — 중간에 멈춰도 덜 받은 파일이 자료 이름으로 남지 않는다
-  const part = await limit(() => saveAttachment(file.url, weekDir, `${name}.part`, session, LIMITS));
+  // 임시 이름으로 받고 다 받은 뒤에만 제자리로 옮긴다
+  const part = await limit(() => downloadTemp(file.url, weekDir, session, LIMITS));
   budget.files++;
-  budget.bytes += (await stat(part.path)).size;
-  // 같은 이름이 있으면 "이름 (2).ext" 자리를 잡아(wx) 그 위로 옮긴다 — 기존 파일은 덮지 않는다
-  const placeNew = async () => {
-    const slot = await openNew(weekDir, name);
-    await slot.file.close();
-    await rename(part.path, slot.path);
-    return slot;
-  };
   try {
+    budget.bytes += (await stat(part.path)).size;
     // 받는 동안 사용자가 고쳤을 수 있으므로 받은 뒤, 바꾸기 직전에 잰다
     const local = prevPath ? await localHash(prevPath) : null;
     if (prev && prevPath && local !== null) {
@@ -169,7 +162,7 @@ async function syncFile(
         await rename(part.path, prevPath);
         return { status: 'updated', path: prevPath, entry: entry(prevPath, part.sha256), downloaded: true };
       }
-      const slot = await placeNew();
+      const slot = await placeNew(weekDir, name, part.path);
       return {
         status: 'updated',
         path: slot.path,
@@ -178,7 +171,7 @@ async function syncFile(
         warning: `받은 뒤 수정된 파일이라 덮어쓰지 않고 새 버전을 ${slot.path} 에 저장했습니다 (기존: ${prevPath}).`,
       };
     }
-    const slot = await placeNew();
+    const slot = await placeNew(weekDir, name, part.path);
     return {
       status: 'added',
       path: slot.path,
