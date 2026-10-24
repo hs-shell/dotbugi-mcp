@@ -9,7 +9,7 @@ import { clean } from '../tasks/text.js';
 export interface VodMeta {
   course: string;
   courseId: string;
-  // sync_materials 와 같은 규칙의 주차 폴더 이름 (summarize_week 가 같은 폴더에서 자료·녹취를 함께 읽는다)
+  // sync_materials 와 같은 규칙의 주차 폴더 이름 (노트가 같은 폴더에서 자료·STT 결과를 함께 읽는다)
   week: string;
   title: string;
   // 강좌 화면에 dimmed 로 표시된 강의 — 열람 기간 지남(링크 없음) / 아직 공개 전(사용 가능 날짜 표시). 영상을 못 받으면 reason 으로 알린다

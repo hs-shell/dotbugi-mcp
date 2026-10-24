@@ -2,8 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { TRANSCRIBE_QUEUE_MAX } from '../constants.js';
 import { cell, clean } from '../tasks/text.js';
+import { notesRequest, notesText } from './notes.js';
 
-// 슬래시 명령 바로가기 (Claude Code: /dotbugi:status). 인자는 본문에 들어가므로 summarize_week 처럼 한 줄로 접고 길이를 묶는다.
+// 슬래시 명령 바로가기 (Claude Code: /dotbugi:status). 인자는 본문에 들어가므로 한 줄로 접고 길이를 묶는다.
 // 원칙: 선택 인자를 비우면 추적 과목 전체가 대상, 리소스가 큰 작업(STT)은 실행 전에 대상 목록을 확인받는다
 // 따옴표·백틱은 본문의 "..."·`도구` 구분을 깨므로 받지 않는다
 const freeText = (describe: string) =>
@@ -143,6 +144,16 @@ const shortcuts: Shortcut[] = [
         '3. 바로 과제를 함께 시작해: 진행 계획을 세우고, 필요하면 작업 폴더를 만들고, 사용자와 초안을 함께 작성해. 정리만 하고 멈추지 마.',
         '4. 제출은 하지 않는다. 작업을 마칠 때 제출 주소(submitUrl)와 파일명 규칙을 다시 안내해 줘.',
       ].join('\n'),
+  },
+  {
+    name: 'notes',
+    title: '주차별 강의 노트',
+    description: '주차별 강의 노트 생성 (범위 뒤에 작성 지시를 붙일 수 있음)',
+    usage: 'notes [과목|courseId|교수] [N주차] [지시]',
+    example: '/dotbugi:notes 자료구조 3주차 시험 대비로 예제 위주',
+    args: { request: notesRequest },
+    // 대상 확인·변경 감지·저장은 list_notes·save_notes 가, 노트 본문은 모델이 쓴다
+    text: ({ request: r }) => notesText(r),
   },
   {
     name: 'transcribe',

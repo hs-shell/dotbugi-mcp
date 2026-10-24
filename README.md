@@ -68,25 +68,26 @@ claude mcp add -s user dotbugi -- npx -y @dotbugi/mcp
 | "LMS 에서 지워진 자료 정리해줘"                       | `delete_materials` (승인 화면)                             |
 | "자료는 문서/돋부기에 저장해줘" / "자료 어디 저장돼?" | `set_storage_dir` (승인 화면) / `get_storage_dir`          |
 | "자료를 구글 드라이브에 저장해줘"                     | `find_google_drive` → `set_storage_dir` (승인 화면)        |
-| "자료구조 5주차 정리해줘"                             | `summarize_week` 프롬프트                                  |
+| "자료구조 5주차 노트 만들어줘"                        | `list_notes` → `save_notes` (`notes` 프롬프트)             |
 | "STT 준비해줘"                                        | `asr_install`, `asr_status`                                |
 | "이 강의 STT 해줘" / "어디까지 됐어?" / "STT 멈춰"    | `transcribe_vod` / `transcribe_status` / `stop_transcribe` |
 | "LMS 로그아웃해줘"                                    | `logout`                                                   |
 
-Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` 처럼 직접 부를 수도 있습니다.
+Claude Code 에서는 `/dotbugi:notes 자료구조 5주차 시험 대비로` 처럼 범위와 노트 작성 지시를 함께 넘길 수 있습니다.
 
 자주 쓰는 작업은 Claude Code 에서 슬래시 명령으로 바로 부를 수 있습니다 (서버 이름이 `dotbugi` 일 때). `/status` 처럼 뒷부분만 쳐도 자동 완성됩니다. `[ ]` 안 인자는 생략할 수 있고, 생략하면 추적 과목 전체가 대상입니다:
 
-| 명령                                      | 설명                                                               |
-| ----------------------------------------- | ------------------------------------------------------------------ |
-| `/dotbugi:status [과목\|courseId] [past]` | 할 일 현황 (과목을 주면 그 과목 상세, past 면 마감 지난 항목 포함) |
-| `/dotbugi:pull [과목\|courseId]`          | 강의자료·과제 최신화 (바뀐 자료·과제만 요약)                       |
-| `/dotbugi:courses`                        | 추적 과목 선택 (체크박스 선택 창)                                  |
-| `/dotbugi:work [cmid\|과제명]`            | 과제 함께 수행 (생략하면 미완료 과제 목록에서 선택)                |
-| `/dotbugi:transcribe [cmid…\|과목\|all]`  | 동영상 강의 STT 변환 (all 이 아니면 대상 확인 후 실행)             |
-| `/dotbugi:drive`                          | Google Drive 연동 (저장 위치를 내 드라이브로)                      |
-| `/dotbugi:login`                          | LMS 로그인                                                         |
-| `/dotbugi:help`                           | 명령 안내                                                          |
+| 명령                                                   | 설명                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------ |
+| `/dotbugi:status [과목\|courseId] [past]`              | 할 일 현황 (과목을 주면 그 과목 상세, past 면 마감 지난 항목 포함) |
+| `/dotbugi:pull [과목\|courseId]`                       | 강의자료·과제 최신화 (바뀐 자료·과제만 요약)                       |
+| `/dotbugi:courses`                                     | 추적 과목 선택 (체크박스 선택 창)                                  |
+| `/dotbugi:work [cmid\|과제명]`                         | 과제 함께 수행 (생략하면 미완료 과제 목록에서 선택)                |
+| `/dotbugi:notes [과목\|courseId\|교수] [N주차] [지시]` | 주차별 강의 노트 생성 (범위 뒤에 작성 지시를 붙일 수 있음)         |
+| `/dotbugi:transcribe [cmid…\|과목\|all]`               | 동영상 강의 STT 변환 (all 이 아니면 대상 확인 후 실행)             |
+| `/dotbugi:drive`                                       | Google Drive 연동 (저장 위치를 내 드라이브로)                      |
+| `/dotbugi:login`                                       | LMS 로그인                                                         |
+| `/dotbugi:help`                                        | 명령 안내                                                          |
 
 **삭제·저장 위치 변경은 승인을 거칩니다.** `delete_materials`·`asr_remove`·`set_storage_dir`(위치만 바꿔도 — 공유 폴더로 바뀌면 앞으로 받는 자료가 새기 때문)는 확인 창(MCP form elicitation)을 지원하는 앱이면 대상 목록을 확인 창에 띄우고, 사용자가 체크하고 승인해야만 실행합니다 (Claude 가 대신 승인할 수 없습니다). 확인 창을 지원하지 않는 앱에서는 목록과 일회용 확인 토큰을 Claude 에게 돌려주고, Claude 가 사용자에게 묻고 토큰을 넣어 다시 불러야 실행합니다. 이 방식에서는 토큰이 모델을 거치므로 서버가 사용자 동의를 직접 확인하지 못합니다 — 남는 관문은 앱 자체의 도구 실행 허용 확인이니, 이런 앱에서는 이 도구들을 자동 허용하지 마세요.
 
@@ -106,7 +107,7 @@ Claude Code 에서는 프롬프트를 `/dotbugi:summarize_week 자료구조 5` �
 |        | [`find_google_drive`](docs/tools.md#get_storage_dir--set_storage_dir--find_google_drive)                                                                                        | Google Drive 내 드라이브 찾기 → 저장 위치 후보 (옮기기는 `set_storage_dir`) |
 |        | [`read_material`](docs/tools.md#read_material)                                                                                                                                  | 받은 자료·첨부·STT 결과 읽기, 폴더 살펴보기                                 |
 |        | [`delete_materials`](docs/tools.md#delete_materials)                                                                                                                            | LMS 에서 사라진 자료를 승인 후 로컬에서 삭제                                |
-|        | [`summarize_week`](docs/tools.md#summarize_week) (프롬프트)                                                                                                                     | 주차 강의자료를 `요약.md` 로 정리                                           |
+|        | [`list_notes`](docs/tools.md#list_notes--save_notes-notes) / [`save_notes`](docs/tools.md#list_notes--save_notes-notes) (`notes` 프롬프트)                                      | 주차별 강의 노트 대상 확인(변경 감지) / 노트 저장                           |
 | STT    | [`transcribe_vod`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe) / [`transcribe_status`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)  | 동영상 강의를 로컬 음성 인식으로 STT 변환(여러 개는 대기열) / 진행 상황     |
 |        | [`stop_transcribe`](docs/tools.md#transcribe_vod--transcribe_status--stop_transcribe)                                                                                           | STT 변환 중지                                                               |
 |        | [`setup_statusline`](docs/tools.md#setup_statusline)                                                                                                                            | Claude Code 상태 표시줄에 STT 진행 표시 (승인 후, 기존 표시줄과 합침)       |
