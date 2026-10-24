@@ -10,7 +10,7 @@ import {
 
 export class SessionExpiredError extends Error {
   constructor() {
-    super('LMS 세션이 만료되었습니다. 터미널에서 dotbugi-mcp login 을 다시 실행하세요.');
+    super('LMS 세션이 만료되었습니다. login 도구를 호출하거나 터미널에서 dotbugi-mcp login 을 다시 실행하세요.');
   }
 }
 
