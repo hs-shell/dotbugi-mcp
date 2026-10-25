@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.4...v0.4.5) (2026-10-25)
+
+
+### Bug Fixes
+
+* 저장 위치가 사라지면 만들지 않고 연결 안내와 함께 멈추기 ([#166](https://github.com/hs-shell/dotbugi-mcp/issues/166)) ([00c2800](https://github.com/hs-shell/dotbugi-mcp/commit/00c2800b0b2d8366b8e49096de76412b013fb984))
+
 ## [0.4.4](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.3...v0.4.4) (2026-10-24)
 
 
