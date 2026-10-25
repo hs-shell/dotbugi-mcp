@@ -1,0 +1,32 @@
+# 코드 오너 — PR 리뷰어 자동 지정 (Dependabot PR 포함)
+# 브랜치 보호의 "Require review from Code Owners" 를 켜면 해당 경로는 오너 승인 없이 머지할 수 없다.
+# '*' 은 메인테이너 팀 → 팀 설정의 자동 할당(round robin)으로 팀원 1명에게 리뷰가 배정된다.
+# 아래 민감 경로는 메인테이너가 늘어나도 프로젝트 오너로 유지한다. (MAINTAINERS.md)
+# 나중에 매칭된 규칙이 우선한다.
+
+*                               @hs-shell/maintainers
+
+# ── 배포·권한·공급망·자격증명에 직접 영향을 주는 경로 (프로젝트 오너 리뷰 필수) ──
+# 워크플로: npm 배포(Trusted Publishing) 경로
+/.github/                       @6-keem
+# Claude Code 플러그인: 매니페스트·훅·스킬이 사용자 PC 에서 실행된다
+/plugin/                        @6-keem
+/.claude-plugin/                @6-keem
+# 자격증명·세션 처리: 키체인 저장, 로그인, 세션 쿠키, 마스킹, LMS 호스트 고정
+/src/keychain/                  @6-keem
+/src/login/                     @6-keem
+/src/session.ts                 @6-keem
+/src/redact.ts                  @6-keem
+/src/constants.ts               @6-keem
+/src/lms.ts                     @6-keem
+# 내려받아 실행하는 ASR 바이너리 해시 고정(공급망)
+/src/asr/pins.ts                @6-keem
+# 의존성(공급망)
+/package.json                   @6-keem
+/package-lock.json              @6-keem
+# 릴리즈 버전 산출
+/release-please-config.json     @6-keem
+/.release-please-manifest.json  @6-keem
+# 자동 리뷰·훅 설정
+/.coderabbit.yaml               @6-keem
+/.husky/                        @6-keem

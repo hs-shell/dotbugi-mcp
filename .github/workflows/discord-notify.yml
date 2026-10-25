@@ -1,0 +1,76 @@
+name: Discord 알림
+
+# dotbugi-mcp 의 이슈/PR/CI 실패 이벤트를 Discord 로 보낸다.
+# DISCORD_WEBHOOK_URL 이 없으면 건너뛰고, vars.DISCORD_ENABLED=false 면 끈다.
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened, closed]
+  workflow_run:
+    workflows: ['PR 검사']
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: ${{ vars.DISCORD_ENABLED != 'false' }}
+    steps:
+      - name: Discord 전송
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const webhook = process.env.DISCORD_WEBHOOK_URL;
+            if (!webhook) {
+              core.info('DISCORD_WEBHOOK_URL 미설정 — 건너뜀');
+              return;
+            }
+
+            const event = context.eventName;
+            let embed;
+
+            if (event === 'issues') {
+              const i = context.payload.issue;
+              embed = {
+                title: `[dotbugi-mcp] 🐛 새 이슈 #${i.number}: ${i.title}`,
+                url: i.html_url,
+                description: `작성자: ${i.user.login}`,
+                color: 0x5865f2, // 파랑
+              };
+            } else if (event === 'pull_request') {
+              const pr = context.payload.pull_request;
+              const merged = pr.merged === true;
+              const action = context.payload.action;
+              if (action === 'closed' && !merged) return; // 머지 없이 닫힌 PR은 무시
+              embed = {
+                title: merged
+                  ? `[dotbugi-mcp] 🟣 PR 머지됨 #${pr.number}: ${pr.title}`
+                  : `[dotbugi-mcp] 🟢 PR 열림 #${pr.number}: ${pr.title}`,
+                url: pr.html_url,
+                description: `작성자: ${pr.user.login}`,
+                color: merged ? 0x8957e5 : 0x57f287, // 보라/초록
+              };
+            } else if (event === 'workflow_run') {
+              const run = context.payload.workflow_run;
+              if (run.conclusion !== 'failure') return; // 실패만 알림
+              embed = {
+                title: `[dotbugi-mcp] ❌ CI 실패: ${run.name}`,
+                url: run.html_url,
+                description: `브랜치: ${run.head_branch}`,
+                color: 0xed4245, // 빨강
+              };
+            }
+
+            if (!embed) return;
+            embed.title = embed.title.slice(0, 256); // Discord embed 제목 한도 256자 — 넘으면 전송 거부
+            const res = await fetch(webhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }), // PR 제목 등의 @everyone·멘션 무력화
+            });
+            if (!res.ok) core.warning(`Discord 알림 실패: ${res.status}`);
