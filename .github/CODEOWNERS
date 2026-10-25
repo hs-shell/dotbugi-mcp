@@ -1,0 +1,6 @@
+# 코드 오너 — PR 리뷰어 자동 지정 (Dependabot PR 포함)
+# 브랜치 보호의 "Require review from Code Owners" 를 켜면 오너 승인 없이 머지할 수 없다.
+# 메인테이너 팀이 생기면 '*' 을 팀으로 바꾸고, 배포·권한·공급망 경로(.github/, package*.json,
+# release-please 설정, .coderabbit.yaml, .husky/)는 프로젝트 오너로 유지한다. (dotbugi 와 같은 구성)
+
+*                               @6-keem
