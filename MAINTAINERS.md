@@ -72,7 +72,7 @@ flowchart TD
 3. 브랜치 보호(`main`)
    - **Require review from Code Owners** 켜기 → 민감 경로는 오너 승인 필수
    - **Require approval of the most recent reviewable push** 켜기 → 승인 후 몰래 커밋 추가 차단
-   - **Do not allow bypassing the above settings**(관리자 포함 적용) 켜기 → 이제 서로 승인 가능하므로 `--admin` 머지 불필요
+   - **Do not allow bypassing the above settings** 는 켜지 않는다 → Release PR 은 필수 검사가 돌지 않아 오너의 `--admin` 머지가 필요하다 (Release PR 을 GitHub App 토큰으로 만들도록 바꾸면 켤 수 있다)
 
 ## 일상 운영
 

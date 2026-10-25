@@ -1,5 +1,5 @@
 # CodeRabbit 설정 — https://docs.coderabbit.ai/guides/configure-coderabbit
-# public 저장소에서는 별도 설치/활성화 없이 자동으로 PR 리뷰가 동작합니다.
+# CodeRabbit 앱이 이 저장소에 설치·활성화돼 있어야 자동 PR 리뷰가 동작합니다 (이 파일은 동작 방식만 정함).
 language: ko-KR
 
 reviews:
@@ -14,7 +14,7 @@ reviews:
     drafts: false
     # release-please가 자동 생성하는 Release PR은 리뷰하지 않는다 (리뷰할 코드 없음)
     ignore_title_keywords:
-      - release
+      - 'chore(main): release'
     base_branches:
       - main
   path_filters:

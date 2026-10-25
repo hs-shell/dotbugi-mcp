@@ -67,6 +67,7 @@ jobs:
             }
 
             if (!embed) return;
+            embed.title = embed.title.slice(0, 256); // Discord embed 제목 한도 256자 — 넘으면 전송 거부
             const res = await fetch(webhook, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
