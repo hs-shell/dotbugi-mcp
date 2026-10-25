@@ -29,7 +29,7 @@ stdout 은 MCP 프로토콜 전용입니다. 로그는 반드시 stderr 로 씁�
 - 커밋 메시지와 PR 제목은 **Conventional Commits** (`feat`/`fix`/`docs`/`refactor`/`perf`/`test`/`chore`/`ci`/`style`/`build`/`revert`). husky + commitlint 가 커밋을, PR 제목 검사가 PR 제목을 확인합니다. 한국어 제목도 됩니다.
 - **스쿼시 머지만** 씁니다. main 에 남는 커밋 제목 = PR 제목이고, release-please 가 이를 읽어 버전을 정합니다.
 - PR 검사: Prettier·ESLint·타입 체크와 빌드·테스트·의존성 취약점(high 이상 차단). **CI 가 실패한 PR 은 머지하지 않습니다.**
-- main 보호: 필수 검사 `verify`·`issue-link` 통과 + 승인 1개가 있어야 머지됩니다.
+- main 보호: 필수 검사 `verify`·`issue-link`·`CodeRabbit` 통과 + 승인 1개가 있어야 머지됩니다.
 - 리뷰: [CodeRabbit](https://coderabbit.ai) 이 PR 을 열 때 자동으로 한국어 리뷰를 남깁니다 (`.coderabbit.yaml`). 다시 받으려면 `@coderabbitai review` 를 댓글로 답니다. 리뷰어는 `.github/CODEOWNERS` 로 자동 지정됩니다.
 - 자동화: PR 제목 접두어로 타입 라벨이 붙고 (`fix:` → `bug`, 나머지는 같은 이름), 새 이슈는 기존 이슈와 비교해 중복으로 보이면 댓글과 `possible-duplicate` 라벨이 달립니다.
 

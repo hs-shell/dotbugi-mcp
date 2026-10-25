@@ -4,11 +4,11 @@
 
 ## 역할과 권한
 
-| 역할          | GitHub 권한  | 할 수 있는 일                               |
-| ------------- | ------------ | ------------------------------------------- |
-| 프로젝트 오너 | **Admin**    | 저장소·브랜치 보호 설정, npm 배포 승인(2FA) |
-| 메인테이너    | **Maintain** | PR 리뷰·머지, 이슈 관리, 릴리즈 PR 머지     |
-| 기여자        | 없음 (Fork)  | PR 제출                                     |
+| 역할          | GitHub 권한  | 할 수 있는 일                                               |
+| ------------- | ------------ | ----------------------------------------------------------- |
+| 프로젝트 오너 | **Admin**    | 저장소·브랜치 보호 설정, 릴리즈 PR 머지, npm 배포 승인(2FA) |
+| 메인테이너    | **Maintain** | PR 리뷰·머지, 이슈 관리                                     |
+| 기여자        | 없음 (Fork)  | PR 제출                                                     |
 
 - **Admin 은 오너 외에 부여하지 않는다.** Admin 은 브랜치 보호 규칙을 직접 바꿀 수 있어 어떤 통제로도 막을 수 없다.
 - 메인테이너는 **Maintain** 까지. Maintain 은 보호 규칙·Variables 를 바꿀 수 없다.
@@ -60,7 +60,8 @@ flowchart TD
 
 - 평소 PR 을 main 에 머지해도 릴리즈는 나가지 않는다. release-please 가 Conventional Commits 를 읽어 **Release PR**(버전 범프 + CHANGELOG)을 자동으로 만들고 갱신한다.
 - 발행하려면 **Release PR 을 머지**한다 → 태그 + GitHub Release + npm 스테이징 배포.
-- 버전은 커밋 타입에서 자동 산출된다 (`feat` → minor, `fix` → patch, `feat!`/`BREAKING CHANGE` → major). `build`/`ci`/`docs`/`chore` 는 버전을 올리지 않는다.
+- Release PR 은 기본 `GITHUB_TOKEN` 으로 만들어져 PR 검사(`verify`·`issue-link`)가 돌지 않는다. 필수 검사가 비어 있으므로 오너가 관리자 권한(`--admin`)으로 머지한다.
+- 버전은 커밋 타입에서 자동 산출된다 (`feat` → minor, `fix` → patch, `feat!`/`BREAKING CHANGE` → major. 단 1.0.0 전에는 `bump-minor-pre-major` 로 major 대신 minor). `build`/`ci`/`docs`/`chore` 는 버전을 올리지 않는다.
 
 ## 메인테이너 합류 시 체크리스트 (오너)
 
