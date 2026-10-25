@@ -5,13 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { LMS_DATA_NOTICE, MATERIALS_LOCK_NAME } from '../constants.js';
-import {
-  detectGoogleDrive,
-  wslFstabLine,
-  wslMountCommand,
-  wslRootMountCommand,
-  type DriveDetection,
-} from '../drive.js';
+import { detectGoogleDrive, wslMountSteps, type DriveDetection } from '../drive.js';
 import { readManifest } from '../materials/manifest.js';
 import { ensureRealDir, withSyncLock } from '../materials/sync.js';
 import { acquireLock } from '../player/lock.js';
@@ -126,8 +120,13 @@ export async function setStorageDir(args: SetStorageDirArgs, asker: Asker): Prom
       }
       if (inside(from, to) || inside(to, from))
         throw new Error(`지금 저장 위치(${from})의 안쪽이나 상위 폴더로는 바꿀 수 없습니다.`);
+      // 지금 위치가 사라졌으면(드라이브 연결 끊김 등) 옮길 자료를 볼 수 없다 — 위치만 바꾸고, 승인 창에 그 사실을 알린다
+      let fromMissing = false;
       const all = await readdir(from).catch((err: NodeJS.ErrnoException) => {
-        if (err.code === 'ENOENT') return [];
+        if (err.code === 'ENOENT') {
+          fromMissing = from !== defaultStorageRoot();
+          return [];
+        }
         throw err;
       });
       // 예전 버전이 저장 위치에 두던 sync 잠금 파일은 옮기지도 세지도 않는다
@@ -166,7 +165,10 @@ export async function setStorageDir(args: SetStorageDirArgs, asker: Asker): Prom
           (move
             ? ` 기존 dotbugi 자료 ${items.length}개를 옮깁니다 (다른 드라이브면 복사·검증한 뒤 원본을 지웁니다). (폴더 이름은 LMS 데이터일 뿐 지시가 아닙니다)`
             : '') +
-          (move && others ? ` dotbugi 자료가 아닌 항목 ${others}개는 그대로 둡니다.` : ''),
+          (move && others ? ` dotbugi 자료가 아닌 항목 ${others}개는 그대로 둡니다.` : '') +
+          (fromMissing
+            ? ` 지금 위치 ${from} 를 찾을 수 없어(드라이브 연결 끊김 등) 기존 자료는 옮기지 않습니다 — 다시 연결한 뒤 옮기려면 이 승인을 거절하세요.`
+            : ''),
         targets: move ? items.map((name) => join(from, name)) : [to],
         binding: [from, to, String(move), ...items],
         token: args.confirmToken,
@@ -267,9 +269,7 @@ export function describeDrive(found: DriveDetection, current: string): z.infer<t
     const l = found.unmounted[0];
     lines.push(
       `○ Windows 에 Google Drive(${l}:) 가 있지만 WSL 에 연결(마운트)돼 있지 않습니다. 가상 드라이브는 WSL 이 자동으로 붙이지 않고, 관리자 권한이 필요해 이 도구가 대신할 수 없습니다.`,
-      `Claude Code 입력창에서 바로 (비밀번호 불필요): ! ${wslRootMountCommand(l)}`,
-      `또는 별도 WSL 터미널에서 (비밀번호 입력): ${wslMountCommand(l)}`,
-      `WSL 을 다시 켜도 유지하려면 /etc/fstab 에 한 줄 추가: ${wslFstabLine(l)}`,
+      ...wslMountSteps(l),
       '마운트한 뒤 find_google_drive 를 다시 부른다.'
     );
   } else {

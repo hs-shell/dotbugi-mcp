@@ -1,13 +1,14 @@
 import { existsSync, lstatSync, mkdirSync, writeFileSync } from 'node:fs';
-import { lstat, mkdir, rename } from 'node:fs/promises';
+import { lstat, mkdir, rename, stat } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
-import { basename, dirname, isAbsolute, join } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix } from 'node:path';
 import * as z from 'zod/v4';
 import { LMS_UTC_OFFSET } from './constants.js';
+import { wslMountSteps } from './drive.js';
 import { log } from './log.js';
 import { isWsl } from './platform.js';
 import { readStateFile, writeStateFile } from './player/state.js';
-import { wslLocalAppData } from './wsl-paths.js';
+import { wslAutomountRoot, wslLocalAppData } from './wsl-paths.js';
 
 // 저장 위치·학기 폴더 규칙의 단일 출처 — 강의자료·과제 첨부·녹취·노트가 모두 <저장 위치>/<YYYY-N학기>/ 아래에 쌓인다.
 // homedir() 는 부를 때마다 읽는다 (테스트가 홈을 바꾼다)
@@ -65,6 +66,38 @@ export const writeStorageConfig = (root: string, file = storageConfigFile(), mov
   writeStateFile(file, storageConfigSchema, { version: 1, root, ...(movedFrom ? { movedFrom } : {}) });
 
 export const storageRoot = () => readStorageConfig()?.root ?? defaultStorageRoot();
+
+// 저장 위치가 없을 때 안내. WSL 의 Windows 드라이브(<automount>/<문자>/…)면 WSL 재시작으로 풀린 마운트일 가능성이 커 마운트 방법을 붙인다
+export function missingStorageRootMessage(root: string): string {
+  const lines = [
+    `저장 위치 ${root} 를 찾을 수 없습니다. 연결이 끊긴 드라이브 대신 엉뚱한 곳에 자료가 쌓이지 않도록 폴더를 새로 만들지 않고 멈췄습니다.`,
+  ];
+  const letter = isWsl() ? /^([a-z])(?:\/|$)/i.exec(posix.relative(wslAutomountRoot(), root))?.[1] : undefined;
+  if (letter)
+    lines.push(
+      `Windows 드라이브(${letter.toUpperCase()}:)가 WSL 에 연결(마운트)돼 있지 않은 것 같습니다 (WSL 을 다시 켜면 풀립니다).`,
+      ...wslMountSteps(letter.toUpperCase()),
+      '마운트한 뒤 다시 시도하세요.'
+    );
+  else
+    lines.push(
+      '외장·네트워크 드라이브 연결이 끊겼거나 폴더가 옮겨지지 않았는지 확인하세요. 다시 연결하거나 set_storage_dir 로 저장 위치를 바꾸세요.'
+    );
+  return lines.join('\n');
+}
+
+// 사용자가 고른 저장 위치와 그 상위는 만들지 않는다 — 마운트가 풀린 빈 폴더(/mnt/g 등) 안에 새로 만들면 Drive 가 아닌 로컬에 자료가 쌓인다.
+// 기본 위치만 처음 쓸 때(create) 만든다. 학기·과목·주차 폴더는 이 확인 뒤 호출부가 만든다
+export async function ensureStorageRoot(root = storageRoot(), create = false): Promise<void> {
+  const st = await stat(root).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  });
+  if (st?.isDirectory()) return;
+  if (st) throw new Error(`저장 위치 ${root} 가 폴더가 아닙니다.`);
+  if (root !== defaultStorageRoot()) throw new Error(missingStorageRootMessage(root));
+  if (create) await mkdir(root, { recursive: true, mode: 0o700 });
+}
 
 // '1970-01-01T00:00:00+09:00' 은 UTC 로 -9시간 — 그 부호를 뒤집으면 LMS 시간대의 오프셋(ms)
 const LMS_OFFSET_MS = -Date.parse(`1970-01-01T00:00:00${LMS_UTC_OFFSET}`);

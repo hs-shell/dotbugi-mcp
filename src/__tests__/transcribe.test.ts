@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,6 +47,8 @@ const media = (segments: string[], extra = '') =>
 let dir: string;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'transcribe-'));
+  // 사용자가 고른 저장 위치는 만들지 않는다 — 이미 있는 것으로 둔다
+  await mkdir(join(dir, 'root'));
 });
 afterEach(() => rm(dir, { recursive: true, force: true }));
 afterAll(() => rm(state.home, { recursive: true, force: true }));
@@ -305,6 +307,21 @@ describe('transcribeVod', () => {
     const { d, fetched } = deps({ runtime: () => Promise.reject(new Error('ASR 런타임이 설치되지 않았습니다')) });
     await expect(transcribeVod(42, d)).rejects.toThrow('설치되지 않았습니다');
     expect(fetched).toEqual([]);
+  });
+
+  // hs-shell/dotbugi-mcp#165 — Drive 마운트가 풀리면 저장 위치가 사라진다. 만들지 않고 그 작업을 실패로 끝낸다
+  it('저장 위치가 없으면 받기 전에 멈추고, 도중에 사라지면 쓰기 전에 멈춘다 (어느 쪽도 만들지 않음)', async () => {
+    const root = join(dir, 'root');
+    await rm(root, { recursive: true });
+    const first = deps();
+    await expect(transcribeVod(42, first.d)).rejects.toThrow(`저장 위치 ${root} 를 찾을 수 없습니다`);
+    expect(first.fetched).toEqual([]);
+
+    await mkdir(root);
+    const mid = deps({ report: (phase) => phase === 'extract' && rmSync(root, { recursive: true, force: true }) });
+    await expect(transcribeVod(42, mid.d)).rejects.toThrow('찾을 수 없습니다');
+    expect(mid.fetched.length).toBeGreaterThan(0);
+    expect(existsSync(root)).toBe(false);
   });
 
   it('공개 전 강의는 재생 목록을 주더라도 받지 않고 사용 가능 날짜로 알린다', async () => {

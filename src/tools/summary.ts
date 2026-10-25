@@ -9,7 +9,7 @@ import { buildNotes, SUMMARY_MARK, writeOwnFile } from '../notes/notes-file.js';
 import { matchCoursesOrProf } from '../notes/targets.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
-import { storageRoot } from '../storage.js';
+import { ensureStorageRoot, storageRoot } from '../storage.js';
 import {
   scanSummaryTargets,
   summaryName,
@@ -61,6 +61,7 @@ export async function saveSummary(input: {
   const parts = rel.split(sep);
   if (!rel || isAbsolute(rel) || parts.length !== 2 || parts.includes('..'))
     throw new Error('dir 은 list_summary 가 돌려준 과목 폴더여야 합니다.');
+  await ensureStorageRoot(root);
   await ensureRealDir(root, input.dir, false);
   if (!(await lstat(input.dir).catch(() => null))?.isDirectory())
     throw new Error('dir 은 list_summary 가 돌려준 과목 폴더여야 합니다.');
@@ -111,7 +112,9 @@ export function registerSummaryTools(server: McpServer): void {
           courses = matchCoursesOrProf(courses, course);
           if (!courses.length) throw new Error(`추적 중인 강좌에서 "${clean(course)}" 과목을 찾지 못했습니다.`);
         }
-        const scan = await scanSummaryTargets(courses, storageRoot(), { range, instructions });
+        const root = storageRoot();
+        await ensureStorageRoot(root);
+        const scan = await scanSummaryTargets(courses, root, { range, instructions });
         const tail = [
           scan.upToDate ? `최신 요약이라 건너뛴 과목: ${scan.upToDate}개` : '',
           ...scan.warnings.map((w) => `※ ${w}`),
