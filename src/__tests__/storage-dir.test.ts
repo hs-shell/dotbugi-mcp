@@ -340,6 +340,30 @@ describe('setStorageDir', () => {
     expect(await readFile(join(oldRoot(), '2026-2학기', '자료구조', 'a.txt'), 'utf8')).toBe('A');
   });
 
+  // hs-shell/dotbugi-mcp#165 — 지금 위치(Drive 등)의 연결이 끊긴 경우
+  it('지금 위치가 사라졌으면 승인 창에 알리고, 옛 위치는 만들지 않은 채 위치만 바꾼다', async () => {
+    const gone = home('gdrive', '돋부기');
+    await writeStorageConfig(gone);
+    const a = asker(true);
+    expect(await setStorageDir({ path: '~/Documents/돋부기' }, a)).toContain('저장 위치를');
+    expect(a.asked[0]).toContain(`지금 위치 ${gone} 를 찾을 수 없어`);
+    expect(storageRoot()).toBe(home('Documents', '돋부기'));
+    expect(await readdir(state.home)).not.toContain('gdrive');
+  });
+
+  it('이어서 옮길 옛 위치가 사라졌으면 movedFrom 을 지우지 않고 멈춘다', async () => {
+    const to = home('Documents', '돋부기');
+    const gone = home('gdrive', '돋부기');
+    await mkdir(to, { recursive: true });
+    await writeStorageConfig(to, undefined, gone);
+    const a = asker(true);
+    await expect(setStorageDir({ path: '~/Documents/돋부기' }, a)).rejects.toThrow(
+      `저장 위치 ${gone} 를 찾을 수 없습니다`
+    );
+    expect(a.asked).toHaveLength(0);
+    expect(readStorageConfig()).toEqual({ version: 1, root: to, movedFrom: gone });
+  });
+
   it('지금 위치의 안쪽·상위 폴더는 거부한다', async () => {
     await writeStorageConfig(home('Documents', '돋부기'));
     await expect(setStorageDir({ path: '~/Documents/돋부기/sub' }, asker(true))).rejects.toThrow('안쪽이나 상위');

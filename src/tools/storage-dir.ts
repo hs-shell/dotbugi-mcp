@@ -10,7 +10,13 @@ import { readManifest } from '../materials/manifest.js';
 import { ensureRealDir, withSyncLock } from '../materials/sync.js';
 import { acquireLock } from '../player/lock.js';
 import { isWsl } from '../platform.js';
-import { defaultStorageRoot, readStorageConfig, semesterDir, writeStorageConfig } from '../storage.js';
+import {
+  defaultStorageRoot,
+  missingStorageRootMessage,
+  readStorageConfig,
+  semesterDir,
+  writeStorageConfig,
+} from '../storage.js';
 import { copyTreeVerified, sameTree } from '../storage-move.js';
 import { TRANSCRIBE_BUSY, TRANSCRIBE_LOCK_FILE } from '../transcribe/state.js';
 import { windowsToWslPath, wslAutomountRoot, wslLocalAppData } from '../wsl-paths.js';
@@ -129,6 +135,9 @@ export async function setStorageDir(args: SetStorageDirArgs, asker: Asker): Prom
         }
         throw err;
       });
+      // 이어서 옮길 옛 위치가 연결이 끊겼으면 movedFrom 을 지우지 않고 멈춘다 — 다시 연결한 뒤 같은 경로로 부르면 이어서 옮긴다
+      if (resuming && fromMissing)
+        throw new Error(`지난번 옮기기를 이어 가지 못했습니다. ${missingStorageRootMessage(from)}`);
       // 예전 버전이 저장 위치에 두던 sync 잠금 파일은 옮기지도 세지도 않는다
       const items: string[] = [];
       let others = 0;

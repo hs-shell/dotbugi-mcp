@@ -26,7 +26,7 @@ import { ensureRealDir, migrateCourseDir, openCourseDir, withSyncLock } from '..
 import { SessionExpiredError } from '../lms.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
-import { moveLegacyDir, storageRoot } from '../storage.js';
+import { ensureStorageRoot, moveLegacyDir, storageRoot } from '../storage.js';
 import { readVodItems, type VodItem } from '../transcribe/find-vod.js';
 import { progressOf, type Progress } from './progress.js';
 import { listAllCourses } from '../tasks/collect.js';
@@ -210,6 +210,8 @@ export function registerGetAssignment(server: McpServer): void {
       let session = '';
       try {
         ({ session } = await getSession());
+        // 저장 위치가 사라졌으면 LMS 에 묻기 전에 멈춘다 (쓰기 직전 ensureRealDir 도 다시 확인)
+        await ensureStorageRoot();
         const fetchHtml = createFetchHtml(session, ctx.mcpReq.signal);
         const page = parseAssignPage(await fetchHtml(`${ASSIGN_VIEW_PATH}?id=${cmid}`));
         const place = await locate(fetchHtml, page.courseId, cmid, ctx.mcpReq.signal);
