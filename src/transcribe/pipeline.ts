@@ -21,6 +21,7 @@ import {
   withSyncLock,
 } from '../materials/sync.js';
 import { ensurePrivateDir } from '../player/state.js';
+import { ensureStorageRoot } from '../storage.js';
 import { stripUrls } from '../redact.js';
 import type { VodMeta } from './find-vod.js';
 import { extractPlaylistUrl, loadSegments, mediaGet } from './hls.js';
@@ -156,6 +157,8 @@ export async function transcribeVod(cmid: number, deps: TranscribeDeps): Promise
     // 강제 종료로 남은 임시 파일까지 지우고 시작한다
     await rm(tmp, { recursive: true, force: true });
     deps.report('prepare', null);
+    // 저장 위치가 없으면 받고 변환하기 전에 멈춘다 (도중에 사라지면 쓰기 전 ensureRealDir 가 멈춘다)
+    await ensureStorageRoot(deps.root);
     const meta = await deps.findVod(cmid);
     if (!LMS_NUMERIC_ID.test(meta.courseId)) throw new Error('과목 번호 형식이 올바르지 않습니다.');
     // 공개 전 강의는 LMS 가 재생 목록을 주더라도 받지 않는다 — 교수가 정한 공개 제한을 우회하지 않는다 (cmid 직접 지정·대기열 모두)

@@ -11,7 +11,7 @@ import { acquireLock, isAlive } from '../player/lock.js';
 import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
-import { storageRoot } from '../storage.js';
+import { ensureStorageRoot, storageRoot } from '../storage.js';
 import { listVodTargets, type VodTarget } from '../transcribe/targets.js';
 import { askerOf, confirmDestructive, confirmTokenInput, type Asker } from './confirm.js';
 import {
@@ -293,6 +293,8 @@ export function registerTranscribeVod(server: McpServer): void {
         // all: false 는 지정하지 않은 것으로 본다 (모델이 기본값을 채워 보내는 경우)
         if ([cmids, course, all || undefined].filter((v) => v !== undefined).length > 1)
           throw new Error('cmids·course·all 중 하나만 넣으세요.');
+        // 대기열에 넣기 전에 — 백그라운드 작업은 쓰기 직전에도 다시 확인한다 (ensureRealDir)
+        await ensureStorageRoot();
         const resolved = await resolveTargets({ cmids, course, all, confirmToken }, askerOf(server, ctx), async (c) =>
           listVodTargets(createFetchHtml((await getSession()).session, ctx.mcpReq.signal), storageRoot(), c)
         );

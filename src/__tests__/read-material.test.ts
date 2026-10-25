@@ -143,8 +143,8 @@ describe('readMaterial — 읽기', () => {
     await expect(read(`${week}/big.png`)).rejects.toThrow('너무 큽니다');
   });
 
-  it('저장 위치가 없으면 먼저 받으라고 알린다', async () => {
-    await expect(readMaterial({ path: '' }, join(base, 'none'))).rejects.toThrow('아직 없습니다');
+  it('사용자가 고른 저장 위치가 없으면 찾을 수 없다고 알린다', async () => {
+    await expect(readMaterial({ path: '' }, join(base, 'none'))).rejects.toThrow('찾을 수 없습니다');
   });
 });
 

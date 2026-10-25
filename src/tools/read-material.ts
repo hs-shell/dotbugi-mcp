@@ -17,7 +17,7 @@ import {
 } from '../constants.js';
 import { DOC_EXT, type DocContent, extractDoc } from '../doctext/extract.js';
 import { imageMime } from '../doctext/images.js';
-import { storageRoot } from '../storage.js';
+import { ensureStorageRoot, storageRoot } from '../storage.js';
 
 const TEXT_EXT = new Set(['.md', '.txt', '.csv', '.json']);
 const IMAGE_MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
@@ -149,6 +149,7 @@ export async function readText(abs: string, st: Stats, rel: string): Promise<str
 }
 
 export async function readMaterial(args: ReadMaterialArgs, root = storageRoot()): Promise<CallToolResult> {
+  await ensureStorageRoot(root);
   const { abs, rel, st } = await resolveMaterial(root, args.path);
   if (st.isDirectory()) {
     if (args.mode === 'read') throw new Error(`${rel || '저장 위치'} 는 폴더입니다. mode: "list" 로 살펴보세요.`);

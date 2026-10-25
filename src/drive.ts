@@ -98,3 +98,9 @@ export const wslRootMountCommand = (letter: string, root = wslAutomountRoot()) =
 };
 export const wslFstabLine = (letter: string, root = wslAutomountRoot()) =>
   `${letter}: ${posix.join(root, letter.toLowerCase())} drvfs defaults 0 0`;
+// 마운트되지 않은 WSL 드라이브를 붙이는 방법 — find_google_drive 와 저장 위치가 사라졌을 때(ensureStorageRoot) 같은 안내
+export const wslMountSteps = (letter: string) => [
+  `Claude Code 입력창에서 바로 (비밀번호 불필요): ! ${wslRootMountCommand(letter)}`,
+  `또는 별도 WSL 터미널에서 (비밀번호 입력): ${wslMountCommand(letter)}`,
+  `WSL 을 다시 켜도 유지하려면 /etc/fstab 에 한 줄 추가: ${wslFstabLine(letter)}`,
+];

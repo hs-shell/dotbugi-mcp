@@ -10,7 +10,7 @@ import { weekSources } from '../notes/sources.js';
 import { matchCoursesOrProf, scanNotesTargets, type NotesTarget } from '../notes/targets.js';
 import { redact } from '../redact.js';
 import { getSession } from '../session.js';
-import { storageRoot } from '../storage.js';
+import { ensureStorageRoot, storageRoot } from '../storage.js';
 import { listCourses } from '../tasks/collect.js';
 import { clean } from '../tasks/text.js';
 import { listVodTargets } from '../transcribe/targets.js';
@@ -45,6 +45,7 @@ export async function saveNotes(input: {
   const parts = rel.split(sep);
   if (!rel || isAbsolute(rel) || parts.length !== 3 || parts.includes('..'))
     throw new Error('dir 은 list_notes 가 돌려준 주차 폴더여야 합니다.');
+  await ensureStorageRoot(root);
   await ensureRealDir(root, input.dir, false);
   if (!(await lstat(input.dir).catch(() => null))?.isDirectory())
     throw new Error('dir 은 list_notes 가 돌려준 주차 폴더여야 합니다.');
@@ -95,6 +96,7 @@ export function registerNotesTools(server: McpServer): void {
           if (!courses.length) throw new Error(`추적 중인 강좌에서 "${clean(course)}" 과목을 찾지 못했습니다.`);
         }
         const root = storageRoot();
+        await ensureStorageRoot(root);
         // STT 없는 동영상 강의 — 목록을 못 받아도 노트는 만들 수 있으니 경고만
         const warnings: string[] = [];
         const { targets: vods, failures } = await listVodTargets(fetchHtml, root).catch((err: unknown) => {

@@ -8,7 +8,7 @@ import { SessionExpiredError } from '../lms.js';
 import { fileKey, weekName } from '../materials/course-page.js';
 import { cliCaps, resolveRemoved, syncMaterials, withSyncLock, type SyncResult } from '../materials/sync.js';
 import { createServer } from '../server.js';
-import { previousSemester, semesterOf } from '../storage.js';
+import { previousSemester, semesterOf, writeStorageConfig } from '../storage.js';
 import { transcribeVod } from '../transcribe/pipeline.js';
 import { pullState } from '../tasks/last-pull.js';
 
@@ -392,6 +392,36 @@ describe('pull_materials 도구', () => {
     const all = await send('tools/call', { name: 'pull_materials', arguments: {} });
     expect((all.structuredContent as Out).more).toBe(false);
     expect(pullState()).toMatchObject({ pullStale: false });
+  });
+});
+
+describe('저장 위치가 사라졌을 때 (hs-shell/dotbugi-mcp#165)', () => {
+  it('pull_materials 는 "변경 없음" 대신 오류로 멈추고, LMS 에 묻지도 저장 위치를 만들지도 않는다', async () => {
+    getSession.mockResolvedValue({ session: SESSION, savedAt: '', method: 'extension' });
+    const gone = join(state.home, 'gdrive', '내 드라이브', '돋부기');
+    await writeStorageConfig(gone);
+    const [client, server] = InMemoryTransport.createLinkedPair();
+    const replies = new Map<number, (r: Record<string, unknown>) => void>();
+    client.onmessage = (msg: JSONRPCMessage) => {
+      if ('id' in msg) replies.get(msg.id as number)?.(('result' in msg ? msg.result : msg) as Record<string, unknown>);
+    };
+    await createServer().connect(server);
+    let id = 0;
+    const send = (method: string, params?: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        replies.set(++id, resolve);
+        void client.send({ jsonrpc: '2.0', id, method, params });
+      });
+    await send('initialize', {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 't', version: '0' },
+    });
+    const result = await send('tools/call', { name: 'pull_materials', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect((result.content as { text: string }[])[0].text).toContain(`저장 위치 ${gone} 를 찾을 수 없습니다`);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await readdir(state.home)).not.toContain('gdrive');
   });
 });
 

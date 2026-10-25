@@ -20,7 +20,7 @@ import { SessionExpiredError } from '../lms.js';
 import { acquireLock } from '../player/lock.js';
 import { replaceFile } from '../player/state.js';
 import { redact } from '../redact.js';
-import { moveLegacyDir, previousSemester, semesterOf, storageRoot } from '../storage.js';
+import { ensureStorageRoot, moveLegacyDir, previousSemester, semesterOf, storageRoot } from '../storage.js';
 import { listCourses } from '../tasks/collect.js';
 import { clean } from '../tasks/text.js';
 import { fileKey, folderFileUrls, parseCoursePage, resourceFileUrl, type CourseModule } from './course-page.js';
@@ -115,7 +115,8 @@ export function childDir(parent: string, raw: string): string {
 export async function ensureRealDir(root: string, dir: string, create = true): Promise<void> {
   const rel = relative(root, dir);
   if (!rel || isAbsolute(rel) || rel.split(sep)[0] === '..') throw new Error('저장 폴더 밖의 경로입니다.');
-  if (create) await mkdir(root, { recursive: true, mode: 0o700 });
+  // 저장 위치 자신(사용자가 고른 폴더)은 기본 위치가 아니면 만들지 않는다
+  if (create) await ensureStorageRoot(root, true);
   let current = root;
   for (const part of rel.split(sep)) {
     current = join(current, part);
@@ -398,6 +399,8 @@ async function syncCourse(
 export async function syncMaterials(session: string, course?: string, caps = cliCaps()): Promise<SyncResult> {
   const fetchHtml = createFetchHtml(session, caps.signal);
   const out: SyncResult = { root: storageRoot(), files: [], removed: [], warnings: [], more: false };
+  // 과목별 오류는 경고로 삼키므로 저장 위치가 사라진 것은 여기서 먼저 멈춘다 ("변경 없음" 으로 보이지 않게)
+  await ensureStorageRoot(out.root);
   const budget: Budget = { files: 0, bytes: 0, capped: false, deadline: Date.now() + caps.maxMs, done: 0, caps };
   const filter = course?.toLowerCase();
   const courses = (await listCourses(fetchHtml)).filter(
