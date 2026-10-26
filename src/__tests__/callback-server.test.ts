@@ -120,8 +120,12 @@ describe('startCallbackServer', () => {
     const res = await post({ code: server.code, session: SESSION });
     expect(res.status).toBe(200);
     expect(res.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    // 성공 응답 본문까지 끊기지 않고 받아야 한다 (Windows 에서 바로 강제 종료하면 ECONNRESET)
+    expect(res.headers.get('connection')).toBe('close');
+    expect(await res.text()).toBe('ok');
     await expect(server.session).resolves.toBe(SESSION);
-    await expect(post({ code: server.code, session: SESSION })).rejects.toThrow();
+    // 응답 연결이 닫히면 서버도 닫혀 더는 받지 않는다
+    await vi.waitFor(() => expect(post({ code: server.code, session: SESSION })).rejects.toThrow());
   });
 
   it('시간 초과 시 reject 하고 닫힌다', async () => {
