@@ -1,42 +1,23 @@
 <!--
-PR 제목은 Conventional Commits 형식이어야 합니다 (스쿼시 커밋 메시지·버전 산출에 사용). 예) feat: 과제 마감 알림 추가
+- What is this PR solving? Write a clear and concise description.
+- Reference the issue it solves after `Closes` (the issue-link check requires it). Open an issue first if there is none.
+- What other alternatives have you explored?
+- Are there any parts you think require more attention from reviewers?
+
+Also, please make sure you do the following:
+
+- Read the Contributing Guidelines (CONTRIBUTING.md).
+- Check that there isn't already a PR that solves the problem the same way.
+- Update the documentation (README.md / docs/tools.md) if user-facing behavior changed.
+- Include tests that fail without this PR but pass with it. If not, explain why (src/ and plugin/hooks/ changes are enforced by the test-required check).
+- No secrets (session cookie, connect code, video URL) leak into tool results or logs.
+
+If you have used AI:
+
+- Keep the description and discussion concise, in your own words.
+- Describe how you reviewed the generated code.
+
+You can write in Korean or English (한국어로 작성해도 됩니다).
 -->
 
-## 관련 이슈
-
-<!--
-⚠️ 모든 PR은 먼저 이슈가 등록되어 있어야 합니다.
-아래에 연결할 이슈 번호를 반드시 적어주세요. (`Closes #123` 형식이면 머지 시 자동으로 닫힙니다)
--->
-
-Closes #
-
-## 변경 내용
-
-<!-- 무엇을, 왜 바꿨는지 간단히 설명해주세요. -->
-
--
-
-## 변경 유형
-
-<!-- 해당하는 항목에 [x] 표시 -->
-
-- [ ] 🐛 버그 수정 (`fix`)
-- [ ] ✨ 기능 추가 (`feat`)
-- [ ] 📝 문서 (`docs`)
-- [ ] ♻️ 리팩터링 (`refactor`)
-- [ ] 🎨 스타일/포맷 (`style`)
-- [ ] ⚡ 성능 개선 (`perf`)
-- [ ] ✅ 테스트 (`test`)
-- [ ] ⚙️ 빌드/CI/기타 (`build`, `ci`, `chore`, `revert`)
-
-## 체크리스트
-
-- [ ] 이 PR과 연결된 이슈가 존재합니다.
-- [ ] 로컬에서 `npx prettier --check .` / `npm run lint` / `npm run build` / `npm run test` 가 통과합니다.
-- [ ] 변경 사항을 직접 테스트했습니다.
-- [ ] 리뷰어 피드백을 반영할 준비가 되어 있습니다.
-
-## 동작 확인 (선택)
-
-<!-- MCP Inspector 또는 Claude Code에서 확인한 결과(요청/응답 일부)를 붙여주세요. -->
+Closes

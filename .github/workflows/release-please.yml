@@ -23,13 +23,24 @@ jobs:
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
+    env:
+      HAS_APP: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
     steps:
-      # 기본 GITHUB_TOKEN 사용: 이 토큰으로 만든 Release PR에는 PR 검사 워크플로가 돌지 않는다.
-      # (필요하면 dotbugi처럼 GitHub App 토큰으로 교체)
+      # GitHub App 토큰을 써야 Release PR 에 PR 검사(verify·CodeRabbit)가 돈다.
+      # (GITHUB_TOKEN 이 만든 PR·커밋은 다른 워크플로를 트리거하지 않음) 시크릿이 없으면 GITHUB_TOKEN 으로 동작
+      - name: GitHub App 토큰 발급
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Release Please
         id: rp
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
+          token: ${{ steps.app-token.outputs.token || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 

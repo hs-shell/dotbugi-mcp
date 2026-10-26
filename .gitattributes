@@ -1,0 +1,9 @@
+# 모든 텍스트 파일은 LF 로 저장·체크아웃한다 (Prettier 기본값과 같아 Windows 에서도 `prettier --check` 가 일관됨)
+* text=auto eol=lf
+
+# 바이너리는 변환하지 않는다
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
