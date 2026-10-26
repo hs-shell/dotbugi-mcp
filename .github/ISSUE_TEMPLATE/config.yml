@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 🔎 중복 이슈 먼저 검색하기
-    url: https://github.com/hs-shell/dotbugi-mcp/issues?q=is%3Aissue
-    about: 이슈를 올리기 전에 같은 내용이 이미 등록되어 있는지 꼭 검색해주세요.
+  - name: 질문과 토론
+    url: https://github.com/hs-shell/dotbugi-mcp/discussions
+    about: 사용법 질문이나 아이디어 논의는 GitHub Discussions 를 이용해주세요.
+  - name: dotbugi 확장 이슈
+    url: https://github.com/hs-shell/dotbugi/issues/new/choose
+    about: 브라우저 확장(dotbugi) 자체의 문제는 dotbugi 저장소에 올려주세요.
