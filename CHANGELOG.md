@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.6](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.5...v0.4.6) (2026-10-26)
+
+
+### Bug Fixes
+
+* 로그인 콜백 성공 응답을 다 보낸 뒤 서버 닫기 (Windows ECONNRESET) ([#176](https://github.com/hs-shell/dotbugi-mcp/issues/176)) ([dbf5247](https://github.com/hs-shell/dotbugi-mcp/commit/dbf52478b96505f853b7dff881a7d8c3cdcc989a))
+* 오픈소스 기여 설정을 dotbugi 와 맞추기 ([#169](https://github.com/hs-shell/dotbugi-mcp/issues/169)) ([14a5687](https://github.com/hs-shell/dotbugi-mcp/commit/14a5687d9d3b872377e6fc463a16cfb326f4f79a))
+
 ## [0.4.5](https://github.com/hs-shell/dotbugi-mcp/compare/v0.4.4...v0.4.5) (2026-10-25)
 
 
