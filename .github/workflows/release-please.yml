@@ -24,7 +24,7 @@ jobs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
     env:
-      HAS_APP: ${{ secrets.APP_ID != '' }}
+      HAS_APP: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
     steps:
       # GitHub App 토큰을 써야 Release PR 에 PR 검사(verify·CodeRabbit)가 돈다.
       # (GITHUB_TOKEN 이 만든 PR·커밋은 다른 워크플로를 트리거하지 않음) 시크릿이 없으면 GITHUB_TOKEN 으로 동작

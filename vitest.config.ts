@@ -8,7 +8,7 @@ export default defineConfig({
     // `npm run test:coverage` 때만 수집. json-summary 는 PR 커버리지 댓글이 읽는다
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.ts', 'plugin/hooks/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/__tests__/**'],
       reporter: ['text', 'json-summary'],
     },

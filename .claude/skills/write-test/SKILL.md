@@ -12,7 +12,7 @@ description: 사용자가 "테스트 써줘", "테스트 추가", "재현 테스
 
 - `src/**` → `src/__tests__/<대상>.test.ts`. **같은 대상의 기존 파일이 있으면 거기에 케이스를 추가**한다.
 - `plugin/skills` 생성 결과 등 src 밖 → `test/*.test.ts`.
-- `plugin/hooks/*` → `plugin/tests/*.test.ts` (`claude-code/testing` 사용, vitest 가 아님).
+- `plugin/hooks/*` → 순수 함수(`format.ts`)는 `test/*.test.ts` 에서 vitest 로 테스트한다 (`test/plugin-band.test.ts`). `plugin/tests/` 는 `claude-code/testing` 용이라 CI 에서 돌지 않아 `테스트 필수` 검사가 인정하지 않는다.
 
 ## 3단계: 이 저장소 패턴
 
