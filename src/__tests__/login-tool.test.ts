@@ -1,6 +1,8 @@
 import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from '@modelcontextprotocol/server';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { openUrl } from '../platform.js';
 import { createServer } from '../server.js';
+import { cancelPendingLogin } from '../tools/login.js';
 
 const SESSION = 'abcdefghij0123456789xyz';
 const ORIGIN = 'chrome-extension://fbhdnbombekihdhjcfiimiibfmikghch';
@@ -21,10 +23,13 @@ vi.mock('../login/browser.js', async (orig) => ({
   ...(await orig<object>()),
   loginWithBrowser: () => loginWithBrowser(),
 }));
-const keychain = vi.hoisted(() => ({ value: null as string | null }));
+const keychain = vi.hoisted(() => ({ value: null as string | null, broken: false }));
 vi.mock('../keychain/index.js', () => ({
   getKeychain: () => ({
-    get: async () => keychain.value,
+    get: async () => {
+      if (keychain.broken) throw new Error('no secret service');
+      return keychain.value;
+    },
     set: async (v: string) => void (keychain.value = v),
     delete: async () => ((keychain.value = null), true),
   }),
@@ -73,8 +78,11 @@ const post = (port: string, body: unknown) =>
   fetch(`http://127.0.0.1:${port}/cb`, { method: 'POST', headers: { origin: ORIGIN }, body: JSON.stringify(body) });
 
 afterEach(() => {
+  // 끝나지 않은 로그인이 다음 테스트(특히 logout 문구)에 섞이지 않게
+  cancelPendingLogin();
   opened.length = 0;
   keychain.value = null;
+  keychain.broken = false;
   wsl.value = false;
   verifySession.mockResolvedValue(true);
   loginWithBrowser.mockReset();
@@ -128,6 +136,38 @@ describe('login 도구', () => {
       { timeout: 2000 }
     );
     stderr.mockRestore();
+  });
+});
+
+describe('login 도구 실패', () => {
+  it('OS 키체인을 쓸 수 없으면 브라우저를 열지 않고 거부한다', async () => {
+    keychain.broken = true;
+    const result = await call('login');
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('OS 키체인을 사용할 수 없어 로그인하지 않습니다');
+    expect(opened).toEqual([]);
+  });
+
+  it('기본 브라우저를 열지 못하면 콜백 서버를 닫고 오류, 다음 호출은 새로 시작한다', async () => {
+    vi.mocked(openUrl).mockImplementationOnce(async (url: string) => {
+      opened.push(url);
+      throw new Error('기본 브라우저를 열지 못했습니다.');
+    });
+    const result = await call('login');
+    expect(result).toEqual({ text: '기본 브라우저를 열지 못했습니다.', isError: true });
+    const { port } = connect(opened[0]);
+    await expect(post(port, {})).rejects.toThrow();
+    // 진행 중으로 남지 않는다 — 다음 호출이 새 연결을 연다 (시간 제한으로 끝날 때까지 기다려 다음 테스트와 섞이지 않게)
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(await login()).toContain('로그인을 시작했습니다');
+      expect(opened).toHaveLength(2);
+      await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('시간이 초과')), {
+        timeout: 2000,
+      });
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });
 
@@ -193,6 +233,37 @@ describe('logout 도구', () => {
     expect(keychain.value).toBeNull();
     // 다시 불러도 오류 없이 없다고만 알린다
     expect((await call('logout')).text).toContain('저장된 세션이 없습니다');
+  });
+
+  it('확장 연결 세션은 서버 로그아웃 없이 지우고, 서버 로그아웃 실패도 지우기는 한다', async () => {
+    lmsLogout.mockClear();
+    keychain.value = JSON.stringify({ session: SESSION, savedAt: '', method: 'extension' });
+    const ext = await call('logout');
+    expect(ext.text).toContain('LMS 서버 로그아웃은 하지 않습니다');
+    expect(lmsLogout).not.toHaveBeenCalled();
+    expect(keychain.value).toBeNull();
+
+    keychain.value = JSON.stringify({ session: SESSION, savedAt: '', method: 'browser' });
+    lmsLogout.mockRejectedValueOnce(new Error(`network ${SESSION}`));
+    const failed = await call('logout');
+    expect(failed.text).toContain('이미 만료되었거나 종료하지 못했습니다');
+    expect(failed.text).not.toContain(SESSION);
+    expect(keychain.value).toBeNull();
+  });
+
+  it('형식이 깨진 세션은 서버 로그아웃 없이 지운다', async () => {
+    lmsLogout.mockClear();
+    keychain.value = '{not json';
+    const result = await call('logout');
+    expect(result).toEqual({ text: '형식이 올바르지 않은 세션을 OS 키체인에서 삭제했습니다.', isError: false });
+    expect(lmsLogout).not.toHaveBeenCalled();
+    expect(keychain.value).toBeNull();
+  });
+
+  it('키체인 오류는 도구 오류로 돌려준다', async () => {
+    keychain.broken = true;
+    const result = await call('logout');
+    expect(result).toEqual({ text: 'no secret service', isError: true });
   });
 
   it('대기 중인 로그인을 취소해, 나중에 세션이 도착해도 저장하지 않는다', async () => {

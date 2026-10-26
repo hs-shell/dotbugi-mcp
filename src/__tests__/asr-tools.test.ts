@@ -12,7 +12,7 @@ import {
   readAsrInstallState,
   writeAsrInstallState,
 } from '../asr/state.js';
-import { asr } from '../commands/asr.js';
+import { asr, statusText } from '../commands/asr.js';
 import { adoptLock } from '../player/lock.js';
 import { asrStatus, startInstall } from '../tools/asr.js';
 
@@ -211,5 +211,70 @@ describe.skipIf(!supported)('asr install (CLI·작업 프로세스)', () => {
 
   it('--worker 는 install 에서만', async () => {
     await expect(asr(['status'], { worker: true }, root)).rejects.toThrow('사용법');
+  });
+});
+
+describe('asr status (CLI)', () => {
+  const real = { platform: process.platform, arch: process.arch };
+  const setPlatform = (p: NodeJS.Platform, a: NodeJS.Architecture) => {
+    Object.defineProperty(process, 'platform', { value: p, configurable: true });
+    Object.defineProperty(process, 'arch', { value: a, configurable: true });
+  };
+  afterEach(() => setPlatform(real.platform, real.arch));
+
+  it('미지원 플랫폼이면 바이너리는 검증할 수 없다고만 알리고, 깨진 설정·GPU venv·합계를 보여 준다', async () => {
+    await fakeInstall(root);
+    await writeFile(asrPaths(root).config, '{broken');
+    await mkdir(join(asrPaths(root).venv, 'bin'), { recursive: true });
+    await writeFile(join(asrPaths(root).venv, 'bin', 'python'), 'x'.repeat(2_000_000));
+    setPlatform('win32', 'x64');
+    const text = await statusText(root);
+    expect(text).toContain(`위치: ${root}`);
+    expect(text).not.toContain('설정: cpu · 0.6b');
+    expect(text).toContain('- ffmpeg: 0MB 미지원 플랫폼(win32-x64) — 검증 불가');
+    expect(text).toContain('- qwen_asr: 0MB 미지원 플랫폼(win32-x64) — 검증 불가');
+    // 모델 파일은 플랫폼과 무관하게 고정값으로 검증한다
+    expect(text).toMatch(/- 모델 0\.6b: 0MB .*해시 불일치/);
+    expect(text).toContain('- GPU venv: 2MB');
+    expect(text).toContain('합계: 2MB');
+  });
+
+  it('설정 파일이 없으면 설치 미완료, 모델 파일이 빠졌으면 없음', async () => {
+    await fakeInstall(root);
+    await rm(asrPaths(root).config);
+    await rm(modelFilePath(root, '0.6b', 'model.safetensors'));
+    const text = await statusText(root);
+    expect(text).toContain('설정: 설치 미완료');
+    expect(text).toContain('model.safetensors: 없음');
+  });
+});
+
+describe('asr 명령 인자', () => {
+  it('하위 명령이 없거나 모르는 것, 남는 인자, 엉뚱한 옵션 조합은 사용법으로 거부', async () => {
+    for (const [args, opts] of [
+      [[], {}],
+      [['update'], {}],
+      [['status', 'x'], {}],
+      [['status'], { gpu: true }],
+      [['remove'], { model: '1.7b' }],
+      [['install'], { yes: true }],
+    ] as const)
+      await expect(asr([...args], opts, root)).rejects.toThrow('사용법');
+  });
+
+  it('remove 는 설치가 없으면 그렇게 알리고, 터미널이 아니면 --yes 없이 지우지 않는다', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const tty = process.stdin.isTTY;
+    try {
+      await asr(['remove'], {}, join(root, 'none'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('설치된 ASR 런타임이 없습니다'));
+      await fakeInstall(root);
+      Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+      await expect(asr(['remove'], {}, root)).rejects.toThrow('--yes');
+      expect((await stat(root)).isDirectory()).toBe(true);
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: tty, configurable: true });
+      stderr.mockRestore();
+    }
   });
 });
