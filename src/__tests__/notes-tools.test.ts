@@ -116,12 +116,15 @@ describe('list_notes', () => {
     let home = 0;
     fetchMock.mockImplementation((url) =>
       String(url) === 'https://learn.hansung.ac.kr/' && ++home % 2 === 0
-        ? Promise.reject(new Error('network down'))
+        ? Promise.reject(new Error('network down MoodleSession=abcdefghij0123456789'))
         : fakeLmsFetch(url)
     );
     const t = await approve('list_notes', { course: '자료구조', week: 3 });
     expect(jsonOf(t)).toMatchObject([{ week: '3주차', status: 'new', missingStt: [] }]);
     expect(t).toContain('동영상 강의 목록을 받지 못해 STT 여부는 확인하지 않았습니다');
+    // 오류 메시지에 섞인 세션 쿠키는 가린다
+    expect(t).toContain('MoodleSession=[REDACTED]');
+    expect(t).not.toContain('abcdefghij0123456789');
   });
 
   it('없는 과목이면 오류, 세션 오류도 도구 오류로 돌려준다', async () => {

@@ -2,6 +2,7 @@ import { InMemoryTransport, LATEST_PROTOCOL_VERSION, type JSONRPCMessage } from 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { openUrl } from '../platform.js';
 import { createServer } from '../server.js';
+import { cancelPendingLogin } from '../tools/login.js';
 
 const SESSION = 'abcdefghij0123456789xyz';
 const ORIGIN = 'chrome-extension://fbhdnbombekihdhjcfiimiibfmikghch';
@@ -77,6 +78,8 @@ const post = (port: string, body: unknown) =>
   fetch(`http://127.0.0.1:${port}/cb`, { method: 'POST', headers: { origin: ORIGIN }, body: JSON.stringify(body) });
 
 afterEach(() => {
+  // 끝나지 않은 로그인이 다음 테스트(특히 logout 문구)에 섞이지 않게
+  cancelPendingLogin();
   opened.length = 0;
   keychain.value = null;
   keychain.broken = false;
@@ -156,12 +159,15 @@ describe('login 도구 실패', () => {
     await expect(post(port, {})).rejects.toThrow();
     // 진행 중으로 남지 않는다 — 다음 호출이 새 연결을 연다 (시간 제한으로 끝날 때까지 기다려 다음 테스트와 섞이지 않게)
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    expect(await login()).toContain('로그인을 시작했습니다');
-    expect(opened).toHaveLength(2);
-    await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('시간이 초과')), {
-      timeout: 2000,
-    });
-    stderr.mockRestore();
+    try {
+      expect(await login()).toContain('로그인을 시작했습니다');
+      expect(opened).toHaveLength(2);
+      await vi.waitFor(() => expect(stderr).toHaveBeenCalledWith(expect.stringContaining('시간이 초과')), {
+        timeout: 2000,
+      });
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });
 
@@ -257,7 +263,7 @@ describe('logout 도구', () => {
   it('키체인 오류는 도구 오류로 돌려준다', async () => {
     keychain.broken = true;
     const result = await call('logout');
-    expect(result.isError).toBe(true);
+    expect(result).toEqual({ text: 'no secret service', isError: true });
   });
 
   it('대기 중인 로그인을 취소해, 나중에 세션이 도착해도 저장하지 않는다', async () => {

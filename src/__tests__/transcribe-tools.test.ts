@@ -11,10 +11,13 @@ import { writeTranscribeState, type TranscribeState } from '../transcribe/state.
 import { fakeLmsFetch } from './fixtures/lms-pages.js';
 
 // 상태·대기열·잠금 경로는 import 시점에 homedir 로 정해진다 — 그 전에 테스트 전용 홈을 정한다
-const home = vi.hoisted(() => ({
-  dir: `${process.env.TMPDIR ?? '/tmp'}/dotbugi-transcribe-tools-${process.pid}`,
-}));
-vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => home.dir }));
+// (Windows 에는 TMPDIR 이 없다 — 실제 os.tmpdir() 아래에 둔다)
+const home = vi.hoisted(() => ({ dir: '' }));
+vi.mock('node:os', async (orig) => {
+  const os = await orig<typeof import('node:os')>();
+  home.dir ||= `${os.tmpdir()}/dotbugi-transcribe-tools-${process.pid}`;
+  return { ...os, homedir: () => home.dir };
+});
 
 const getSession = vi.fn();
 vi.mock('../session.js', () => ({ getSession: () => getSession() }));
