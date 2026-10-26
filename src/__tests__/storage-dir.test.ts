@@ -115,6 +115,9 @@ describe('resolveStorageDir', () => {
     await expect(resolveStorageDir('C:\\Users\\u\\AppData\\x')).rejects.toThrow('시스템');
     await expect(resolveStorageDir('C:\\Users\\other\\x')).rejects.toThrow('홈 폴더');
     await expect(resolveStorageDir('C:\\Users\\u')).rejects.toThrow('홈 폴더');
+    // '..' 로 올라가거나 금지 문자가 있는 Windows 경로는 변환하지 않는다
+    for (const bad of ['C:\\Users\\u\\..\\..\\Windows', 'C:\\Users\\u\\a|b'])
+      await expect(resolveStorageDir(bad)).rejects.toThrow('Windows 경로 형식');
     await rm(mnt, { recursive: true, force: true });
   });
 
@@ -151,6 +154,16 @@ describe('setStorageDir', () => {
     expect((await readdir(home('Documents', '돋부기'))).sort()).toEqual(['2026-2학기', 'assign-5']);
     expect(await readdir(home('Downloads'))).toEqual([]);
     expect(storageRoot()).toBe(home('Documents', '돋부기'));
+  });
+
+  it('지금과 같은 위치면 묻지 않고 그대로 둔다', async () => {
+    await writeStorageConfig(home('Documents', '돋부기'));
+    await mkdir(home('Documents', '돋부기'), { recursive: true });
+    const a = asker(true);
+    expect(await setStorageDir({ path: '~/Documents/돋부기/' }, a)).toBe(
+      `이미 저장 위치가 ${home('Documents', '돋부기')} 입니다.`
+    );
+    expect(a.asked).toEqual([]);
   });
 
   it('승인하지 않으면 아무것도 옮기지도 저장하지도 않는다', async () => {

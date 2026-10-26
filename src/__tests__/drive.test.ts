@@ -1,7 +1,33 @@
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { myDrivesIn, parseDriveLetters, wslDetection, wslFstabLine, wslMountCommand } from '../drive.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  detectGoogleDrive,
+  myDrivesIn,
+  parseDriveLetters,
+  wslDetection,
+  wslFstabLine,
+  wslMountCommand,
+} from '../drive.js';
 import { describeDrive } from '../tools/storage-dir.js';
+import { wslAutomountRoot } from '../wsl-paths.js';
+
+// 실제 홈·실제 PowerShell 대신 테스트 값
+const state = vi.hoisted(() => ({ home: '', wsl: false, letters: null as string | null }));
+vi.mock('node:os', async (orig) => ({ ...(await orig<typeof import('node:os')>()), homedir: () => state.home }));
+vi.mock('../platform.js', async (orig) => ({
+  ...(await orig<typeof import('../platform.js')>()),
+  isWsl: () => state.wsl,
+}));
+const execFileSync = vi.fn<(...a: unknown[]) => string>(() => {
+  if (state.letters === null) throw new Error('timeout');
+  return state.letters;
+});
+vi.mock('node:child_process', async (orig) => ({
+  ...(await orig<typeof import('node:child_process')>()),
+  execFileSync: (...a: unknown[]) => execFileSync(...a),
+}));
 
 // 디스크 대신 "있는 폴더" 목록으로 판단한다
 const dirs =
@@ -60,5 +86,57 @@ describe('describeDrive', () => {
   });
   it('없으면 설치 안내', () => {
     expect(describeDrive({ roots: [], unmounted: [] }, '/x').guidance).toContain('google.com/drive/download');
+  });
+});
+
+describe('detectGoogleDrive', () => {
+  const realPlatform = process.platform;
+  const setPlatform = (p: NodeJS.Platform) =>
+    Object.defineProperty(process, 'platform', { value: p, configurable: true });
+  beforeEach(async () => {
+    state.home = await mkdtemp(join(tmpdir(), 'dotbugi-drive-'));
+    state.wsl = false;
+    execFileSync.mockClear();
+  });
+  afterEach(async () => {
+    setPlatform(realPlatform);
+    await rm(state.home, { recursive: true, force: true });
+  });
+
+  it('macOS 는 CloudStorage/GoogleDrive-<계정> 안의 내 드라이브만 (링크·다른 폴더는 무시)', async () => {
+    setPlatform('darwin');
+    const cs = join(state.home, 'Library', 'CloudStorage');
+    expect(detectGoogleDrive()).toEqual({ roots: [], unmounted: [] });
+    await mkdir(join(cs, 'GoogleDrive-a@x.com', '내 드라이브'), { recursive: true });
+    await mkdir(join(cs, 'GoogleDrive-a@x.com', '공유 드라이브'), { recursive: true });
+    await mkdir(join(cs, 'OneDrive', 'My Drive'), { recursive: true });
+    expect(detectGoogleDrive()).toEqual({ roots: [join(cs, 'GoogleDrive-a@x.com', '내 드라이브')], unmounted: [] });
+  });
+
+  it.skipIf(process.platform === 'win32')('macOS 의 내 드라이브가 링크면 쓰지 않는다', async () => {
+    setPlatform('darwin');
+    const account = join(state.home, 'Library', 'CloudStorage', 'GoogleDrive-a@x.com');
+    await mkdir(account, { recursive: true });
+    await symlink(state.home, join(account, 'My Drive'));
+    expect(detectGoogleDrive().roots).toEqual([]);
+  });
+
+  it('Linux 는 공식 Drive 앱이 없어 찾지 않는다', () => {
+    setPlatform('linux');
+    expect(detectGoogleDrive()).toEqual({ roots: [], unmounted: [] });
+  });
+
+  it('WSL 은 PowerShell 이 알려 준 드라이브 문자 중 마운트 안 된 것을 알리고, 조회 실패는 빈 결과', () => {
+    setPlatform('linux');
+    state.wsl = true;
+    state.letters = 'C,G\r\n';
+    expect(detectGoogleDrive()).toEqual({ roots: [], unmounted: ['G'] });
+    // 한글 폴더명이 깨지지 않게 스크립트는 -EncodedCommand 로만 넘긴다
+    const [, args, opts] = execFileSync.mock.calls[0] as [string, string[], { cwd: string }];
+    expect(args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand']);
+    expect(Buffer.from(args[3], 'base64').toString('utf16le')).toContain("'내 드라이브'");
+    expect(opts.cwd).toBe(`${wslAutomountRoot()}c`);
+    state.letters = null;
+    expect(detectGoogleDrive()).toEqual({ roots: [], unmounted: [] });
   });
 });

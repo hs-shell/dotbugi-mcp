@@ -153,7 +153,7 @@ describe('mediaGet', () => {
 
 // 가짜 ffmpeg·ASR: ffmpeg 는 PCM 을 내고, ASR 은 stdin 을 다 읽은 뒤 글을 낸다
 type Child = EventEmitter & { stdout: PassThrough; stdin: PassThrough; stderr: PassThrough };
-function fakeSpawn(opts: { asrCode?: number | null; asrSignal?: string; stderr?: string } = {}) {
+function fakeSpawn(opts: { asrCode?: number | null; asrSignal?: string; stderr?: string; asrText?: string } = {}) {
   const calls: { command: string; args: string[] }[] = [];
   const impl = ((command: string, args: string[]) => {
     calls.push({ command, args });
@@ -168,7 +168,7 @@ function fakeSpawn(opts: { asrCode?: number | null; asrSignal?: string; stderr?:
         c.stdin.resume();
         c.stdin.on('end', () => {
           if (opts.stderr) c.stderr.write(opts.stderr);
-          c.stdout.end('안녕하세요 강의입니다\n', () =>
+          c.stdout.end(opts.asrText ?? '안녕하세요 강의입니다\n', () =>
             setImmediate(() => c.emit('close', opts.asrCode === undefined ? 0 : opts.asrCode, opts.asrSignal ?? null))
           );
         });
@@ -280,6 +280,13 @@ describe('transcribeVod', () => {
     expect(err.message).toContain('(3)');
     expect(err.message).toContain('model load failed [URL]');
     expect(err.message).not.toContain(TOKEN);
+    await tmpGone(d);
+  });
+
+  it('받아쓴 글이 비면 결과 파일을 남기지 않고 실패한다', async () => {
+    const { d } = deps({ spawn: fakeSpawn({ asrText: ' \n\n' }).impl });
+    await expect(transcribeVod(42, d)).rejects.toThrow('받아쓴 내용이 없습니다');
+    await expect(stat(OUT())).rejects.toThrow();
     await tmpGone(d);
   });
 
