@@ -1,21 +1,23 @@
 <!--
-- 이 PR 이 무엇을 해결하나요? 명확하고 간결하게 적어주세요.
-- 관련 이슈를 `Closes` 뒤에 번호로 적어주세요. 이슈가 없으면 먼저 만들어주세요 (issue-link 검사가 확인합니다).
-- 검토해 본 다른 방법이 있나요?
-- 리뷰어가 특히 봐야 할 부분이 있나요?
+- What is this PR solving? Write a clear and concise description.
+- Reference the issue it solves after `Closes` (the issue-link check requires it). Open an issue first if there is none.
+- What other alternatives have you explored?
+- Are there any parts you think require more attention from reviewers?
 
-아래도 확인해주세요:
+Also, please make sure you do the following:
 
-- 기여 안내(CONTRIBUTING.md)를 읽었습니다.
-- 같은 문제를 같은 방식으로 푸는 PR 이 이미 있지 않은지 확인했습니다.
-- 사용자에게 보이는 동작이 바뀌었다면 README.md / docs/tools.md 를 고쳤습니다.
-- 이 PR 없이는 실패하고 이 PR 로 통과하는 테스트를 넣었습니다. 넣지 않았다면 이유를 적어주세요 (src/, plugin/hooks/ 변경은 테스트 필수 검사가 확인합니다).
-- 세션 쿠키·연결 코드·영상 주소 같은 비밀값이 도구 결과나 로그에 나가지 않습니다.
+- Read the Contributing Guidelines (CONTRIBUTING.md).
+- Check that there isn't already a PR that solves the problem the same way.
+- Update the documentation (README.md / docs/tools.md) if user-facing behavior changed.
+- Include tests that fail without this PR but pass with it. If not, explain why (src/ and plugin/hooks/ changes are enforced by the test-required check).
+- No secrets (session cookie, connect code, video URL) leak into tool results or logs.
 
-AI 를 썼다면:
+If you have used AI:
 
-- 설명과 논의는 간결하게, 자기 말로 써주세요.
-- 생성된 코드를 어떻게 검토했는지 적어주세요.
+- Keep the description and discussion concise, in your own words.
+- Describe how you reviewed the generated code.
+
+You can write in Korean or English (한국어로 작성해도 됩니다).
 -->
 
 Closes

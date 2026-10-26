@@ -1,18 +1,22 @@
-name: 작업
-description: 버그·기능이 아닌 작업(문서, CI, 리팩터링, 빌드 등)을 등록합니다
+name: Task
+description: Work that is not a bug or a feature (docs, CI, refactoring, build, ...)
 body:
+  - type: markdown
+    attributes:
+      value: |
+        You can write in Korean or English (한국어로 작성해도 됩니다).
   - type: textarea
     id: description
     attributes:
-      label: 설명
-      description: 왜 이 작업이 필요한지, 지금 상태는 어떤지 적어주세요.
+      label: Description
+      description: Why is this needed, and what is the current state?
     validations:
       required: true
   - type: textarea
     id: todo
     attributes:
-      label: 할 일
-      description: 할 일을 체크리스트로 적어주세요.
+      label: Tasks
+      description: What needs to be done, as a checklist.
       placeholder: |
         - [ ] ...
     validations:
@@ -20,12 +24,12 @@ body:
   - type: textarea
     id: acceptance
     attributes:
-      label: 완료 기준
-      description: 무엇이 되면 끝났다고 볼 수 있나요?
+      label: Done when
+      description: What has to be true for this to be finished?
   - type: checkboxes
     id: checkboxes
     attributes:
-      label: 확인
+      label: Validations
       options:
-        - label: 같은 작업을 다루는 [이슈](https://github.com/hs-shell/dotbugi-mcp/issues)가 없는지 확인했습니다.
+        - label: Check that there isn't [already an issue](https://github.com/hs-shell/dotbugi-mcp/issues) for the same work.
           required: true

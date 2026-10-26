@@ -1,38 +1,38 @@
-name: 버그 리포트
-description: dotbugi-mcp 가 동작하지 않거나 예상과 다르게 동작하는 문제를 알려주세요
+name: Bug report
+description: Report a problem with dotbugi-mcp
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        버그 리포트를 작성해 주셔서 감사합니다.
+        Thanks for taking the time to fill out this bug report! You can write in Korean or English (한국어로 작성해도 됩니다).
   - type: textarea
     id: bug-description
     attributes:
-      label: 버그 설명
-      description: 무엇이 잘못됐는지 명확하고 간결하게 적어주세요. 직접 PR 을 보낼 생각이라면 여기에 알려주세요.
-      placeholder: ... 를 요청했고, ... 를 기대했는데, 실제로는 ... 가 나옵니다.
+      label: Describe the bug
+      description: A clear and concise description of what the bug is. If you intend to submit a PR for this issue, tell us here.
+      placeholder: I did ... I expected ... What actually happened is ...
     validations:
       required: true
   - type: textarea
     id: reproduction-steps
     attributes:
-      label: 재현 방법
-      description: 문제를 다시 일으킬 수 있는 순서를 적어주세요. 어떤 도구·슬래시 명령을 썼는지 알려주시면 빠르게 찾을 수 있습니다.
+      label: Steps to reproduce
+      description: Steps to reproduce the problem. Mention which tool or slash command you used.
       placeholder: |
-        1. `/dotbugi:login` 으로 연결
-        2. "이번 주 과제 알려줘" 요청
+        1. Connect with `/dotbugi:login`
+        2. Ask "이번 주 과제 알려줘"
         3. ...
     validations:
       required: true
   - type: textarea
     id: system-info
     attributes:
-      label: 환경
-      description: dotbugi-mcp 버전(`npm view @dotbugi/mcp version` 또는 플러그인 버전), 설치 방식(플러그인 / `claude mcp add` / Claude Desktop), MCP 클라이언트 버전, Node.js 버전, OS(Windows / macOS / Linux / WSL)
+      label: System info
+      description: dotbugi-mcp version (`npm view @dotbugi/mcp version` or plugin version), install method (plugin / `claude mcp add` / Claude Desktop), MCP client version, Node.js version, OS (Windows / macOS / Linux / WSL)
       render: text
       placeholder: |
-        dotbugi-mcp: 0.4.5 (플러그인)
+        dotbugi-mcp: 0.4.5 (plugin)
         Claude Code: 2.1.300
         Node.js: 24.x
         OS: WSL (Ubuntu 24.04)
@@ -41,23 +41,23 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: 로그
+      label: Logs
       description: |
-        재현 방법만으로 부족할 때 서버 stderr 로그나 도구 결과를 붙여주세요. 이미지보다 텍스트를 권장합니다.
+        Server stderr log or tool output, if the steps are not enough. Please paste text rather than images.
 
-        올리기 전에 MoodleSession 쿠키, 연결 코드, sesskey, 학번 같은 개인정보가 없는지 꼭 확인해주세요.
+        Before posting, remove anything private: MoodleSession cookie, connect code, sesskey, student ID.
       render: shell
   - type: checkboxes
     id: checkboxes
     attributes:
-      label: 확인
-      description: 이슈를 올리기 전에 아래를 확인해주세요
+      label: Validations
+      description: Before submitting the issue, please make sure you do the following
       options:
-        - label: '[기여 안내](https://github.com/hs-shell/dotbugi-mcp/blob/main/CONTRIBUTING.md)와 [README 문제 해결](https://github.com/hs-shell/dotbugi-mcp#문제-해결)을 읽었습니다.'
+        - label: Read the [Contributing Guidelines](https://github.com/hs-shell/dotbugi-mcp/blob/main/CONTRIBUTING.md) and the [README troubleshooting](https://github.com/hs-shell/dotbugi-mcp#문제-해결).
           required: true
-        - label: 같은 버그를 다루는 [이슈](https://github.com/hs-shell/dotbugi-mcp/issues)가 없는지 확인했습니다.
+        - label: Check that there isn't [already an issue](https://github.com/hs-shell/dotbugi-mcp/issues) that reports the same bug.
           required: true
-        - label: 최신 버전에서도 재현됩니다.
+        - label: The bug still happens on the latest version.
           required: true
-        - label: 사용법 질문이 아닌 구체적인 버그입니다. 질문은 [Discussions](https://github.com/hs-shell/dotbugi-mcp/discussions)에 남겨주세요.
+        - label: This is a concrete bug. For questions, open a [GitHub Discussion](https://github.com/hs-shell/dotbugi-mcp/discussions).
           required: true

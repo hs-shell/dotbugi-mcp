@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 질문과 토론
+  - name: Questions & Discussions
     url: https://github.com/hs-shell/dotbugi-mcp/discussions
-    about: 사용법 질문이나 아이디어 논의는 GitHub Discussions 를 이용해주세요.
-  - name: dotbugi 확장 이슈
+    about: Use GitHub Discussions for questions and ideas.
+  - name: dotbugi extension issues
     url: https://github.com/hs-shell/dotbugi/issues/new/choose
-    about: 브라우저 확장(dotbugi) 자체의 문제는 dotbugi 저장소에 올려주세요.
+    about: Problems with the browser extension itself belong in the dotbugi repository.
