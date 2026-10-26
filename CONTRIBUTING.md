@@ -40,12 +40,13 @@ stdout 은 MCP 프로토콜 전용입니다. 로그는 반드시 stderr 로 씁�
 
 `.claude/` 에 이 저장소용 설정과 스킬이 있습니다. 저장소를 Claude Code 로 열면 [ponytail](https://github.com/DietrichGebert/ponytail) 플러그인(필요한 만큼만 짜는 모드) 설치를 묻습니다.
 
-| 스킬            | 하는 일                                                 |
-| --------------- | ------------------------------------------------------- |
-| `/create-issue` | 이슈 템플릿을 그대로 채워 이슈 생성 (중복 검색 먼저)    |
-| `/implement`    | 이슈 → 브랜치 → 테스트 먼저 → 구현 → 검사               |
-| `/write-test`   | 이 저장소 패턴(fixture·InMemoryTransport 등)으로 테스트 |
-| `/create-pr`    | 검사 통과 확인 후 PR 템플릿을 채워 PR 생성              |
+| 스킬            | 하는 일                                                                   |
+| --------------- | ------------------------------------------------------------------------- |
+| `/create-issue` | 이슈 템플릿을 그대로 채워 이슈 생성 (중복 검색 먼저)                      |
+| `/implement`    | 이슈 → 브랜치 → 테스트 먼저 → 구현 → 검사                                 |
+| `/write-test`   | 이 저장소 패턴(fixture·InMemoryTransport 등)으로 테스트                   |
+| `/create-pr`    | 검사 통과 확인 후 PR 템플릿을 채워 PR 생성                                |
+| `/rebase`       | 최신 main 위로 리베이스하고 충돌을 해결한 뒤 `--force-with-lease` 로 push |
 
 ## qwen_asr 바이너리 고정 (관리자)
 

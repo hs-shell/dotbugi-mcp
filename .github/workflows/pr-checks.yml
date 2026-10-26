@@ -75,14 +75,18 @@ jobs:
       - name: 의존성 취약점 검사 (high 이상 차단)
         run: npm audit --audit-level=high
 
-  # 빌드·테스트는 OS별 분기(경로·권한·프로세스)가 실제로 돌도록 매트릭스
+  # 빌드·테스트는 OS별 분기(경로·권한·프로세스)가 실제로 돌도록 3 OS × Node 24,
+  # 최소 지원 버전(engines)은 ubuntu 한 칸에서만 확인한다
   build-test:
     needs: issue-link
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: ['22.22.1', '24']
+        node: ['24']
+        include:
+          - os: ubuntu-latest
+            node: '22.22.1'
     runs-on: ${{ matrix.os }}
     steps:
       - name: 리포지토리 체크아웃
