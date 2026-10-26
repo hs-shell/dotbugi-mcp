@@ -50,7 +50,10 @@ export function startCallbackServer(allowedOrigins: readonly string[], timeoutMs
       if (!SESSION_PATTERN.test(String(msg.session))) return reject(400);
       // 모든 검사를 통과한 뒤에만 일회성으로 닫는다
       done = true;
-      res.writeHead(200, { 'Access-Control-Allow-Origin': origin }).end('ok', close);
+      // 응답이 상대에게 다 간 뒤(소켓이 닫힌 뒤) 서버를 닫는다. 쓰자마자 closeAllConnections 하면
+      // Windows 는 RST 로 끊어 확장이 성공 응답을 못 읽고 ECONNRESET 을 받는다
+      res.socket?.once('close', close);
+      res.writeHead(200, { 'Access-Control-Allow-Origin': origin, Connection: 'close' }).end('ok');
       accept(String(msg.session));
     });
   });
